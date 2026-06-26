@@ -16,7 +16,7 @@ type ProjetoPrevision = {
 const formatarData = (dataStr?: string) => {
   if (!dataStr) return '-'
 
-  const [datePart] = dataStr.split('T')
+  const [datePart] = dataStr.split(/[T ]/)
   const [ano, mes, dia] = datePart.split('-')
 
   if (!ano || !mes || !dia) return dataStr

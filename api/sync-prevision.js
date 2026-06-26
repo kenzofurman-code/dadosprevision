@@ -9,18 +9,20 @@ const PREVISION_REST_ENDPOINTS = {
 
 const DEFAULT_PROJECTS_QUERY = `
   query Projects($first: Int!, $after: String) {
-    projectsPage(first: $first, after: $after, archivedLast: true) {
-      nodes {
-        id
-        name
-        archivedAt
-        finishProjectDate
-        activeBaselineEndDate
-        updateProcessStatus
-      }
-      pageInfo {
-        hasNextPage
-        endCursor
+    me {
+      projectsPage(first: $first, after: $after, archivedLast: true) {
+        nodes {
+          id
+          name
+          archivedAt
+          finishProjectDate
+          activeBaselineEndDate
+          updateProcessStatus
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
       }
     }
   }
@@ -49,7 +51,7 @@ function getDb() {
 function getProjectConnection(data) {
   if (!data || typeof data !== 'object') return null
 
-  return data.projects ?? data.projectList ?? data.allProjects ?? null
+  return data.me?.projectsPage ?? data.projectsPage ?? data.projects ?? data.projectList ?? data.allProjects ?? null
 }
 
 function getProjects(connection) {
