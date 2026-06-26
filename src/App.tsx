@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { collection, getDocs, orderBy, query } from 'firebase/firestore'
 import './App.css'
-import { db, firebaseReady } from './firebase'
 
 type ProjetoPrevision = {
   id_prevision?: string | number
@@ -24,15 +22,33 @@ const formatarData = (dataStr?: string) => {
   return `${dia}/${mes}/${ano}`
 }
 
-const withTimeout = <T,>(promise: Promise<T>, ms = 12000) =>
-  Promise.race([
-    promise,
-    new Promise<T>((_, reject) => {
-      window.setTimeout(() => {
-        reject(new Error('Tempo limite ao carregar dados do Firestore.'))
-      }, ms)
-    }),
-  ])
+async function fetchJson(url: string, options?: RequestInit) {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 30000)
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+    const payload = await response.json().catch(() => null)
+
+    if (!response.ok) {
+      throw new Error(payload?.error || `Erro HTTP ${response.status}.`)
+    }
+
+    return payload
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('Tempo limite ao consultar o servidor.')
+    }
+
+    throw error
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
 
 function App() {
   const [projetos, setProjetos] = useState<ProjetoPrevision[]>([])
@@ -42,31 +58,17 @@ function App() {
   const [mensagem, setMensagem] = useState('')
 
   const carregarProjetos = useCallback(async () => {
-    if (!firebaseReady || !db) {
-      setErro('Configure as variaveis de ambiente do Firebase para carregar os dados.')
-      setCarregando(false)
-      return
-    }
-
     try {
+      setCarregando(true)
       setErro('')
-      const projetosCollection = collection(db, 'prevision_projetos')
-      let snapshot
-
-      try {
-        snapshot = await withTimeout(getDocs(query(projetosCollection, orderBy('nome_projeto'))))
-      } catch (orderedError) {
-        console.warn('Falha ao carregar com ordenacao, tentando sem orderBy:', orderedError)
-        snapshot = await withTimeout(getDocs(projetosCollection))
-      }
-
-      setProjetos(snapshot.docs.map((doc) => doc.data() as ProjetoPrevision))
+      const payload = await fetchJson('/api/projects')
+      setProjetos(Array.isArray(payload.projects) ? payload.projects : [])
     } catch (error) {
-      console.error('Erro ao ler dados do Firestore:', error)
+      console.error('Erro ao carregar projetos:', error)
       setErro(
         error instanceof Error
           ? error.message
-          : 'Erro ao carregar dados. Confira as regras de leitura do Firestore e se a colecao prevision_projetos existe.',
+          : 'Erro ao carregar dados do servidor.',
       )
     } finally {
       setCarregando(false)
@@ -83,14 +85,9 @@ function App() {
       setMensagem('')
       setErro('')
 
-      const response = await fetch('/api/sync-prevision', {
+      const payload = await fetchJson('/api/sync-prevision', {
         method: 'POST',
       })
-      const payload = await response.json().catch(() => null)
-
-      if (!response.ok) {
-        throw new Error(payload?.error || 'Erro ao sincronizar com a Prevision.')
-      }
 
       setMensagem(`${payload.imported ?? 0} projeto(s) sincronizado(s).`)
       await carregarProjetos()
@@ -155,7 +152,7 @@ function App() {
 
         {!carregando && !erro && projetos.length === 0 && (
           <div className="state-message">
-            Nenhum dado encontrado. Execute a Cloud Function primeiro para povoar o banco.
+            Nenhum dado encontrado. Use Sincronizar Prevision para povoar o banco.
           </div>
         )}
 

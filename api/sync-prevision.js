@@ -1,5 +1,4 @@
-import { cert, getApps, initializeApp } from 'firebase-admin/app'
-import { getFirestore } from 'firebase-admin/firestore'
+import { getDb } from '../lib/firebase-admin.js'
 
 const PREVISION_ENDPOINT = 'https://api.prevision.com.br/graphql'
 const PREVISION_REST_ENDPOINTS = {
@@ -27,26 +26,6 @@ const DEFAULT_PROJECTS_QUERY = `
     }
   }
 `
-
-function getServiceAccount() {
-  const encoded = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64
-
-  if (!encoded) {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT_BASE64 nao configurada.')
-  }
-
-  return JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'))
-}
-
-function getDb() {
-  if (!getApps().length) {
-    initializeApp({
-      credential: cert(getServiceAccount()),
-    })
-  }
-
-  return getFirestore()
-}
 
 function getProjectConnection(data) {
   if (!data || typeof data !== 'object') return null
@@ -216,12 +195,6 @@ async function fetchPrevisionProjects() {
   }
 
   if (process.env.PREVISION_API_MODE === 'rest') {
-    if (apiKey === '93YZKy2JESYspFa9XNAHia59') {
-      throw new Error(
-        'PREVISION_API_MODE esta como rest, mas essa chave funcionou apenas no GraphQL. Configure PREVISION_API_MODE=graphql na Vercel.',
-      )
-    }
-
     return fetchPrevisionProjectsFromRest(apiKey)
   }
 
