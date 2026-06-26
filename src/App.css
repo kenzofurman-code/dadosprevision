@@ -84,6 +84,12 @@
   font-weight: 800;
 }
 
+.actions-bar .secondary-button {
+  border: 1px solid #d9e2ec;
+  background: #ffffff;
+  color: #172033;
+}
+
 .actions-bar button:disabled {
   cursor: wait;
   opacity: 0.68;

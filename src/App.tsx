@@ -24,6 +24,16 @@ const formatarData = (dataStr?: string) => {
   return `${dia}/${mes}/${ano}`
 }
 
+const withTimeout = <T,>(promise: Promise<T>, ms = 12000) =>
+  Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => {
+        reject(new Error('Tempo limite ao carregar dados do Firestore.'))
+      }, ms)
+    }),
+  ])
+
 function App() {
   const [projetos, setProjetos] = useState<ProjetoPrevision[]>([])
   const [carregando, setCarregando] = useState(true)
@@ -40,17 +50,23 @@ function App() {
 
     try {
       setErro('')
-      const projetosQuery = query(
-        collection(db, 'prevision_projetos'),
-        orderBy('nome_projeto'),
-      )
-      const snapshot = await getDocs(projetosQuery)
+      const projetosCollection = collection(db, 'prevision_projetos')
+      let snapshot
+
+      try {
+        snapshot = await withTimeout(getDocs(query(projetosCollection, orderBy('nome_projeto'))))
+      } catch (orderedError) {
+        console.warn('Falha ao carregar com ordenacao, tentando sem orderBy:', orderedError)
+        snapshot = await withTimeout(getDocs(projetosCollection))
+      }
 
       setProjetos(snapshot.docs.map((doc) => doc.data() as ProjetoPrevision))
     } catch (error) {
       console.error('Erro ao ler dados do Firestore:', error)
       setErro(
-        'Erro ao carregar dados. Confira as regras de leitura do Firestore e se a colecao prevision_projetos existe.',
+        error instanceof Error
+          ? error.message
+          : 'Erro ao carregar dados. Confira as regras de leitura do Firestore e se a colecao prevision_projetos existe.',
       )
     } finally {
       setCarregando(false)
@@ -123,6 +139,9 @@ function App() {
       </header>
 
       <div className="actions-bar">
+        <button type="button" className="secondary-button" onClick={carregarProjetos} disabled={carregando}>
+          {carregando ? 'Carregando...' : 'Recarregar'}
+        </button>
         <button type="button" onClick={sincronizarProjetos} disabled={sincronizando}>
           {sincronizando ? 'Sincronizando...' : 'Sincronizar Prevision'}
         </button>
