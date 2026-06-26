@@ -30,8 +30,19 @@ async function readProjectsWithAdmin() {
   return snapshot.docs.map((doc) => ({ ...doc.data(), firestore_id: doc.id }))
 }
 
+function getFirebaseProjectId() {
+  const rawValue = process.env.VITE_FIREBASE_PROJECT_ID || 'dadosprevision'
+  const projectId = rawValue
+    .trim()
+    .replace(/^VITE_FIREBASE_PROJECT_ID=/i, '')
+    .replace(/^["']|["']$/g, '')
+    .trim()
+
+  return projectId || 'dadosprevision'
+}
+
 async function readProjectsWithFirestoreRest() {
-  const projectId = process.env.VITE_FIREBASE_PROJECT_ID || 'dadosprevision'
+  const projectId = getFirebaseProjectId()
   const endpoint = new URL(
     `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/prevision_projetos`,
   )
