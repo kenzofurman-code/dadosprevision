@@ -107,6 +107,15 @@ function wait(ms) {
   })
 }
 
+function sanitizePrevisionApiKey(value) {
+  return value
+    .trim()
+    .replace(/^PREVISION_API_KEY=/i, '')
+    .replace(/^["']|["']$/g, '')
+    .replace(/^(token|bearer)\s+/i, '')
+    .trim()
+}
+
 async function fetchJsonWithRetry(url, options, attempts = 3) {
   let lastPayload = null
 
@@ -155,9 +164,7 @@ async function fetchPrevisionProjectsFromRest(apiKey) {
 }
 
 async function fetchPrevisionProjectsFromGraphql(apiKey) {
-  const token = apiKey.trim().toLowerCase().startsWith('token ')
-    ? apiKey.trim()
-    : `token ${apiKey.trim()}`
+  const token = `token ${apiKey}`
   const query = process.env.PREVISION_PROJECTS_QUERY || DEFAULT_PROJECTS_QUERY
   const projects = []
   let after = null
@@ -201,12 +208,20 @@ async function fetchPrevisionProjectsFromGraphql(apiKey) {
 
 async function fetchPrevisionProjects() {
   const apiKey = process.env.PREVISION_API_KEY
+    ? sanitizePrevisionApiKey(process.env.PREVISION_API_KEY)
+    : ''
 
   if (!apiKey) {
     throw new Error('PREVISION_API_KEY nao configurada.')
   }
 
   if (process.env.PREVISION_API_MODE === 'rest') {
+    if (apiKey === '93YZKy2JESYspFa9XNAHia59') {
+      throw new Error(
+        'PREVISION_API_MODE esta como rest, mas essa chave funcionou apenas no GraphQL. Configure PREVISION_API_MODE=graphql na Vercel.',
+      )
+    }
+
     return fetchPrevisionProjectsFromRest(apiKey)
   }
 
