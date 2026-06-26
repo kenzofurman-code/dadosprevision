@@ -2,6 +2,10 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
 
 const PREVISION_ENDPOINT = 'https://api.prevision.com.br/graphql'
+const PREVISION_REST_ENDPOINTS = {
+  construction: 'https://api.prevision.com.br/construction/api/v1/projects',
+  incorporation: 'https://api.prevision.com.br/incorporation/api/v1/projects',
+}
 
 const DEFAULT_PROJECTS_QUERY = `
   query Projects($first: Int!, $after: String) {
@@ -92,13 +96,57 @@ async function saveProjects(db, projects) {
   }
 }
 
-async function fetchPrevisionProjects() {
-  const apiKey = process.env.PREVISION_API_KEY
+function wait(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
 
-  if (!apiKey) {
-    throw new Error('PREVISION_API_KEY nao configurada.')
+async function fetchJsonWithRetry(url, options, attempts = 3) {
+  let lastPayload = null
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const response = await fetch(url, options)
+    const retryAfter = Number(response.headers.get('retry-after') || 0)
+    const payload = await response.json().catch(() => null)
+    lastPayload = payload
+
+    if (response.ok) return payload
+
+    if (response.status === 429 && attempt < attempts) {
+      const delayMs = retryAfter > 0 ? retryAfter * 1000 : attempt * 12000
+      await wait(delayMs)
+      continue
+    }
+
+    if (response.status === 429) {
+      throw new Error(
+        'Prevision retornou HTTP 429. Aguarde 1 minuto e tente novamente; a API limita a quantidade de requisicoes por minuto.',
+      )
+    }
+
+    throw new Error(`Prevision retornou HTTP ${response.status}.`)
   }
 
+  return lastPayload
+}
+
+async function fetchPrevisionProjectsFromRest(apiKey) {
+  const resource = process.env.PREVISION_REST_RESOURCE || 'construction'
+  const endpoint = PREVISION_REST_ENDPOINTS[resource] || PREVISION_REST_ENDPOINTS.construction
+  const payload = await fetchJsonWithRetry(endpoint, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      Accept: 'application/json',
+      'User-Agent': 'dadosprevision/1.0',
+    },
+  })
+
+  return payload?.projects ?? []
+}
+
+async function fetchPrevisionProjectsFromGraphql(apiKey) {
   const query = process.env.PREVISION_PROJECTS_QUERY || DEFAULT_PROJECTS_QUERY
   const projects = []
   let after = null
@@ -108,11 +156,12 @@ async function fetchPrevisionProjects() {
   while (hasNextPage && page < 20) {
     page += 1
 
-    const response = await fetch(PREVISION_ENDPOINT, {
+    const payload = await fetchJsonWithRetry(PREVISION_ENDPOINT, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        UserAuthorization: `token ${apiKey}`,
         'Content-Type': 'application/json',
+        'User-Agent': 'dadosprevision/1.0',
       },
       body: JSON.stringify({
         query,
@@ -122,12 +171,6 @@ async function fetchPrevisionProjects() {
         },
       }),
     })
-
-    const payload = await response.json().catch(() => null)
-
-    if (!response.ok) {
-      throw new Error(`Prevision retornou HTTP ${response.status}.`)
-    }
 
     if (payload?.errors?.length) {
       throw new Error(payload.errors.map((error) => error.message).join(' | '))
@@ -142,6 +185,20 @@ async function fetchPrevisionProjects() {
   }
 
   return projects
+}
+
+async function fetchPrevisionProjects() {
+  const apiKey = process.env.PREVISION_API_KEY
+
+  if (!apiKey) {
+    throw new Error('PREVISION_API_KEY nao configurada.')
+  }
+
+  if (process.env.PREVISION_API_MODE === 'rest') {
+    return fetchPrevisionProjectsFromRest(apiKey)
+  }
+
+  return fetchPrevisionProjectsFromGraphql(apiKey)
 }
 
 export default async function handler(req, res) {
