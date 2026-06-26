@@ -95,3 +95,17 @@ Para atualizar diariamente, crie uma Cloud Function agendada no Firebase que:
 4. Use `id_prevision` como ID do documento ou como campo unico para evitar duplicidade.
 
 O front-end ja esta pronto para ler a colecao. A parte que depende de informacao externa e a Cloud Function, porque precisa do endpoint e da chave da API Prevision.
+
+## Botao de sincronizacao
+
+O projeto tambem possui a rota Vercel `POST /api/sync-prevision`, chamada pelo botao **Sincronizar Prevision**.
+
+Variaveis privadas necessarias na Vercel:
+
+```env
+PREVISION_API_MODE=graphql
+PREVISION_API_KEY=sua_chave_prevision
+FIREBASE_SERVICE_ACCOUNT_BASE64=service_account_json_em_base64
+```
+
+Para GraphQL, a Prevision exige o header `UserAuthorization` no formato `token SUA_CHAVE`. A rota ja monta esse header automaticamente.

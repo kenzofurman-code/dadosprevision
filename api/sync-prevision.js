@@ -9,17 +9,14 @@ const PREVISION_REST_ENDPOINTS = {
 
 const DEFAULT_PROJECTS_QUERY = `
   query Projects($first: Int!, $after: String) {
-    projects(first: $first, after: $after) {
+    projectsPage(first: $first, after: $after, archivedLast: true) {
       nodes {
         id
         name
-        status
-        startDate
-        endDate
-        disabled
-        company {
-          name
-        }
+        archivedAt
+        finishProjectDate
+        activeBaselineEndDate
+        updateProcessStatus
       }
       pageInfo {
         hasNextPage
@@ -73,9 +70,15 @@ function normalizeProject(project) {
     nome_projeto: project.name ?? project.title ?? project.description ?? '-',
     empresa_nome: company.name ?? project.companyName ?? project.enterpriseName ?? '-',
     data_inicio: project.startDate ?? project.start_date ?? project.startsAt ?? null,
-    data_fim: project.endDate ?? project.end_date ?? project.endsAt ?? null,
-    status: project.status ?? 'Ativo',
-    desativado: Boolean(project.disabled ?? project.archived ?? project.inactive ?? false),
+    data_fim:
+      project.endDate ??
+      project.end_date ??
+      project.endsAt ??
+      project.finishProjectDate ??
+      project.activeBaselineEndDate ??
+      null,
+    status: project.status ?? project.updateProcessStatus ?? 'Ativo',
+    desativado: Boolean(project.disabled ?? project.archived ?? project.inactive ?? project.archivedAt ?? false),
     atualizado_em: new Date().toISOString(),
   }
 }
@@ -125,7 +128,10 @@ async function fetchJsonWithRetry(url, options, attempts = 3) {
       )
     }
 
-    throw new Error(`Prevision retornou HTTP ${response.status}.`)
+    const details = payload?.error?.message || payload?.message || payload?.error || ''
+    throw new Error(
+      `Prevision retornou HTTP ${response.status}${details ? `: ${details}` : ''}.`,
+    )
   }
 
   return lastPayload
@@ -147,6 +153,9 @@ async function fetchPrevisionProjectsFromRest(apiKey) {
 }
 
 async function fetchPrevisionProjectsFromGraphql(apiKey) {
+  const token = apiKey.trim().toLowerCase().startsWith('token ')
+    ? apiKey.trim()
+    : `token ${apiKey.trim()}`
   const query = process.env.PREVISION_PROJECTS_QUERY || DEFAULT_PROJECTS_QUERY
   const projects = []
   let after = null
@@ -159,7 +168,8 @@ async function fetchPrevisionProjectsFromGraphql(apiKey) {
     const payload = await fetchJsonWithRetry(PREVISION_ENDPOINT, {
       method: 'POST',
       headers: {
-        UserAuthorization: `token ${apiKey}`,
+        UserAuthorization: token,
+        Accept: 'application/json',
         'Content-Type': 'application/json',
         'User-Agent': 'dadosprevision/1.0',
       },
