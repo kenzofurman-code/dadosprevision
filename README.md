@@ -95,6 +95,18 @@ npm run sync:local
 O comando usa os arquivos ignorados pelo Git `vercel-env-backend.txt` e
 `service-account-dadosprevision.json`.
 
+A sincronizacao detalhada popula as colecoes:
+
+- `prevision_projetos`
+- `prevision_atividades`
+- `prevision_pavimentos`
+- `prevision_servicos`
+- `prevision_marcos`
+- `prevision_linhas_base`
+- `prevision_responsaveis`
+
+O painel apresenta cada conjunto em uma tabela paginada, com filtro por projeto.
+
 ## Sincronizacao com Prevision
 
 Para atualizar diariamente, crie uma Cloud Function agendada no Firebase que:

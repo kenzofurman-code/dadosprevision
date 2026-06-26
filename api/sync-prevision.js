@@ -1,204 +1,239 @@
 import { getDb } from '../lib/firebase-admin.js'
+import {
+  fetchAllProjectIds,
+  fetchProjectData,
+  sanitizePrevisionApiKey,
+} from '../lib/prevision-client.js'
 
-const PREVISION_ENDPOINT = 'https://api.prevision.com.br/graphql'
-const PREVISION_REST_ENDPOINTS = {
-  construction: 'https://api.prevision.com.br/construction/api/v1/projects',
-  incorporation: 'https://api.prevision.com.br/incorporation/api/v1/projects',
+const COLLECTIONS = {
+  activities: 'prevision_atividades',
+  floors: 'prevision_pavimentos',
+  services: 'prevision_servicos',
+  milestones: 'prevision_marcos',
+  baselines: 'prevision_linhas_base',
+  responsibles: 'prevision_responsaveis',
 }
 
-const DEFAULT_PROJECTS_QUERY = `
-  query Projects($first: Int!, $after: String) {
-    me {
-      projectsPage(first: $first, after: $after, archivedLast: true) {
-        nodes {
-          id
-          name
-          archivedAt
-          finishProjectDate
-          activeBaselineEndDate
-          updateProcessStatus
-        }
-        pageInfo {
-          hasNextPage
-          endCursor
-        }
-      }
-    }
-  }
-`
-
-function getProjectConnection(data) {
-  if (!data || typeof data !== 'object') return null
-
-  return data.me?.projectsPage ?? data.projectsPage ?? data.projects ?? data.projectList ?? data.allProjects ?? null
+function clean(value) {
+  return JSON.parse(JSON.stringify(value))
 }
 
-function getProjects(connection) {
-  if (Array.isArray(connection)) return connection
-  if (Array.isArray(connection?.nodes)) return connection.nodes
-  if (Array.isArray(connection?.edges)) return connection.edges.map((edge) => edge.node)
-  if (Array.isArray(connection?.items)) return connection.items
-
-  return []
-}
-
-function normalizeProject(project) {
-  const id = project.id ?? project.uuid ?? project.code ?? project.identifier
-  const company = project.company ?? project.companyData ?? project.enterprise ?? {}
-
+function projectReference(project, projectName) {
   return {
-    id_prevision: String(id),
-    nome_projeto: project.name ?? project.title ?? project.description ?? '-',
-    empresa_nome: company.name ?? project.companyName ?? project.enterpriseName ?? '-',
-    data_inicio: project.startDate ?? project.start_date ?? project.startsAt ?? null,
-    data_fim:
-      project.endDate ??
-      project.end_date ??
-      project.endsAt ??
-      project.finishProjectDate ??
-      project.activeBaselineEndDate ??
-      null,
-    status: project.status ?? project.updateProcessStatus ?? 'Ativo',
-    desativado: Boolean(project.disabled ?? project.archived ?? project.inactive ?? project.archivedAt ?? false),
-    atualizado_em: new Date().toISOString(),
+    projeto_id: String(project.id),
+    projeto_nome: projectName,
   }
 }
 
-async function saveProjects(db, projects) {
-  const chunkSize = 450
+function normalizeProject(project, data, counts) {
+  const summary = data.summary || {}
 
-  for (let index = 0; index < projects.length; index += chunkSize) {
+  return clean({
+    id_prevision: String(project.id),
+    nome_projeto: data.name || project.name || '-',
+    empresa_nome: '-',
+    endereco: data.address || null,
+    area: data.area ? Number(data.area) : null,
+    tipologia: data.typology || null,
+    fase: data.phase || null,
+    tipo_entrega: data.deliveryType || null,
+    tipo_cronograma: data.scheduleType || null,
+    imagem_url: data.pictureUrl || null,
+    secao_id: data.projectSection?.id || null,
+    secao_nome: data.projectSection?.name || null,
+    criado_em: data.createdAt || null,
+    data_inicio: summary.startAt || null,
+    data_fim: summary.endAt || data.finishProjectDate || data.activeBaselineEndDate || null,
+    ultima_medicao: summary.lastMeasurement || null,
+    progresso_esperado: summary.expected ?? null,
+    progresso_realizado: summary.realized ?? null,
+    custo_orcado: summary.cost ?? null,
+    custo_realizado: summary.realizedCost ?? null,
+    atraso_dias: summary.delay ?? null,
+    idp: summary.idp ?? null,
+    dias_desde_inicio: summary.daysSinceStart ?? null,
+    dias_ate_fim: summary.daysToEnd ?? null,
+    status_dashboard: data.dashboardStatus?.status || null,
+    status: data.updateProcessStatus || project.updateProcessStatus || 'unknown',
+    desativado: Boolean(data.archivedAt || project.archivedAt),
+    total_atividades: counts.activities,
+    total_pavimentos: counts.floors,
+    total_servicos: counts.services,
+    total_marcos: counts.milestones,
+    total_linhas_base: counts.baselines,
+    total_responsaveis: counts.responsibles,
+    atualizado_em: new Date().toISOString(),
+  })
+}
+
+function normalizeActivity(item, project, projectName) {
+  return clean({
+    ...projectReference(project, projectName),
+    id_prevision: String(item.id),
+    codigo_eap: item.wbsCode || null,
+    pavimento_id: item.floor?.id || null,
+    pavimento_nome: item.floor?.name || null,
+    servico_id: item.service?.id || null,
+    servico_nome: item.service?.name || null,
+    data_inicio: item.startAt || null,
+    data_fim: item.endAt || null,
+    duracao_dias: item.workDuration ?? null,
+    progresso_realizado: item.percentageCompleted ?? null,
+    progresso_esperado: item.expectedPercentageCompleted ?? null,
+    custo_orcado: item.budgetCost ?? null,
+    parte: item.part ?? null,
+    possui_etapas: Boolean(item.hasJobs),
+    unidade_nome: item.measurementUnit?.name || null,
+    unidade_simbolo: item.measurementUnit?.symbol || null,
+    excluido_em: item.deletedAt || null,
+  })
+}
+
+function normalizeFloor(item, project, projectName) {
+  return clean({
+    ...projectReference(project, projectName),
+    id_prevision: String(item.id),
+    nome: item.name,
+    posicao: item.position,
+    area: item.area ?? null,
+    tag: item.tag || null,
+    grupo_repeticao: item.replicationGroupName || null,
+    data_inicio: item.startAt || null,
+    data_fim: item.endAt || null,
+    excluido_em: item.deletedAt || null,
+  })
+}
+
+function normalizeService(item, project, projectName) {
+  return clean({
+    ...projectReference(project, projectName),
+    id_prevision: String(item.id),
+    nome: item.name,
+    posicao: item.position,
+    cor: item.color || null,
+    unidade: item.unit || null,
+    data_inicio: item.startAt || null,
+    data_fim: item.endAt || null,
+    possui_atividades: Boolean(item.hasActivities),
+    possui_etapas: Boolean(item.hasJobs),
+  })
+}
+
+function normalizeMilestone(item, project, projectName) {
+  return clean({
+    ...projectReference(project, projectName),
+    id_prevision: String(item.id),
+    nome: item.name,
+    data: item.date,
+    cor: item.color || null,
+    atributo_base: item.baseAttribute || null,
+    defasagem_dias: item.lag ?? null,
+    operacao_tempo: item.timeOperation || null,
+    visivel_na_obra: Boolean(item.visibleInConstruction),
+    origem_incorporacao: Boolean(item.isFromIncorporation),
+    atividade_id: item.activity?.id || null,
+  })
+}
+
+function normalizeBaseline(item, project, projectName) {
+  return clean({
+    ...projectReference(project, projectName),
+    id_prevision: String(item.id),
+    ativa: Boolean(item.active),
+    criado_em: item.createdAt,
+    versao_lob_id: item.lobVersionId || null,
+  })
+}
+
+function normalizeResponsible(item, project, projectName) {
+  return clean({
+    ...projectReference(project, projectName),
+    id_prevision: String(item.id),
+    nome: item.name,
+  })
+}
+
+async function syncCollectionForProject(db, collectionName, projectId, items) {
+  const collection = db.collection(collectionName)
+  const existing = await collection.where('projeto_id', '==', projectId).get()
+  const incomingIds = new Set(items.map((item) => `${projectId}_${item.id_prevision}`))
+  const writes = []
+
+  for (const doc of existing.docs) {
+    if (!incomingIds.has(doc.id)) writes.push({ type: 'delete', ref: doc.ref })
+  }
+  for (const item of items) {
+    writes.push({
+      type: 'set',
+      ref: collection.doc(`${projectId}_${item.id_prevision}`),
+      data: item,
+    })
+  }
+
+  for (let index = 0; index < writes.length; index += 450) {
     const batch = db.batch()
-    const chunk = projects.slice(index, index + chunkSize)
-
-    for (const project of chunk) {
-      const ref = db.collection('prevision_projetos').doc(project.id_prevision)
-      batch.set(ref, project, { merge: true })
+    for (const write of writes.slice(index, index + 450)) {
+      if (write.type === 'delete') batch.delete(write.ref)
+      else batch.set(write.ref, write.data, { merge: true })
     }
-
     await batch.commit()
   }
 }
 
-function wait(ms) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms)
-  })
-}
+async function synchronizeAll(apiKey, requestedProjectId = '') {
+  const db = getDb()
+  const allProjects = await fetchAllProjectIds(apiKey)
+  const projects = requestedProjectId
+    ? allProjects.filter((project) => String(project.id) === requestedProjectId)
+    : allProjects
 
-function sanitizePrevisionApiKey(value) {
-  return value
-    .trim()
-    .replace(/^PREVISION_API_KEY=/i, '')
-    .replace(/^["']|["']$/g, '')
-    .replace(/^(token|bearer)\s+/i, '')
-    .trim()
-}
+  if (!projects.length) {
+    throw new Error('Projeto nao encontrado na Prevision.')
+  }
 
-async function fetchJsonWithRetry(url, options, attempts = 3) {
-  let lastPayload = null
+  const totals = {
+    projects: projects.length,
+    activities: 0,
+    floors: 0,
+    services: 0,
+    milestones: 0,
+    baselines: 0,
+    responsibles: 0,
+  }
 
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const response = await fetch(url, options)
-    const retryAfter = Number(response.headers.get('retry-after') || 0)
-    const payload = await response.json().catch(() => null)
-    lastPayload = payload
-
-    if (response.ok) return payload
-
-    if (response.status === 429 && attempt < attempts) {
-      const delayMs = retryAfter > 0 ? retryAfter * 1000 : attempt * 12000
-      await wait(delayMs)
-      continue
+  for (const project of projects) {
+    const data = await fetchProjectData(apiKey, project)
+    const projectName = data.details.name || project.name
+    const normalized = {
+      activities: data.activities.map((item) => normalizeActivity(item, project, projectName)),
+      floors: data.floors.map((item) => normalizeFloor(item, project, projectName)),
+      services: data.services.map((item) => normalizeService(item, project, projectName)),
+      milestones: data.milestones.map((item) => normalizeMilestone(item, project, projectName)),
+      baselines: data.baselines.map((item) => normalizeBaseline(item, project, projectName)),
+      responsibles: data.responsibles.map((item) =>
+        normalizeResponsible(item, project, projectName),
+      ),
     }
 
-    if (response.status === 429) {
-      throw new Error(
-        'Prevision retornou HTTP 429. Aguarde 1 minuto e tente novamente; a API limita a quantidade de requisicoes por minuto.',
-      )
+    for (const [key, collectionName] of Object.entries(COLLECTIONS)) {
+      await syncCollectionForProject(db, collectionName, String(project.id), normalized[key])
+      totals[key] += normalized[key].length
     }
 
-    const details = payload?.error?.message || payload?.message || payload?.error || ''
-    throw new Error(
-      `Prevision retornou HTTP ${response.status}${details ? `: ${details}` : ''}.`,
-    )
+    await db
+      .collection('prevision_projetos')
+      .doc(String(project.id))
+      .set(normalizeProject(project, data.details, {
+        activities: normalized.activities.length,
+        floors: normalized.floors.length,
+        services: normalized.services.length,
+        milestones: normalized.milestones.length,
+        baselines: normalized.baselines.length,
+        responsibles: normalized.responsibles.length,
+      }))
   }
 
-  return lastPayload
-}
-
-async function fetchPrevisionProjectsFromRest(apiKey) {
-  const resource = process.env.PREVISION_REST_RESOURCE || 'construction'
-  const endpoint = PREVISION_REST_ENDPOINTS[resource] || PREVISION_REST_ENDPOINTS.construction
-  const payload = await fetchJsonWithRetry(endpoint, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      Accept: 'application/json',
-      'User-Agent': 'dadosprevision/1.0',
-    },
-  })
-
-  return payload?.projects ?? []
-}
-
-async function fetchPrevisionProjectsFromGraphql(apiKey) {
-  const token = `token ${apiKey}`
-  const query = process.env.PREVISION_PROJECTS_QUERY || DEFAULT_PROJECTS_QUERY
-  const projects = []
-  let after = null
-  let hasNextPage = true
-  let page = 0
-
-  while (hasNextPage && page < 20) {
-    page += 1
-
-    const payload = await fetchJsonWithRetry(PREVISION_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        UserAuthorization: token,
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        'User-Agent': 'dadosprevision/1.0',
-      },
-      body: JSON.stringify({
-        query,
-        variables: {
-          first: 100,
-          after,
-        },
-      }),
-    })
-
-    if (payload?.errors?.length) {
-      throw new Error(payload.errors.map((error) => error.message).join(' | '))
-    }
-
-    const connection = getProjectConnection(payload?.data)
-    const currentProjects = getProjects(connection)
-    projects.push(...currentProjects)
-
-    hasNextPage = Boolean(connection?.pageInfo?.hasNextPage)
-    after = connection?.pageInfo?.endCursor ?? null
-  }
-
-  return projects
-}
-
-async function fetchPrevisionProjects() {
-  const apiKey = process.env.PREVISION_API_KEY
-    ? sanitizePrevisionApiKey(process.env.PREVISION_API_KEY)
-    : ''
-
-  if (!apiKey) {
-    throw new Error('PREVISION_API_KEY nao configurada.')
-  }
-
-  if (process.env.PREVISION_API_MODE === 'rest') {
-    return fetchPrevisionProjectsFromRest(apiKey)
-  }
-
-  return fetchPrevisionProjectsFromGraphql(apiKey)
+  return totals
 }
 
 export default async function handler(req, res) {
@@ -208,18 +243,19 @@ export default async function handler(req, res) {
   }
 
   try {
-    const rawProjects = await fetchPrevisionProjects()
-    const normalizedProjects = rawProjects.map(normalizeProject).filter((project) => project.id_prevision)
-    const db = getDb()
-    await saveProjects(db, normalizedProjects)
+    const apiKey = process.env.PREVISION_API_KEY
+      ? sanitizePrevisionApiKey(process.env.PREVISION_API_KEY)
+      : ''
 
-    return res.status(200).json({
-      ok: true,
-      imported: normalizedProjects.length,
-    })
+    if (!apiKey || apiKey === '...') {
+      throw new Error('PREVISION_API_KEY nao configurada com o valor real.')
+    }
+
+    const requestedProjectId = req.body?.projectId ? String(req.body.projectId) : ''
+    const totals = await synchronizeAll(apiKey, requestedProjectId)
+    return res.status(200).json({ ok: true, imported: totals.projects, totals })
   } catch (error) {
     console.error(error)
-
     return res.status(500).json({
       error: error instanceof Error ? error.message : 'Erro ao sincronizar projetos.',
     })

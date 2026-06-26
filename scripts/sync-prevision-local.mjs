@@ -50,3 +50,12 @@ const snapshot = await getDb().collection('prevision_projetos').get()
 
 console.log(`${result.imported} projeto(s) recebidos da Prevision.`)
 console.log(`${snapshot.size} documento(s) salvos no Firestore.`)
+
+if (result.totals) {
+  console.log(`${result.totals.activities} atividade(s).`)
+  console.log(`${result.totals.floors} pavimento(s).`)
+  console.log(`${result.totals.services} servico(s).`)
+  console.log(`${result.totals.milestones} marco(s).`)
+  console.log(`${result.totals.baselines} linha(s) de base.`)
+  console.log(`${result.totals.responsibles} responsavel(is).`)
+}

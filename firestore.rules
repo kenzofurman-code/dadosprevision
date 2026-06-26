@@ -6,5 +6,35 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false;
     }
+
+    match /prevision_atividades/{document} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /prevision_pavimentos/{document} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /prevision_servicos/{document} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /prevision_marcos/{document} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /prevision_linhas_base/{document} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /prevision_responsaveis/{document} {
+      allow read: if true;
+      allow write: if false;
+    }
   }
 }

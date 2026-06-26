@@ -1,30 +1,246 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
+import {
+  Building2,
+  ChevronLeft,
+  ChevronRight,
+  Database,
+  Flag,
+  History,
+  Layers3,
+  ListChecks,
+  RefreshCw,
+  Search,
+  Users,
+  Wrench,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import './App.css'
 
-type ProjetoPrevision = {
-  id_prevision?: string | number
+type DataView =
+  | 'projects'
+  | 'activities'
+  | 'floors'
+  | 'services'
+  | 'milestones'
+  | 'baselines'
+  | 'responsibles'
+
+type DataRecord = Record<string, string | number | boolean | null | undefined>
+
+type Project = DataRecord & {
+  id_prevision?: string
   nome_projeto?: string
-  empresa_nome?: string
-  data_inicio?: string
-  data_fim?: string
-  status?: string
   desativado?: boolean
 }
 
-const formatarData = (dataStr?: string) => {
-  if (!dataStr) return '-'
-
-  const [datePart] = dataStr.split(/[T ]/)
-  const [ano, mes, dia] = datePart.split('-')
-
-  if (!ano || !mes || !dia) return dataStr
-
-  return `${dia}/${mes}/${ano}`
+type Column = {
+  label: string
+  render: (record: DataRecord) => ReactNode
+  align?: 'right'
 }
 
-async function fetchJson(url: string, options?: RequestInit) {
+type TabDefinition = {
+  key: DataView
+  label: string
+  icon: LucideIcon
+  totalField?: string
+}
+
+const PAGE_SIZE = 100
+
+const tabs: TabDefinition[] = [
+  { key: 'projects', label: 'Projetos', icon: Building2 },
+  { key: 'activities', label: 'Atividades', icon: ListChecks, totalField: 'total_atividades' },
+  { key: 'floors', label: 'Pavimentos', icon: Layers3, totalField: 'total_pavimentos' },
+  { key: 'services', label: 'Serviços', icon: Wrench, totalField: 'total_servicos' },
+  { key: 'milestones', label: 'Marcos', icon: Flag, totalField: 'total_marcos' },
+  { key: 'baselines', label: 'Linhas de base', icon: History, totalField: 'total_linhas_base' },
+  { key: 'responsibles', label: 'Responsáveis', icon: Users, totalField: 'total_responsaveis' },
+]
+
+const dataViews = new Set<DataView>([
+  'activities',
+  'floors',
+  'services',
+  'milestones',
+  'baselines',
+  'responsibles',
+])
+
+const numberFormatter = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 })
+const integerFormatter = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 })
+const currencyFormatter = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  maximumFractionDigits: 0,
+})
+
+function formatDate(value?: string | number | boolean | null) {
+  if (!value || typeof value !== 'string') return '-'
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : value
+}
+
+function formatNumber(value?: string | number | boolean | null, suffix = '') {
+  const number = Number(value)
+  return Number.isFinite(number) ? `${numberFormatter.format(number)}${suffix}` : '-'
+}
+
+function formatCurrency(value?: string | number | boolean | null) {
+  const number = Number(value)
+  return Number.isFinite(number) ? currencyFormatter.format(number) : '-'
+}
+
+function formatPercent(value?: string | number | boolean | null) {
+  const number = Number(value)
+  return Number.isFinite(number) ? `${numberFormatter.format(number * 100)}%` : '-'
+}
+
+function projectStatus(record: DataRecord) {
+  if (record.desativado) return { label: 'Arquivado', className: 'neutral' }
+  if (record.status_dashboard === 'outdated') return { label: 'Desatualizado', className: 'warning' }
+  if (record.status === 'finished') return { label: 'Atualizado', className: 'success' }
+  if (record.status === 'never_updated') return { label: 'Sem atualização', className: 'neutral' }
+  return { label: String(record.status || 'Ativo'), className: 'info' }
+}
+
+function activityStatus(record: DataRecord) {
+  if (record.excluido_em) return { label: 'Excluída', className: 'neutral' }
+  const progress = Number(record.progresso_realizado)
+  if (progress >= 1) return { label: 'Concluída', className: 'success' }
+
+  const today = new Date().toISOString().slice(0, 10)
+  const start = String(record.data_inicio || '').slice(0, 10)
+  const end = String(record.data_fim || '').slice(0, 10)
+  if (end && end < today) return { label: 'Atrasada', className: 'danger' }
+  if (start && start > today) return { label: 'Planejada', className: 'info' }
+  return { label: 'Em andamento', className: 'warning' }
+}
+
+function StatusBadge({ status }: { status: { label: string; className: string } }) {
+  return <span className={`status-badge status-${status.className}`}>{status.label}</span>
+}
+
+const columns: Record<DataView, Column[]> = {
+  projects: [
+    {
+      label: 'Projeto',
+      render: (record) => (
+        <div className="primary-cell">
+          <strong>{String(record.nome_projeto || '-')}</strong>
+          <small>ID {String(record.id_prevision || '-')}</small>
+        </div>
+      ),
+    },
+    { label: 'Fase', render: (record) => String(record.fase || '-') },
+    { label: 'Área', render: (record) => formatNumber(record.area, ' m²'), align: 'right' },
+    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
+    { label: 'Término', render: (record) => formatDate(record.data_fim) },
+    { label: 'Previsto', render: (record) => formatPercent(record.progresso_esperado), align: 'right' },
+    { label: 'Realizado', render: (record) => formatPercent(record.progresso_realizado), align: 'right' },
+    { label: 'IDP', render: (record) => formatNumber(record.idp), align: 'right' },
+    { label: 'Orçamento', render: (record) => formatCurrency(record.custo_orcado), align: 'right' },
+    {
+      label: 'Atraso',
+      render: (record) => formatNumber(record.atraso_dias, ' d'),
+      align: 'right',
+    },
+    { label: 'Status', render: (record) => <StatusBadge status={projectStatus(record)} /> },
+  ],
+  activities: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    { label: 'EAP', render: (record) => String(record.codigo_eap || '-') },
+    { label: 'Serviço', render: (record) => String(record.servico_nome || '-') },
+    { label: 'Pavimento', render: (record) => String(record.pavimento_nome || '-') },
+    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
+    { label: 'Término', render: (record) => formatDate(record.data_fim) },
+    { label: 'Duração', render: (record) => formatNumber(record.duracao_dias, ' d'), align: 'right' },
+    { label: 'Previsto', render: (record) => formatPercent(record.progresso_esperado), align: 'right' },
+    { label: 'Realizado', render: (record) => formatPercent(record.progresso_realizado), align: 'right' },
+    { label: 'Custo', render: (record) => formatCurrency(record.custo_orcado), align: 'right' },
+    { label: 'Status', render: (record) => <StatusBadge status={activityStatus(record)} /> },
+  ],
+  floors: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    { label: 'Pavimento', render: (record) => String(record.nome || '-') },
+    { label: 'Grupo', render: (record) => String(record.grupo_repeticao || '-') },
+    { label: 'Posição', render: (record) => formatNumber(record.posicao), align: 'right' },
+    { label: 'Área', render: (record) => formatNumber(record.area, ' m²'), align: 'right' },
+    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
+    { label: 'Término', render: (record) => formatDate(record.data_fim) },
+  ],
+  services: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    {
+      label: 'Serviço',
+      render: (record) => (
+        <span className="color-label">
+          <i style={{ backgroundColor: String(record.cor || '#98a2b3') }} />
+          {String(record.nome || '-')}
+        </span>
+      ),
+    },
+    { label: 'Posição', render: (record) => formatNumber(record.posicao), align: 'right' },
+    { label: 'Unidade', render: (record) => String(record.unidade || '-') },
+    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
+    { label: 'Término', render: (record) => formatDate(record.data_fim) },
+    {
+      label: 'Etapas',
+      render: (record) => (record.possui_etapas ? 'Configuradas' : 'Não configuradas'),
+    },
+  ],
+  milestones: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    {
+      label: 'Marco',
+      render: (record) => (
+        <span className="color-label">
+          <i style={{ backgroundColor: String(record.cor || '#98a2b3') }} />
+          {String(record.nome || '-')}
+        </span>
+      ),
+    },
+    { label: 'Data', render: (record) => formatDate(record.data) },
+    { label: 'Referência', render: (record) => String(record.atributo_base || '-') },
+    {
+      label: 'Defasagem',
+      render: (record) => formatNumber(record.defasagem_dias, ' d'),
+      align: 'right',
+    },
+    {
+      label: 'Visibilidade',
+      render: (record) => (record.visivel_na_obra ? 'Visível na obra' : 'Oculto'),
+    },
+  ],
+  baselines: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    { label: 'ID', render: (record) => String(record.id_prevision || '-') },
+    { label: 'Criada em', render: (record) => formatDate(record.criado_em) },
+    { label: 'Versão LOB', render: (record) => String(record.versao_lob_id || '-') },
+    {
+      label: 'Status',
+      render: (record) => (
+        <StatusBadge
+          status={
+            record.ativa
+              ? { label: 'Ativa', className: 'success' }
+              : { label: 'Histórica', className: 'neutral' }
+          }
+        />
+      ),
+    },
+  ],
+  responsibles: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    { label: 'Responsável', render: (record) => String(record.nome || '-') },
+    { label: 'ID Prevision', render: (record) => String(record.id_prevision || '-') },
+  ],
+}
+
+async function fetchJson(url: string, options?: RequestInit, timeoutMs = 30000) {
   const controller = new AbortController()
-  const timeout = window.setTimeout(() => controller.abort(), 30000)
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
 
   try {
     const response = await fetch(url, {
@@ -37,20 +253,15 @@ async function fetchJson(url: string, options?: RequestInit) {
     if (!response.ok) {
       throw new Error(
         payload?.error ||
-          `O servidor respondeu HTTP ${response.status} sem uma mensagem valida. Confira os logs da funcao na Vercel.`,
+          `O servidor respondeu HTTP ${response.status}. Confira os logs da função na Vercel.`,
       )
     }
-
-    if (!payload) {
-      throw new Error('O servidor respondeu sem dados. Confira os logs da funcao na Vercel.')
-    }
-
+    if (!payload) throw new Error('O servidor respondeu sem dados.')
     return payload
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       throw new Error('Tempo limite ao consultar o servidor.')
     }
-
     throw error
   } finally {
     window.clearTimeout(timeout)
@@ -58,147 +269,299 @@ async function fetchJson(url: string, options?: RequestInit) {
 }
 
 function App() {
-  const [projetos, setProjetos] = useState<ProjetoPrevision[]>([])
-  const [carregando, setCarregando] = useState(true)
-  const [sincronizando, setSincronizando] = useState(false)
-  const [erro, setErro] = useState('')
-  const [mensagem, setMensagem] = useState('')
+  const [projects, setProjects] = useState<Project[]>([])
+  const [records, setRecords] = useState<DataRecord[]>([])
+  const [activeView, setActiveView] = useState<DataView>('projects')
+  const [selectedProject, setSelectedProject] = useState('')
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [synchronizing, setSynchronizing] = useState(false)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
 
-  const carregarProjetos = useCallback(async () => {
-    try {
-      setCarregando(true)
-      setErro('')
-      const payload = await fetchJson('/api/projects')
-      setProjetos(Array.isArray(payload.projects) ? payload.projects : [])
-    } catch (error) {
-      console.error('Erro ao carregar projetos:', error)
-      setErro(
-        error instanceof Error
-          ? error.message
-          : 'Erro ao carregar dados do servidor.',
-      )
-    } finally {
-      setCarregando(false)
-    }
+  const loadProjects = useCallback(async () => {
+    const payload = await fetchJson('/api/projects')
+    setProjects(Array.isArray(payload.projects) ? payload.projects : [])
   }, [])
 
-  useEffect(() => {
-    carregarProjetos()
-  }, [carregarProjetos])
+  const loadCurrentView = useCallback(async () => {
+    if (!dataViews.has(activeView)) return
+    const params = new URLSearchParams({
+      type: activeView,
+      page: String(page),
+      limit: String(PAGE_SIZE),
+    })
+    if (selectedProject) params.set('projectId', selectedProject)
 
-  async function sincronizarProjetos() {
+    const payload = await fetchJson(`/api/data?${params}`)
+    setRecords(Array.isArray(payload.records) ? payload.records : [])
+    setHasMore(Boolean(payload.hasMore))
+  }, [activeView, page, selectedProject])
+
+  const reload = useCallback(async () => {
     try {
-      setSincronizando(true)
-      setMensagem('')
-      setErro('')
-
-      const payload = await fetchJson('/api/sync-prevision', {
-        method: 'POST',
-      })
-
-      setMensagem(`${payload.imported ?? 0} projeto(s) sincronizado(s).`)
-      await carregarProjetos()
-    } catch (error) {
-      setErro(error instanceof Error ? error.message : 'Erro ao sincronizar com a Prevision.')
+      setLoading(true)
+      setError('')
+      await loadProjects()
+      await loadCurrentView()
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Erro ao carregar os dados.')
     } finally {
-      setSincronizando(false)
+      setLoading(false)
+    }
+  }, [loadCurrentView, loadProjects])
+
+  useEffect(() => {
+    reload()
+  }, [reload])
+
+  async function synchronize() {
+    try {
+      setSynchronizing(true)
+      setError('')
+      setMessage('')
+      const payload = await fetchJson(
+        '/api/sync-prevision',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(selectedProject ? { projectId: selectedProject } : {}),
+        },
+        300000,
+      )
+      const total = payload.totals?.activities ?? 0
+      setMessage(`${payload.imported} projeto(s) e ${integerFormatter.format(total)} atividades atualizados.`)
+      await reload()
+    } catch (syncError) {
+      setError(syncError instanceof Error ? syncError.message : 'Erro ao sincronizar com a Prevision.')
+    } finally {
+      setSynchronizing(false)
     }
   }
 
-  const resumo = useMemo(() => {
-    const ativos = projetos.filter((projeto) => !projeto.desativado).length
+  const totals = useMemo(() => {
+    const sum = (field: string) =>
+      projects.reduce((total, project) => total + (Number(project[field]) || 0), 0)
 
     return {
-      total: projetos.length,
-      ativos,
-      inativos: projetos.length - ativos,
+      projects: projects.length,
+      activities: sum('total_atividades'),
+      area: sum('area'),
+      budget: sum('custo_orcado'),
     }
-  }, [projetos])
+  }, [projects])
+
+  const tabTotals = useMemo(
+    () =>
+      Object.fromEntries(
+        tabs.map((tab) => [
+          tab.key,
+          tab.totalField
+            ? projects.reduce((total, project) => total + (Number(project[tab.totalField!]) || 0), 0)
+            : projects.length,
+        ]),
+      ),
+    [projects],
+  )
+
+  const visibleRecords = useMemo(() => {
+    const source: DataRecord[] =
+      activeView === 'projects'
+        ? projects.filter(
+            (project) => !selectedProject || project.id_prevision === selectedProject,
+          )
+        : records
+    const term = search.trim().toLocaleLowerCase('pt-BR')
+    if (!term) return source
+
+    return source.filter((record) =>
+      Object.values(record).some((value) =>
+        String(value ?? '')
+          .toLocaleLowerCase('pt-BR')
+          .includes(term),
+      ),
+    )
+  }, [activeView, projects, records, search, selectedProject])
+
+  const activeTab = tabs.find((tab) => tab.key === activeView) || tabs[0]
+
+  function changeView(view: DataView) {
+    setActiveView(view)
+    setPage(0)
+    setSearch('')
+  }
+
+  function changeProject(projectId: string) {
+    setSelectedProject(projectId)
+    setPage(0)
+  }
 
   return (
     <main className="app-shell">
       <header className="page-header">
-        <div>
-          <p className="eyebrow">Projetos Prevision</p>
-          <h1>Projetos sincronizados</h1>
-          <p className="subtitle">
-            Dados atualizados no Firestore e publicados em uma interface pronta para Vercel.
-          </p>
+        <div className="brand-block">
+          <div className="brand-mark">
+            <Database size={20} />
+          </div>
+          <div>
+            <p className="eyebrow">DadosPrevision</p>
+            <h1>Controle de obras</h1>
+          </div>
         </div>
-
-        <div className="summary" aria-label="Resumo dos projetos">
-          <div>
-            <span>{resumo.total}</span>
-            <small>Total</small>
-          </div>
-          <div>
-            <span>{resumo.ativos}</span>
-            <small>Ativos</small>
-          </div>
-          <div>
-            <span>{resumo.inativos}</span>
-            <small>Inativos</small>
-          </div>
+        <div className="header-actions">
+          <button className="secondary-button" type="button" onClick={reload} disabled={loading}>
+            <RefreshCw size={16} className={loading ? 'spin' : ''} />
+            Recarregar
+          </button>
+          <button type="button" onClick={synchronize} disabled={synchronizing}>
+            <Database size={16} />
+            {synchronizing
+              ? 'Sincronizando...'
+              : selectedProject
+                ? 'Sincronizar projeto'
+                : 'Sincronizar tudo'}
+          </button>
         </div>
       </header>
 
-      <div className="actions-bar">
-        <button type="button" className="secondary-button" onClick={carregarProjetos} disabled={carregando}>
-          {carregando ? 'Carregando...' : 'Recarregar'}
-        </button>
-        <button type="button" onClick={sincronizarProjetos} disabled={sincronizando}>
-          {sincronizando ? 'Sincronizando...' : 'Sincronizar Prevision'}
-        </button>
-        {mensagem && <span>{mensagem}</span>}
-      </div>
+      <section className="summary" aria-label="Resumo da carteira">
+        <div>
+          <span>{integerFormatter.format(totals.projects)}</span>
+          <small>Projetos</small>
+        </div>
+        <div>
+          <span>{integerFormatter.format(totals.activities)}</span>
+          <small>Atividades</small>
+        </div>
+        <div>
+          <span>{integerFormatter.format(totals.area)} m²</span>
+          <small>Área planejada</small>
+        </div>
+        <div>
+          <span>{currencyFormatter.format(totals.budget)}</span>
+          <small>Orçamento total</small>
+        </div>
+      </section>
 
-      <section className="table-panel" aria-live="polite">
-        {carregando && <div className="state-message">Carregando dados do Firestore...</div>}
+      <nav className="data-tabs" aria-label="Conjuntos de dados">
+        {tabs.map((tab) => {
+          const Icon = tab.icon
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              className={activeView === tab.key ? 'active' : ''}
+              onClick={() => changeView(tab.key)}
+            >
+              <Icon size={16} />
+              <span>{tab.label}</span>
+              <small>{integerFormatter.format(Number(tabTotals[tab.key]) || 0)}</small>
+            </button>
+          )
+        })}
+      </nav>
 
-        {!carregando && erro && <div className="state-message error">{erro}</div>}
-
-        {!carregando && !erro && projetos.length === 0 && (
-          <div className="state-message">
-            Nenhum dado encontrado. Use Sincronizar Prevision para povoar o banco.
+      <section className="workspace">
+        <div className="toolbar">
+          <div className="view-title">
+            <activeTab.icon size={18} />
+            <h2>{activeTab.label}</h2>
           </div>
+          <div className="filters">
+            <label>
+              <span>Projeto</span>
+              <select value={selectedProject} onChange={(event) => changeProject(event.target.value)}>
+                <option value="">Todos os projetos</option>
+                {projects.map((project) => (
+                  <option key={project.id_prevision} value={project.id_prevision}>
+                    {project.nome_projeto}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="search-field">
+              <span>Buscar</span>
+              <Search size={16} />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar nesta página"
+              />
+            </label>
+          </div>
+        </div>
+
+        {(message || error) && (
+          <div className={`feedback ${error ? 'error' : 'success'}`}>{error || message}</div>
         )}
 
-        {!carregando && !erro && projetos.length > 0 && (
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>ID Prevision</th>
-                  <th>Nome do Projeto</th>
-                  <th>Empresa</th>
-                  <th>Data Inicio</th>
-                  <th>Data Fim</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {projetos.map((projeto, index) => {
-                  const statusClass = projeto.desativado ? 'status-inativo' : 'status-ativo'
-                  const statusText = projeto.desativado ? 'Desativado' : projeto.status || 'Ativo'
-
-                  return (
-                    <tr key={`${projeto.id_prevision ?? projeto.nome_projeto ?? 'projeto'}-${index}`}>
-                      <td>{projeto.id_prevision ?? '-'}</td>
-                      <td>
-                        <strong>{projeto.nome_projeto ?? '-'}</strong>
-                      </td>
-                      <td>{projeto.empresa_nome ?? '-'}</td>
-                      <td>{formatarData(projeto.data_inicio)}</td>
-                      <td>{formatarData(projeto.data_fim)}</td>
-                      <td>
-                        <span className={`status-badge ${statusClass}`}>{statusText}</span>
-                      </td>
+        <div className="table-panel" aria-live="polite">
+          {loading ? (
+            <div className="state-message">
+              <RefreshCw size={20} className="spin" />
+              Carregando dados
+            </div>
+          ) : visibleRecords.length === 0 ? (
+            <div className="state-message">Nenhum registro encontrado.</div>
+          ) : (
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    {columns[activeView].map((column) => (
+                      <th key={column.label} className={column.align === 'right' ? 'align-right' : ''}>
+                        {column.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleRecords.map((record, index) => (
+                    <tr key={String(record.firestore_id || record.id_prevision || index)}>
+                      {columns[activeView].map((column) => (
+                        <td
+                          key={column.label}
+                          className={column.align === 'right' ? 'align-right' : ''}
+                        >
+                          {column.render(record)}
+                        </td>
+                      ))}
                     </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {activeView !== 'projects' && (
+          <footer className="pagination">
+            <span>
+              Página {page + 1} · {visibleRecords.length} registros exibidos
+            </span>
+            <div>
+              <button
+                type="button"
+                title="Página anterior"
+                aria-label="Página anterior"
+                disabled={page === 0 || loading}
+                onClick={() => setPage((current) => Math.max(0, current - 1))}
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <button
+                type="button"
+                title="Próxima página"
+                aria-label="Próxima página"
+                disabled={!hasMore || loading}
+                onClick={() => setPage((current) => current + 1)}
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </footer>
         )}
       </section>
     </main>
