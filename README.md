@@ -85,6 +85,16 @@ npm run seed:firestore -- service-account-dadosprevision.json
 
 Esse comando cria/atualiza o documento `prevision_projetos/exemplo-001`. Depois, voce pode apagar esse documento exemplo no console do Firestore quando a sincronizacao real estiver funcionando.
 
+Para consultar a Prevision e salvar os projetos diretamente no Firestore usando as
+credenciais locais:
+
+```bash
+npm run sync:local
+```
+
+O comando usa os arquivos ignorados pelo Git `vercel-env-backend.txt` e
+`service-account-dadosprevision.json`.
+
 ## Sincronizacao com Prevision
 
 Para atualizar diariamente, crie uma Cloud Function agendada no Firebase que:

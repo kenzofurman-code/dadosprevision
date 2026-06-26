@@ -35,7 +35,14 @@ async function fetchJson(url: string, options?: RequestInit) {
     const payload = await response.json().catch(() => null)
 
     if (!response.ok) {
-      throw new Error(payload?.error || `Erro HTTP ${response.status}.`)
+      throw new Error(
+        payload?.error ||
+          `O servidor respondeu HTTP ${response.status} sem uma mensagem valida. Confira os logs da funcao na Vercel.`,
+      )
+    }
+
+    if (!payload) {
+      throw new Error('O servidor respondeu sem dados. Confira os logs da funcao na Vercel.')
     }
 
     return payload
