@@ -65,6 +65,36 @@
   text-transform: uppercase;
 }
 
+.actions-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.actions-bar button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 8px;
+  background: #0f766e;
+  color: #ffffff;
+  cursor: pointer;
+  padding: 0 16px;
+  font-weight: 800;
+}
+
+.actions-bar button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.actions-bar span {
+  color: #166534;
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .table-panel {
   overflow: hidden;
   border: 1px solid #d9e2ec;
@@ -166,5 +196,10 @@ td strong {
 
   .page-header h1 {
     font-size: 28px;
+  }
+
+  .actions-bar {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

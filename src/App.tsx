@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { collection, getDocs, orderBy, query } from 'firebase/firestore'
 import './App.css'
 import { db, firebaseReady } from './firebase'
@@ -27,36 +27,63 @@ const formatarData = (dataStr?: string) => {
 function App() {
   const [projetos, setProjetos] = useState<ProjetoPrevision[]>([])
   const [carregando, setCarregando] = useState(true)
+  const [sincronizando, setSincronizando] = useState(false)
   const [erro, setErro] = useState('')
+  const [mensagem, setMensagem] = useState('')
 
-  useEffect(() => {
-    async function carregarProjetos() {
-      if (!firebaseReady || !db) {
-        setErro('Configure as variaveis de ambiente do Firebase para carregar os dados.')
-        setCarregando(false)
-        return
-      }
-
-      try {
-        const projetosQuery = query(
-          collection(db, 'prevision_projetos'),
-          orderBy('nome_projeto'),
-        )
-        const snapshot = await getDocs(projetosQuery)
-
-        setProjetos(snapshot.docs.map((doc) => doc.data() as ProjetoPrevision))
-      } catch (error) {
-        console.error('Erro ao ler dados do Firestore:', error)
-        setErro(
-          'Erro ao carregar dados. Confira as regras de leitura do Firestore e se a colecao prevision_projetos existe.',
-        )
-      } finally {
-        setCarregando(false)
-      }
+  const carregarProjetos = useCallback(async () => {
+    if (!firebaseReady || !db) {
+      setErro('Configure as variaveis de ambiente do Firebase para carregar os dados.')
+      setCarregando(false)
+      return
     }
 
-    carregarProjetos()
+    try {
+      setErro('')
+      const projetosQuery = query(
+        collection(db, 'prevision_projetos'),
+        orderBy('nome_projeto'),
+      )
+      const snapshot = await getDocs(projetosQuery)
+
+      setProjetos(snapshot.docs.map((doc) => doc.data() as ProjetoPrevision))
+    } catch (error) {
+      console.error('Erro ao ler dados do Firestore:', error)
+      setErro(
+        'Erro ao carregar dados. Confira as regras de leitura do Firestore e se a colecao prevision_projetos existe.',
+      )
+    } finally {
+      setCarregando(false)
+    }
   }, [])
+
+  useEffect(() => {
+    carregarProjetos()
+  }, [carregarProjetos])
+
+  async function sincronizarProjetos() {
+    try {
+      setSincronizando(true)
+      setMensagem('')
+      setErro('')
+
+      const response = await fetch('/api/sync-prevision', {
+        method: 'POST',
+      })
+      const payload = await response.json().catch(() => null)
+
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Erro ao sincronizar com a Prevision.')
+      }
+
+      setMensagem(`${payload.imported ?? 0} projeto(s) sincronizado(s).`)
+      await carregarProjetos()
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Erro ao sincronizar com a Prevision.')
+    } finally {
+      setSincronizando(false)
+    }
+  }
 
   const resumo = useMemo(() => {
     const ativos = projetos.filter((projeto) => !projeto.desativado).length
@@ -94,6 +121,13 @@ function App() {
           </div>
         </div>
       </header>
+
+      <div className="actions-bar">
+        <button type="button" onClick={sincronizarProjetos} disabled={sincronizando}>
+          {sincronizando ? 'Sincronizando...' : 'Sincronizar Prevision'}
+        </button>
+        {mensagem && <span>{mensagem}</span>}
+      </div>
 
       <section className="table-panel" aria-live="polite">
         {carregando && <div className="state-message">Carregando dados do Firestore...</div>}
