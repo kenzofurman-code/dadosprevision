@@ -452,6 +452,251 @@ td strong {
   background: #edf3f1;
 }
 
+.cff-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+}
+
+.cff-toolbar-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 220px;
+}
+
+.cff-toolbar-copy p {
+  margin: 0;
+  color: #51625e;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.cff-toolbar-copy h3 {
+  margin: 0;
+  color: #17201e;
+  font-size: 20px;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.cff-toolbar-copy span {
+  color: #7a8985;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.cff-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex: 1 1 auto;
+}
+
+.cff-search-field {
+  min-width: 320px;
+  flex: 1 1 320px;
+}
+
+.cff-select-field {
+  display: grid;
+  gap: 4px;
+  min-width: 170px;
+}
+
+.cff-select-field span {
+  color: #7a8985;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.cff-select-field select {
+  min-width: 0;
+  width: 100%;
+}
+
+.cff-toggle-group {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cff-toggle-group button {
+  min-height: 36px;
+  border-color: #cbd5d2;
+  background: #ffffff;
+  color: #364542;
+  padding: 0 12px;
+}
+
+.cff-toggle-group button.active {
+  border-color: #173f38;
+  background: #173f38;
+  color: #ffffff;
+}
+
+.cff-toggle-group button svg {
+  flex: 0 0 auto;
+}
+
+.cff-panel {
+  padding-top: 0;
+}
+
+.cff-panel-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid #dbe4e1;
+}
+
+.cff-panel-head h3 {
+  margin: 0;
+  color: #17201e;
+  font-size: 18px;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.cff-panel-head p {
+  margin: 4px 0 0;
+  color: #6b7a77;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.cff-panel-meta {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+  text-align: right;
+}
+
+.cff-panel-meta span {
+  color: #7a8985;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.cff-panel-meta strong {
+  color: #17201e;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.cff-summary-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px 16px 14px;
+  border-bottom: 1px solid #dfe7e4;
+}
+
+.cff-summary-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cff-summary-head h4 {
+  margin: 0;
+  color: #17201e;
+  font-size: 14px;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.cff-summary-head p {
+  margin: 4px 0 0;
+  color: #6b7a77;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.cff-summary-head span {
+  color: #7a8985;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.cff-summary-scroll {
+  max-height: 220px;
+}
+
+.cff-summary-table {
+  min-width: 580px;
+}
+
+.cff-summary-table th,
+.cff-summary-table td {
+  height: 40px;
+  padding: 8px 12px;
+}
+
+.cff-summary-table th {
+  background: #f8faf9;
+}
+
+.cff-summary-empty {
+  min-height: 74px;
+  border: 1px dashed #ccd7d4;
+  border-radius: 8px;
+}
+
+.cff-scroll {
+  max-height: calc(100vh - 300px);
+}
+
+.cff-table {
+  min-width: 1220px;
+}
+
+.cff-table th,
+.cff-table td {
+  height: 46px;
+  padding: 10px 12px;
+}
+
+.cff-table th {
+  background: #ffffff;
+  border-bottom: 1px solid #dfe7e4;
+  color: #667571;
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+.cff-table tbody tr:hover {
+  background: #f7faf9;
+}
+
+.cff-table td {
+  font-size: 12px;
+  color: #31423d;
+}
+
+.cff-table .total-cell {
+  color: #173f38;
+  font-weight: 800;
+}
+
+.cff-table.dense th,
+.cff-table.dense td {
+  height: 40px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
 .spin {
   animation: spin 0.9s linear infinite;
 }
@@ -498,6 +743,26 @@ td strong {
     align-items: stretch;
   }
 
+  .cff-toolbar-actions,
+  .cff-panel-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cff-toolbar-actions {
+    width: 100%;
+  }
+
+  .cff-search-field {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .cff-panel-meta {
+    justify-items: start;
+    text-align: left;
+  }
+
   .filters label {
     flex: 1;
   }
@@ -513,6 +778,14 @@ td strong {
   .header-actions,
   .filters {
     flex-direction: column;
+  }
+
+  .cff-toggle-group {
+    width: 100%;
+  }
+
+  .cff-toggle-group button {
+    flex: 1 1 auto;
   }
 
   .summary span {

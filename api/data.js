@@ -28,7 +28,12 @@ export default async function handler(req, res) {
   const type = String(req.query?.type || '')
   const collectionName = COLLECTIONS[type]
 
-  if (!collectionName && type !== 'restrictions' && !ANALYTICS_FIELDS[type]) {
+  if (
+    !collectionName &&
+    type !== 'restrictions' &&
+    type !== 'activityJobs' &&
+    !ANALYTICS_FIELDS[type]
+  ) {
     return res.status(400).json({ error: 'Tipo de dado invalido.' })
   }
 
@@ -55,12 +60,63 @@ export default async function handler(req, res) {
       })
     }
 
+    if (type === 'activityJobs') {
+      const activityPage = await readCollectionPage('prevision_atividades', {
+        page,
+        pageSize,
+        projectId,
+      })
+      const records = activityPage.records.flatMap((activity) =>
+        (activity.microservicos || []).map((job) => ({
+          ...job,
+          firestore_id: `${activity.id_prevision}_${job.id_prevision}`,
+          projeto_id: activity.projeto_id,
+          projeto_nome: activity.projeto_nome,
+          atividade_id: activity.id_prevision,
+          atividade_eap: activity.codigo_eap,
+          servico_nome: activity.servico_nome,
+          pavimento_nome: activity.pavimento_nome,
+        })),
+      )
+
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).json({
+        ok: true,
+        type,
+        records,
+        page,
+        hasMore: activityPage.hasMore,
+      })
+    }
+
+    if (type === 'dashboardCff') {
+      const documents = await readCollection('prevision_analiticos')
+      const scopedDocuments = documents.filter(
+        (document) => !projectId || String(document.projeto_id) === projectId,
+      )
+      const allItems = scopedDocuments.flatMap((document) => document.itens_orcamento || [])
+      const allSummaries = scopedDocuments.flatMap((document) => document.cff_resumo || [])
+      const start = page * pageSize
+      const records = allItems.slice(start, start + pageSize)
+
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).json({
+        ok: true,
+        type,
+        records,
+        summary: allSummaries,
+        page,
+        hasMore: start + pageSize < allItems.length,
+      })
+    }
+
     if (ANALYTICS_FIELDS[type]) {
       const documents = await readCollection('prevision_analiticos')
       const field = ANALYTICS_FIELDS[type]
-      const allRecords = documents
-        .filter((document) => !projectId || String(document.projeto_id) === projectId)
-        .flatMap((document) => document[field] || [])
+      const scopedDocuments = documents.filter(
+        (document) => !projectId || String(document.projeto_id) === projectId,
+      )
+      const allRecords = scopedDocuments.flatMap((document) => document[field] || [])
       const start = page * pageSize
       const records = allRecords.slice(start, start + pageSize)
 

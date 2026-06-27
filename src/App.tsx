@@ -10,9 +10,11 @@ import {
   History,
   Layers3,
   ListChecks,
+  Percent,
   RefreshCw,
   Search,
   ShieldAlert,
+  Settings2,
   Users,
   WalletCards,
   Wrench,
@@ -32,7 +34,7 @@ type DataView =
   | 'budgets'
   | 'dashboard'
 
-type ActivityMode = 'planning' | 'progress' | 'resources'
+type ActivityMode = 'planning' | 'jobs' | 'progress' | 'resources'
 type BudgetMode = 'reports' | 'items'
 type DashboardMode = 'general' | 'monthly' | 'cff' | 'services' | 'floors' | 'states'
 
@@ -50,6 +52,32 @@ type Column = {
   align?: 'right'
 }
 
+type CffRecord = DataRecord & {
+  cffIndex: number
+  cffBase: number
+  cffPrevisto: number
+  cffRealizado: number
+}
+
+type CffMonthlyPoint = {
+  data: string | null
+  base: number
+  previsto: number
+  realizado: number
+}
+
+type CffSummary = {
+  projeto_id?: string
+  projeto_nome?: string
+  orcamento_id?: string
+  orcamento_nome?: string
+  datas?: string[]
+  niveis?: Array<{
+    nivel: string
+    meses: CffMonthlyPoint[]
+  }>
+}
+
 type TabDefinition = {
   key: DataView
   label: string
@@ -63,12 +91,12 @@ const tabs: TabDefinition[] = [
   { key: 'projects', label: 'Projetos', icon: Building2 },
   { key: 'activities', label: 'Atividades', icon: ListChecks, totalField: 'total_atividades' },
   { key: 'floors', label: 'Pavimentos', icon: Layers3, totalField: 'total_pavimentos' },
-  { key: 'services', label: 'Serviços', icon: Wrench, totalField: 'total_servicos' },
+  { key: 'services', label: 'ServiÃ§os', icon: Wrench, totalField: 'total_servicos' },
   { key: 'milestones', label: 'Marcos', icon: Flag, totalField: 'total_marcos' },
   { key: 'baselines', label: 'Linhas de base', icon: History, totalField: 'total_linhas_base' },
-  { key: 'responsibles', label: 'Responsáveis', icon: Users, totalField: 'total_responsaveis' },
-  { key: 'restrictions', label: 'Restrições', icon: ShieldAlert, totalField: 'total_restricoes' },
-  { key: 'budgets', label: 'Orçamento', icon: WalletCards, totalField: 'total_orcamentos' },
+  { key: 'responsibles', label: 'ResponsÃ¡veis', icon: Users, totalField: 'total_responsaveis' },
+  { key: 'restrictions', label: 'RestriÃ§Ãµes', icon: ShieldAlert, totalField: 'total_restricoes' },
+  { key: 'budgets', label: 'OrÃ§amento', icon: WalletCards, totalField: 'total_orcamentos' },
   { key: 'dashboard', label: 'Dashboard', icon: ChartNoAxesCombined, totalField: 'total_dashboards' },
 ]
 
@@ -113,9 +141,23 @@ function formatPercent(value?: string | number | boolean | null) {
   return Number.isFinite(number) ? `${numberFormatter.format(number * 100)}%` : '-'
 }
 
+function compareNatural(left?: string | number | boolean | null, right?: string | number | boolean | null) {
+  return String(left || '').localeCompare(String(right || ''), 'pt-BR', {
+    numeric: true,
+    sensitivity: 'base',
+  })
+}
+
+function formatMonthLabel(value?: string | null) {
+  if (!value) return '-'
+  const match = String(value).match(/^(\d{4})-(\d{2})/)
+  if (!match) return String(value)
+  return `${match[2]}/${match[1]}`
+}
+
 function formatPerspective(value?: string | number | boolean | null) {
   if (value === 'monetary') return 'Financeiro'
-  if (value === 'physical') return 'Físico'
+  if (value === 'physical') return 'FÃ­sico'
   return String(value || '-')
 }
 
@@ -123,14 +165,14 @@ function projectStatus(record: DataRecord) {
   if (record.desativado) return { label: 'Arquivado', className: 'neutral' }
   if (record.status_dashboard === 'outdated') return { label: 'Desatualizado', className: 'warning' }
   if (record.status === 'finished') return { label: 'Atualizado', className: 'success' }
-  if (record.status === 'never_updated') return { label: 'Sem atualização', className: 'neutral' }
+  if (record.status === 'never_updated') return { label: 'Sem atualizaÃ§Ã£o', className: 'neutral' }
   return { label: String(record.status || 'Ativo'), className: 'info' }
 }
 
 function activityStatus(record: DataRecord) {
-  if (record.excluido_em) return { label: 'Excluída', className: 'neutral' }
+  if (record.excluido_em) return { label: 'ExcluÃ­da', className: 'neutral' }
   const progress = Number(record.progresso_realizado)
-  if (progress >= 1) return { label: 'Concluída', className: 'success' }
+  if (progress >= 1) return { label: 'ConcluÃ­da', className: 'success' }
 
   const today = new Date().toISOString().slice(0, 10)
   const start = String(record.data_inicio || '').slice(0, 10)
@@ -142,7 +184,7 @@ function activityStatus(record: DataRecord) {
 
 function restrictionStatus(record: DataRecord) {
   if (record.concluido_em || record.etapa_fase === 'done') {
-    return { label: 'Concluída', className: 'success' }
+    return { label: 'ConcluÃ­da', className: 'success' }
   }
 
   const dueDate = String(record.vencimento_em || '').slice(0, 10)
@@ -168,13 +210,13 @@ const columns: Record<DataView, Column[]> = {
       ),
     },
     { label: 'Fase', render: (record) => String(record.fase || '-') },
-    { label: 'Área', render: (record) => formatNumber(record.area, ' m²'), align: 'right' },
-    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
-    { label: 'Término', render: (record) => formatDate(record.data_fim) },
+    { label: 'Ãrea', render: (record) => formatNumber(record.area, ' mÂ²'), align: 'right' },
+    { label: 'InÃ­cio', render: (record) => formatDate(record.data_inicio) },
+    { label: 'TÃ©rmino', render: (record) => formatDate(record.data_fim) },
     { label: 'Previsto', render: (record) => formatPercent(record.progresso_esperado), align: 'right' },
     { label: 'Realizado', render: (record) => formatPercent(record.progresso_realizado), align: 'right' },
     { label: 'IDP', render: (record) => formatNumber(record.idp), align: 'right' },
-    { label: 'Orçamento', render: (record) => formatCurrency(record.custo_orcado), align: 'right' },
+    { label: 'OrÃ§amento', render: (record) => formatCurrency(record.custo_orcado), align: 'right' },
     {
       label: 'Atraso',
       render: (record) => formatNumber(record.atraso_dias, ' d'),
@@ -185,30 +227,30 @@ const columns: Record<DataView, Column[]> = {
   activities: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     { label: 'EAP', render: (record) => String(record.codigo_eap || '-') },
-    { label: 'Serviço', render: (record) => String(record.servico_nome || '-') },
-    { label: 'Pos. serviço', render: (record) => formatNumber(record.posicao_servico), align: 'right' },
+    { label: 'ServiÃ§o', render: (record) => String(record.servico_nome || '-') },
+    { label: 'Pos. serviÃ§o', render: (record) => formatNumber(record.posicao_servico), align: 'right' },
     { label: 'Pavimento', render: (record) => String(record.pavimento_nome || '-') },
     { label: 'Grupo', render: (record) => String(record.grupo_repeticao || '-') },
     { label: 'Parte', render: (record) => String(record.contador_parte || '-') },
-    { label: 'Nível', render: (record) => String(record.nivel_atividade || '-') },
+    { label: 'NÃ­vel', render: (record) => String(record.nivel_atividade || '-') },
     { label: 'Categoria', render: (record) => String(record.categorizacao || '-') },
     {
-      label: 'Crítico',
+      label: 'CrÃ­tico',
       render: (record) => (
         <StatusBadge
           status={
             String(record.caminho_critico).toLocaleLowerCase('pt-BR') === 'sim'
               ? { label: 'Sim', className: 'danger' }
-              : { label: 'Não', className: 'neutral' }
+              : { label: 'NÃ£o', className: 'neutral' }
           }
         />
       ),
     },
-    { label: 'LB início', render: (record) => formatDate(record.linha_base_inicio) },
-    { label: 'LB término', render: (record) => formatDate(record.linha_base_fim) },
-    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
-    { label: 'Término', render: (record) => formatDate(record.data_fim) },
-    { label: 'Duração', render: (record) => formatNumber(record.duracao_dias, ' d'), align: 'right' },
+    { label: 'LB inÃ­cio', render: (record) => formatDate(record.linha_base_inicio) },
+    { label: 'LB tÃ©rmino', render: (record) => formatDate(record.linha_base_fim) },
+    { label: 'InÃ­cio da obra', render: (record) => formatDate(record.data_inicio_obra) },
+    { label: 'Fim da obra', render: (record) => formatDate(record.data_fim_obra) },
+    { label: 'DuraÃ§Ã£o', render: (record) => formatNumber(record.duracao_dias, ' d'), align: 'right' },
     { label: 'Predecessoras', render: (record) => String(record.predecessoras || '-') },
     { label: 'Sucessoras', render: (record) => String(record.sucessoras || '-') },
     { label: 'Status', render: (record) => <StatusBadge status={activityStatus(record)} /> },
@@ -217,15 +259,15 @@ const columns: Record<DataView, Column[]> = {
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     { label: 'Pavimento', render: (record) => String(record.nome || '-') },
     { label: 'Grupo', render: (record) => String(record.grupo_repeticao || '-') },
-    { label: 'Posição', render: (record) => formatNumber(record.posicao), align: 'right' },
-    { label: 'Área', render: (record) => formatNumber(record.area, ' m²'), align: 'right' },
-    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
-    { label: 'Término', render: (record) => formatDate(record.data_fim) },
+    { label: 'PosiÃ§Ã£o', render: (record) => formatNumber(record.posicao), align: 'right' },
+    { label: 'Ãrea', render: (record) => formatNumber(record.area, ' mÂ²'), align: 'right' },
+    { label: 'InÃ­cio', render: (record) => formatDate(record.data_inicio) },
+    { label: 'TÃ©rmino', render: (record) => formatDate(record.data_fim) },
   ],
   services: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     {
-      label: 'Serviço',
+      label: 'ServiÃ§o',
       render: (record) => (
         <span className="color-label">
           <i style={{ backgroundColor: String(record.cor || '#98a2b3') }} />
@@ -233,13 +275,13 @@ const columns: Record<DataView, Column[]> = {
         </span>
       ),
     },
-    { label: 'Posição', render: (record) => formatNumber(record.posicao), align: 'right' },
+    { label: 'PosiÃ§Ã£o', render: (record) => formatNumber(record.posicao), align: 'right' },
     { label: 'Unidade', render: (record) => String(record.unidade || '-') },
-    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
-    { label: 'Término', render: (record) => formatDate(record.data_fim) },
+    { label: 'InÃ­cio', render: (record) => formatDate(record.data_inicio) },
+    { label: 'TÃ©rmino', render: (record) => formatDate(record.data_fim) },
     {
       label: 'Etapas',
-      render: (record) => (record.possui_etapas ? 'Configuradas' : 'Não configuradas'),
+      render: (record) => (record.possui_etapas ? 'Configuradas' : 'NÃ£o configuradas'),
     },
   ],
   milestones: [
@@ -254,7 +296,7 @@ const columns: Record<DataView, Column[]> = {
       ),
     },
     { label: 'Data', render: (record) => formatDate(record.data) },
-    { label: 'Referência', render: (record) => String(record.atributo_base || '-') },
+    { label: 'ReferÃªncia', render: (record) => String(record.atributo_base || '-') },
     {
       label: 'Defasagem',
       render: (record) => formatNumber(record.defasagem_dias, ' d'),
@@ -262,14 +304,14 @@ const columns: Record<DataView, Column[]> = {
     },
     {
       label: 'Visibilidade',
-      render: (record) => (record.visivel_na_obra ? 'Visível na obra' : 'Oculto'),
+      render: (record) => (record.visivel_na_obra ? 'VisÃ­vel na obra' : 'Oculto'),
     },
   ],
   baselines: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     { label: 'ID', render: (record) => String(record.id_prevision || '-') },
     { label: 'Criada em', render: (record) => formatDate(record.criado_em) },
-    { label: 'Versão LOB', render: (record) => String(record.versao_lob_id || '-') },
+    { label: 'VersÃ£o LOB', render: (record) => String(record.versao_lob_id || '-') },
     {
       label: 'Status',
       render: (record) => (
@@ -277,7 +319,7 @@ const columns: Record<DataView, Column[]> = {
           status={
             record.ativa
               ? { label: 'Ativa', className: 'success' }
-              : { label: 'Histórica', className: 'neutral' }
+              : { label: 'HistÃ³rica', className: 'neutral' }
           }
         />
       ),
@@ -285,13 +327,13 @@ const columns: Record<DataView, Column[]> = {
   ],
   responsibles: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
-    { label: 'Responsável', render: (record) => String(record.nome || '-') },
+    { label: 'ResponsÃ¡vel', render: (record) => String(record.nome || '-') },
     { label: 'ID Prevision', render: (record) => String(record.id_prevision || '-') },
   ],
   restrictions: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     {
-      label: 'Restrição',
+      label: 'RestriÃ§Ã£o',
       render: (record) => (
         <div className="primary-cell">
           <strong>{String(record.titulo || '-')}</strong>
@@ -300,15 +342,15 @@ const columns: Record<DataView, Column[]> = {
       ),
     },
     { label: 'Etapa', render: (record) => String(record.etapa_nome || '-') },
-    { label: 'Situação', render: (record) => <StatusBadge status={restrictionStatus(record)} /> },
+    { label: 'SituaÃ§Ã£o', render: (record) => <StatusBadge status={restrictionStatus(record)} /> },
     { label: 'Prazo', render: (record) => formatDate(record.vencimento_em) },
-    { label: 'Concluída em', render: (record) => formatDate(record.concluido_em) },
+    { label: 'ConcluÃ­da em', render: (record) => formatDate(record.concluido_em) },
     { label: 'Atraso', render: (record) => formatNumber(record.atraso_dias, ' d'), align: 'right' },
     { label: 'EAP', render: (record) => String(record.codigo_eap || '-') },
-    { label: 'Serviço', render: (record) => String(record.servico_nome || '-') },
+    { label: 'ServiÃ§o', render: (record) => String(record.servico_nome || '-') },
     { label: 'Pavimento', render: (record) => String(record.pavimento_nome || '-') },
     { label: 'Etiquetas', render: (record) => String(record.etiquetas_nomes || '-') },
-    { label: 'Responsáveis', render: (record) => String(record.usuarios_nomes || '-') },
+    { label: 'ResponsÃ¡veis', render: (record) => String(record.usuarios_nomes || '-') },
     {
       label: 'Checklist',
       render: (record) =>
@@ -318,10 +360,10 @@ const columns: Record<DataView, Column[]> = {
   ],
   budgets: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
-    { label: 'Orçamento', render: (record) => String(record.nome || '-') },
+    { label: 'OrÃ§amento', render: (record) => String(record.nome || '-') },
     { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
     { label: 'Custo total', render: (record) => formatCurrency(record.custo_total), align: 'right' },
-    { label: 'Custo físico', render: (record) => formatCurrency(record.custo_fisico), align: 'right' },
+    { label: 'Custo fÃ­sico', render: (record) => formatCurrency(record.custo_fisico), align: 'right' },
     { label: 'Custo dos pesos', render: (record) => formatCurrency(record.custo_pesos), align: 'right' },
     {
       label: 'Pesos',
@@ -329,22 +371,22 @@ const columns: Record<DataView, Column[]> = {
         <StatusBadge
           status={
             record.pesos_validos
-              ? { label: 'Válidos', className: 'success' }
+              ? { label: 'VÃ¡lidos', className: 'success' }
               : { label: 'Revisar', className: 'warning' }
           }
         />
       ),
     },
     { label: 'Contrato', render: (record) => (record.liberado_contrato ? 'Liberado' : '-') },
-    { label: 'Padrão', render: (record) => (record.padrao ? 'Sim' : 'Não') },
-    { label: 'Integração', render: (record) => String(record.status_integracao || '-') },
+    { label: 'PadrÃ£o', render: (record) => (record.padrao ? 'Sim' : 'NÃ£o') },
+    { label: 'IntegraÃ§Ã£o', render: (record) => String(record.status_integracao || '-') },
   ],
   dashboard: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
-    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
-    { label: 'Término', render: (record) => formatDate(record.data_fim) },
-    { label: 'Última medição', render: (record) => formatDate(record.ultima_medicao) },
+    { label: 'InÃ­cio', render: (record) => formatDate(record.data_inicio) },
+    { label: 'TÃ©rmino', render: (record) => formatDate(record.data_fim) },
+    { label: 'Ãšltima mediÃ§Ã£o', render: (record) => formatDate(record.ultima_medicao) },
     { label: 'Previsto', render: (record) => formatPercent(record.progresso_previsto), align: 'right' },
     { label: 'Realizado', render: (record) => formatPercent(record.progresso_realizado), align: 'right' },
     { label: 'IDP', render: (record) => formatNumber(record.idp), align: 'right' },
@@ -360,25 +402,47 @@ const columns: Record<DataView, Column[]> = {
 
 const activityColumns: Record<ActivityMode, Column[]> = {
   planning: columns.activities,
+  jobs: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    { label: 'EAP atividade', render: (record) => String(record.atividade_eap || '-') },
+    { label: 'ServiÃ§o', render: (record) => String(record.servico_nome || '-') },
+    { label: 'Pavimento', render: (record) => String(record.pavimento_nome || '-') },
+    {
+      label: 'MicroserviÃ§o',
+      render: (record) => (
+        <div className="primary-cell">
+          <strong>{String(record.nome || '-')}</strong>
+          <small>ID {String(record.id_prevision || '-')}</small>
+        </div>
+      ),
+    },
+    { label: 'EAP job', render: (record) => String(record.codigo_eap || '-') },
+    { label: 'InÃ­cio', render: (record) => formatDate(record.data_inicio) },
+    { label: 'TÃ©rmino', render: (record) => formatDate(record.data_fim) },
+    { label: 'DuraÃ§Ã£o', render: (record) => formatNumber(record.duracao_dias, ' d'), align: 'right' },
+    { label: 'Previsto', render: (record) => formatPercent(record.progresso_esperado), align: 'right' },
+    { label: 'Realizado', render: (record) => formatPercent(record.progresso_realizado), align: 'right' },
+    { label: 'Status', render: (record) => <StatusBadge status={activityStatus(record)} /> },
+  ],
   progress: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     { label: 'EAP', render: (record) => String(record.codigo_eap || '-') },
-    { label: 'Serviço', render: (record) => String(record.servico_nome || '-') },
+    { label: 'ServiÃ§o', render: (record) => String(record.servico_nome || '-') },
     { label: 'Pavimento', render: (record) => String(record.pavimento_nome || '-') },
-    { label: '1ª medição', render: (record) => formatDate(record.primeira_medicao_em) },
-    { label: 'Última medição', render: (record) => formatDate(record.ultima_medicao_em) },
-    { label: 'Referência', render: (record) => formatDate(record.data_referencia) },
-    { label: 'Base físico', render: (record) => formatPercent(record.progresso_fisico_base), align: 'right' },
+    { label: '1Âª mediÃ§Ã£o', render: (record) => formatDate(record.primeira_medicao_em) },
+    { label: 'Ãšltima mediÃ§Ã£o', render: (record) => formatDate(record.ultima_medicao_em) },
+    { label: 'ReferÃªncia', render: (record) => formatDate(record.data_referencia) },
+    { label: 'Base fÃ­sico', render: (record) => formatPercent(record.progresso_fisico_base), align: 'right' },
     { label: 'Previsto', render: (record) => formatPercent(record.progresso_esperado), align: 'right' },
     { label: 'Realizado', render: (record) => formatPercent(record.progresso_realizado), align: 'right' },
-    { label: 'Últ. base', render: (record) => formatPercent(record.ultima_medicao_base), align: 'right' },
+    { label: 'Ãšlt. base', render: (record) => formatPercent(record.ultima_medicao_base), align: 'right' },
     {
-      label: 'Últ. previsto',
+      label: 'Ãšlt. previsto',
       render: (record) => formatPercent(record.ultima_medicao_esperado),
       align: 'right',
     },
     {
-      label: 'Últ. realizado',
+      label: 'Ãšlt. realizado',
       render: (record) => formatPercent(record.ultima_medicao_realizado),
       align: 'right',
     },
@@ -396,18 +460,18 @@ const activityColumns: Record<ActivityMode, Column[]> = {
       align: 'right',
     },
     { label: 'Saldo', render: (record) => formatNumber(record.saldo_unidade), align: 'right' },
-    { label: 'Início real', render: (record) => formatDate(record.data_real_inicio) },
-    { label: 'Término real', render: (record) => formatDate(record.data_real_fim) },
-    { label: 'Duração real', render: (record) => String(record.duracao_real || '-') },
+    { label: 'InÃ­cio real', render: (record) => formatDate(record.data_real_inicio) },
+    { label: 'TÃ©rmino real', render: (record) => formatDate(record.data_real_fim) },
+    { label: 'DuraÃ§Ã£o real', render: (record) => String(record.duracao_real || '-') },
     { label: 'Motivos de atraso', render: (record) => String(record.motivos_atraso || '-') },
   ],
   resources: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     { label: 'EAP', render: (record) => String(record.codigo_eap || '-') },
-    { label: 'Serviço', render: (record) => String(record.servico_nome || '-') },
+    { label: 'ServiÃ§o', render: (record) => String(record.servico_nome || '-') },
     { label: 'Pavimento', render: (record) => String(record.pavimento_nome || '-') },
     { label: 'Materiais', render: (record) => String(record.recursos_materiais || '-') },
-    { label: 'Responsável', render: (record) => String(record.responsavel || '-') },
+    { label: 'ResponsÃ¡vel', render: (record) => String(record.responsavel || '-') },
     { label: 'Custo vinculado', render: (record) => formatCurrency(record.custo_vinculado), align: 'right' },
     {
       label: 'Custo linha base',
@@ -416,7 +480,7 @@ const activityColumns: Record<ActivityMode, Column[]> = {
     },
     { label: 'Unidade', render: (record) => String(record.unidade_simbolo || record.unidade_nome || '-') },
     {
-      label: 'Descrição realizada',
+      label: 'DescriÃ§Ã£o realizada',
       render: (record) => String(record.progresso_unidade_descricao || '-'),
     },
   ],
@@ -426,13 +490,13 @@ const budgetColumns: Record<BudgetMode, Column[]> = {
   reports: columns.budgets,
   items: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
-    { label: 'Código', render: (record) => String(record.codigo || '-') },
-    { label: 'Descrição', render: (record) => String(record.descricao || '-') },
-    { label: 'Nível', render: (record) => formatNumber(record.nivel), align: 'right' },
+    { label: 'CÃ³digo', render: (record) => String(record.codigo || '-') },
+    { label: 'DescriÃ§Ã£o', render: (record) => String(record.descricao || '-') },
+    { label: 'NÃ­vel', render: (record) => formatNumber(record.nivel), align: 'right' },
     { label: 'Tipo', render: (record) => String(record.tipo_grupo || '-') },
-    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
-    { label: 'Término', render: (record) => formatDate(record.data_fim) },
-    { label: 'Mão de obra', render: (record) => formatCurrency(record.custo_mao_obra), align: 'right' },
+    { label: 'InÃ­cio', render: (record) => formatDate(record.data_inicio) },
+    { label: 'TÃ©rmino', render: (record) => formatDate(record.data_fim) },
+    { label: 'MÃ£o de obra', render: (record) => formatCurrency(record.custo_mao_obra), align: 'right' },
     { label: 'Material', render: (record) => formatCurrency(record.custo_material), align: 'right' },
     { label: 'Custo total', render: (record) => formatCurrency(record.custo_total), align: 'right' },
     { label: 'Base', render: (record) => formatPercent(record.peso_base), align: 'right' },
@@ -451,10 +515,10 @@ const dashboardColumns: Record<DashboardMode, Column[]> = {
   monthly: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
-    { label: 'Competência', render: (record) => formatDate(record.data) },
-    { label: 'Base mês', render: (record) => formatPercent(record.base_mes), align: 'right' },
-    { label: 'Previsto mês', render: (record) => formatPercent(record.previsto_mes), align: 'right' },
-    { label: 'Realizado mês', render: (record) => formatPercent(record.realizado_mes), align: 'right' },
+    { label: 'CompetÃªncia', render: (record) => formatDate(record.data) },
+    { label: 'Base mÃªs', render: (record) => formatPercent(record.base_mes), align: 'right' },
+    { label: 'Previsto mÃªs', render: (record) => formatPercent(record.previsto_mes), align: 'right' },
+    { label: 'Realizado mÃªs', render: (record) => formatPercent(record.realizado_mes), align: 'right' },
     { label: 'Curva base', render: (record) => formatPercent(record.curva_base), align: 'right' },
     { label: 'Curva prevista', render: (record) => formatPercent(record.curva_prevista), align: 'right' },
     { label: 'Curva realizada', render: (record) => formatPercent(record.curva_realizada), align: 'right' },
@@ -468,8 +532,8 @@ const dashboardColumns: Record<DashboardMode, Column[]> = {
     { label: 'Lotes', render: (record) => String(record.lotes || '-') },
     { label: 'Atividades', render: (record) => formatNumber(record.total_pesos_atividades), align: 'right' },
     { label: 'Etapas', render: (record) => formatNumber(record.total_pesos_etapas), align: 'right' },
-    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
-    { label: 'Término', render: (record) => formatDate(record.data_fim) },
+    { label: 'Início da obra', render: (record) => formatDate(record.data_inicio_obra) },
+    { label: 'Fim da obra', render: (record) => formatDate(record.data_fim_obra) },
     { label: 'Custo total', render: (record) => formatCurrency(record.custo_total), align: 'right' },
     { label: 'Peso base', render: (record) => formatPercent(record.peso_base), align: 'right' },
     { label: 'Peso previsto', render: (record) => formatPercent(record.peso_previsto), align: 'right' },
@@ -486,9 +550,9 @@ const dashboardColumns: Record<DashboardMode, Column[]> = {
   ],
   services: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
-    { label: 'Serviço', render: (record) => String(record.nome || '-') },
+    { label: 'ServiÃ§o', render: (record) => String(record.nome || '-') },
     { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
-    { label: 'Início base', render: (record) => formatDate(record.data_base_inicio) },
+    { label: 'InÃ­cio base', render: (record) => formatDate(record.data_base_inicio) },
     { label: 'Fim base', render: (record) => formatDate(record.data_base_fim) },
     { label: 'Base', render: (record) => formatPercent(record.base), align: 'right' },
     { label: 'Previsto', render: (record) => formatPercent(record.previsto), align: 'right' },
@@ -503,7 +567,7 @@ const dashboardColumns: Record<DashboardMode, Column[]> = {
     { label: 'Lote', render: (record) => String(record.nome || '-') },
     { label: 'Grupo', render: (record) => String(record.grupo_repeticao || '-') },
     { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
-    { label: 'Início base', render: (record) => formatDate(record.data_base_inicio) },
+    { label: 'InÃ­cio base', render: (record) => formatDate(record.data_base_inicio) },
     { label: 'Fim base', render: (record) => formatDate(record.data_base_fim) },
     { label: 'Base', render: (record) => formatPercent(record.base), align: 'right' },
     { label: 'Previsto', render: (record) => formatPercent(record.previsto), align: 'right' },
@@ -517,8 +581,8 @@ const dashboardColumns: Record<DashboardMode, Column[]> = {
     { label: 'Dashboard', render: (record) => String(record.nome || '-') },
     { label: 'Categoria', render: (record) => String(record.categoria || '-') },
     { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
-    { label: 'Padrão', render: (record) => (record.padrao ? 'Sim' : 'Não') },
-    { label: 'Orçamento', render: (record) => (record.possui_orcamento ? 'Vinculado' : '-') },
+    { label: 'PadrÃ£o', render: (record) => (record.padrao ? 'Sim' : 'NÃ£o') },
+    { label: 'OrÃ§amento', render: (record) => (record.possui_orcamento ? 'Vinculado' : '-') },
     { label: 'Status', render: (record) => String(record.status || '-') },
     { label: 'Atualizado em', render: (record) => formatDate(record.atualizado_em) },
   ],
@@ -539,7 +603,7 @@ async function fetchJson(url: string, options?: RequestInit, timeoutMs = 30000) 
     if (!response.ok) {
       throw new Error(
         payload?.error ||
-          `O servidor respondeu HTTP ${response.status}. Confira os logs da função na Vercel.`,
+          `O servidor respondeu HTTP ${response.status}. Confira os logs da funÃ§Ã£o na Vercel.`,
       )
     }
     if (!payload) throw new Error('O servidor respondeu sem dados.')
@@ -561,6 +625,11 @@ function App() {
   const [activityMode, setActivityMode] = useState<ActivityMode>('planning')
   const [budgetMode, setBudgetMode] = useState<BudgetMode>('reports')
   const [dashboardMode, setDashboardMode] = useState<DashboardMode>('general')
+  const [cffSummaries, setCffSummaries] = useState<CffSummary[]>([])
+  const [cffBudgetFilter, setCffBudgetFilter] = useState<'all' | string>('all')
+  const [cffLevelFilter, setCffLevelFilter] = useState<'all' | 'level1'>('level1')
+  const [cffDisplayMode, setCffDisplayMode] = useState<'percentual' | 'acumulada'>('percentual')
+  const [cffDenseMode, setCffDenseMode] = useState(false)
   const [selectedProject, setSelectedProject] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
@@ -578,7 +647,9 @@ function App() {
   const loadCurrentView = useCallback(async () => {
     if (!dataViews.has(activeView)) return
     const requestedType =
-      activeView === 'budgets'
+      activeView === 'activities' && activityMode === 'jobs'
+        ? 'activityJobs'
+        : activeView === 'budgets'
         ? budgetMode === 'items'
           ? 'budgetItems'
           : 'budgets'
@@ -586,7 +657,7 @@ function App() {
           ? {
               general: 'dashboard',
               monthly: 'dashboardMonthly',
-              cff: 'budgetItems',
+              cff: 'dashboardCff',
               services: 'dashboardServices',
               floors: 'dashboardFloors',
               states: 'dashboardStates',
@@ -601,8 +672,9 @@ function App() {
 
     const payload = await fetchJson(`/api/data?${params}`)
     setRecords(Array.isArray(payload.records) ? payload.records : [])
+    setCffSummaries(Array.isArray((payload as any).summary) ? (payload as any).summary : [])
     setHasMore(Boolean(payload.hasMore))
-  }, [activeView, budgetMode, dashboardMode, page, selectedProject])
+  }, [activeView, activityMode, budgetMode, dashboardMode, page, selectedProject])
 
   const reload = useCallback(async () => {
     try {
@@ -643,11 +715,11 @@ function App() {
       )
       if (activeView === 'restrictions') {
         setMessage(
-          `${integerFormatter.format(payload.totals?.restrictions ?? 0)} restrições atualizadas.`,
+          `${integerFormatter.format(payload.totals?.restrictions ?? 0)} restriÃ§Ãµes atualizadas.`,
         )
       } else if (activeView === 'budgets' || activeView === 'dashboard') {
         setMessage(
-          `${integerFormatter.format(payload.totals?.budgets ?? 0)} orçamentos e ${integerFormatter.format(payload.totals?.dashboards ?? 0)} dashboards atualizados.`,
+          `${integerFormatter.format(payload.totals?.budgets ?? 0)} orÃ§amentos e ${integerFormatter.format(payload.totals?.dashboards ?? 0)} dashboards atualizados.`,
         )
       } else {
         const total = payload.totals?.activities ?? 0
@@ -707,6 +779,123 @@ function App() {
     )
   }, [activeView, projects, records, search, selectedProject])
 
+  const cffRows = useMemo<CffRecord[]>(() => {
+    if (activeView !== 'dashboard' || dashboardMode !== 'cff') return []
+
+    const source = visibleRecords as CffRecord[]
+    const filtered = source.filter((record) => {
+      const budgetMatches =
+        cffBudgetFilter === 'all' || String(record.orcamento_nome || '') === cffBudgetFilter
+      const levelValue = Number(record.nivel ?? 0)
+      const levelMatches =
+        cffLevelFilter === 'all' ? true : levelValue === Number(cffLevelFilter.replace('level', ''))
+      return budgetMatches && levelMatches
+    })
+
+    const sorted = [...filtered].sort((left, right) => {
+      const codeOrder = compareNatural(left.codigo, right.codigo)
+      if (codeOrder !== 0) return codeOrder
+      return compareNatural(left.descricao, right.descricao)
+    })
+
+    let cumulativeBase = 0
+    let cumulativePrevisto = 0
+    let cumulativeRealizado = 0
+
+    return sorted.map((record, index) => {
+      const base = Number(record.peso_base) || 0
+      const previsto = Number(record.peso_previsto) || 0
+      const realizado = Number(record.peso_realizado) || 0
+
+      cumulativeBase += base
+      cumulativePrevisto += previsto
+      cumulativeRealizado += realizado
+
+      return {
+        ...record,
+        cffIndex: index + 1,
+        cffBase: cffDisplayMode === 'acumulada' ? cumulativeBase : base,
+        cffPrevisto: cffDisplayMode === 'acumulada' ? cumulativePrevisto : previsto,
+        cffRealizado: cffDisplayMode === 'acumulada' ? cumulativeRealizado : realizado,
+      } satisfies CffRecord
+    })
+  }, [activeView, dashboardMode, visibleRecords, cffBudgetFilter, cffLevelFilter, cffDisplayMode])
+
+  const cffBudgetNames = useMemo(
+    () =>
+      [...new Set((records as CffRecord[]).map((record) => String(record.orcamento_nome || '').trim()).filter(Boolean))],
+    [records],
+  )
+
+  const cffSummaryBudgetNames = useMemo(
+    () =>
+      [...new Set(cffSummaries.map((summary) => String(summary.orcamento_nome || '').trim()).filter(Boolean))],
+    [cffSummaries],
+  )
+
+  const cffLevelOptions = useMemo(
+    () =>
+      [...new Set((records as CffRecord[]).map((record) => Number(record.nivel ?? 0)).filter((value) => Number.isFinite(value) && value > 0))]
+        .sort((left, right) => left - right)
+        .map((value) => String(value)),
+    [records],
+  )
+
+  const cffBudgetLabel = cffBudgetFilter === 'all'
+    ? (cffBudgetNames[0] || cffSummaryBudgetNames[0] || 'Cronograma Físico-Financeiro')
+    : cffBudgetFilter
+
+  const cffReferenceDate = cffSummaries.find((summary) =>
+    cffBudgetFilter === 'all' ? true : String(summary.orcamento_nome || '') === cffBudgetFilter,
+  )?.datas?.at(-1) || cffRows[0]?.data_fim_obra || cffRows[0]?.data_fim || null
+
+  const cffMonthlyRows = useMemo(() => {
+    if (activeView !== 'dashboard' || dashboardMode !== 'cff') return []
+
+    const selectedSummaries = cffSummaries.filter((summary) =>
+      cffBudgetFilter === 'all' ? true : String(summary.orcamento_nome || '') === cffBudgetFilter,
+    )
+
+    const pickedLevel = cffLevelFilter === 'all' ? 'all' : cffLevelFilter.replace('level', '')
+    const merged = new Map<string, CffMonthlyPoint>()
+
+    for (const summary of selectedSummaries) {
+      const levelData =
+        summary.niveis?.find((entry) => entry.nivel === pickedLevel) ||
+        summary.niveis?.find((entry) => entry.nivel === 'all')
+
+      for (const point of levelData?.meses || []) {
+        const key = String(point.data || '')
+        if (!merged.has(key)) {
+          merged.set(key, { data: point.data || null, base: 0, previsto: 0, realizado: 0 })
+        }
+        const current = merged.get(key)!
+        current.base += Number(point.base) || 0
+        current.previsto += Number(point.previsto) || 0
+        current.realizado += Number(point.realizado) || 0
+      }
+    }
+
+    const rows = [...merged.values()].sort((left, right) => compareNatural(left.data, right.data))
+
+    let cumulativeBase = 0
+    let cumulativePrevisto = 0
+    let cumulativeRealizado = 0
+
+    return rows.map((row) => {
+      cumulativeBase += row.base
+      cumulativePrevisto += row.previsto
+      cumulativeRealizado += row.realizado
+
+      return {
+        ...row,
+        baseExibida: cffDisplayMode === 'acumulada' ? cumulativeBase : row.base,
+        previstoExibido: cffDisplayMode === 'acumulada' ? cumulativePrevisto : row.previsto,
+        realizadoExibido: cffDisplayMode === 'acumulada' ? cumulativeRealizado : row.realizado,
+      }
+    })
+  }, [activeView, dashboardMode, cffSummaries, cffBudgetFilter, cffLevelFilter, cffDisplayMode])
+
   const activeTab = tabs.find((tab) => tab.key === activeView) || tabs[0]
   const currentColumns =
     activeView === 'activities'
@@ -750,9 +939,9 @@ function App() {
             {synchronizing
               ? 'Sincronizando...'
               : activeView === 'restrictions'
-                ? 'Sincronizar restrições'
+                ? 'Sincronizar restriÃ§Ãµes'
                 : activeView === 'budgets' || activeView === 'dashboard'
-                  ? 'Sincronizar análises'
+                  ? 'Sincronizar anÃ¡lises'
               : selectedProject
                 ? 'Sincronizar projeto'
                 : 'Sincronizar tudo'}
@@ -770,12 +959,12 @@ function App() {
           <small>Atividades</small>
         </div>
         <div>
-          <span>{integerFormatter.format(totals.area)} m²</span>
-          <small>Área planejada</small>
+          <span>{integerFormatter.format(totals.area)} mÂ²</span>
+          <small>Ãrea planejada</small>
         </div>
         <div>
           <span>{currencyFormatter.format(totals.budget)}</span>
-          <small>Orçamento total</small>
+          <small>OrÃ§amento total</small>
         </div>
       </section>
 
@@ -814,10 +1003,20 @@ function App() {
               </button>
               <button
                 type="button"
+                className={activityMode === 'jobs' ? 'active' : ''}
+                onClick={() => {
+                  setActivityMode('jobs')
+                  setPage(0)
+                }}
+              >
+                MicroserviÃ§os
+              </button>
+              <button
+                type="button"
                 className={activityMode === 'progress' ? 'active' : ''}
                 onClick={() => setActivityMode('progress')}
               >
-                Medições
+                MediÃ§Ãµes
               </button>
               <button
                 type="button"
@@ -829,7 +1028,7 @@ function App() {
             </div>
           )}
           {activeView === 'budgets' && (
-            <div className="activity-modes" aria-label="Detalhamento do orçamento">
+            <div className="activity-modes" aria-label="Detalhamento do orÃ§amento">
               <button
                 type="button"
                 className={budgetMode === 'reports' ? 'active' : ''}
@@ -838,7 +1037,7 @@ function App() {
                   setPage(0)
                 }}
               >
-                Relatórios
+                RelatÃ³rios
               </button>
               <button
                 type="button"
@@ -858,7 +1057,7 @@ function App() {
                 ['general', 'Geral'],
                 ['monthly', 'Curva mensal'],
                 ['cff', 'CFF'],
-                ['services', 'Serviços'],
+                ['services', 'ServiÃ§os'],
                 ['floors', 'Lotes'],
                 ['states', 'Estados'],
               ].map(([mode, label]) => (
@@ -876,40 +1075,207 @@ function App() {
               ))}
             </div>
           )}
-          <div className="filters">
-            <label>
-              <span>Projeto</span>
-              <select value={selectedProject} onChange={(event) => changeProject(event.target.value)}>
-                <option value="">Todos os projetos</option>
-                {projects.map((project) => (
-                  <option key={project.id_prevision} value={project.id_prevision}>
-                    {project.nome_projeto}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="search-field">
-              <span>Buscar</span>
-              <Search size={16} />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar nesta página"
-              />
-            </label>
-          </div>
+          {activeView === 'dashboard' && dashboardMode === 'cff' ? (
+            <div className="cff-toolbar">
+              <div className="cff-toolbar-copy">
+                <p>Cronograma Físico-Financeiro</p>
+                <h3>{cffBudgetLabel}</h3>
+                <span>Referência {cffReferenceDate ? formatDate(cffReferenceDate) : '-'}</span>
+              </div>
+              <div className="cff-toolbar-actions">
+                <label className="search-field cff-search-field">
+                  <span>Buscar</span>
+                  <Search size={16} />
+                  <input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Buscar atividade, código ou valor"
+                  />
+                </label>
+                <label className="cff-select-field">
+                  <span>Orçamento</span>
+                  <select value={cffBudgetFilter} onChange={(event) => setCffBudgetFilter(event.target.value)}>
+                    <option value="all">Todos</option>
+                    {cffSummaryBudgetNames.map((budget) => (
+                      <option key={budget} value={budget}>
+                        {budget}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="cff-select-field">
+                  <span>Nível</span>
+                  <select value={cffLevelFilter} onChange={(event) => setCffLevelFilter(event.target.value as 'all' | 'level1')}>
+                    <option value="all">Todos</option>
+                    {cffLevelOptions.map((level) => (
+                      <option key={level} value={`level${level}`}>
+                        Nível {level}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="cff-toggle-group" role="group" aria-label="Controles do CFF">
+                  <button
+                    type="button"
+                    className={cffDisplayMode === 'percentual' ? 'active' : ''}
+                    onClick={() => setCffDisplayMode('percentual')}
+                  >
+                    <Percent size={14} />
+                    Percentual (%)
+                  </button>
+                  <button
+                    type="button"
+                    className={cffDisplayMode === 'acumulada' ? 'active' : ''}
+                    onClick={() => setCffDisplayMode('acumulada')}
+                  >
+                    <ChartNoAxesCombined size={14} />
+                    Acumulada
+                  </button>
+                  <button
+                    type="button"
+                    className={cffDenseMode ? 'active' : ''}
+                    title="Modo compacto"
+                    aria-label="Modo compacto"
+                    onClick={() => setCffDenseMode((current) => !current)}
+                  >
+                    <Settings2 size={14} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="filters">
+              <label>
+                <span>Projeto</span>
+                <select value={selectedProject} onChange={(event) => changeProject(event.target.value)}>
+                  <option value="">Todos os projetos</option>
+                  {projects.map((project) => (
+                    <option key={project.id_prevision} value={project.id_prevision}>
+                      {project.nome_projeto}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="search-field">
+                <span>Buscar</span>
+                <Search size={16} />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Buscar nesta página"
+                />
+              </label>
+            </div>
+          )}
         </div>
 
         {(message || error) && (
           <div className={`feedback ${error ? 'error' : 'success'}`}>{error || message}</div>
         )}
 
-        <div className="table-panel" aria-live="polite">
+        <div className={`table-panel ${activeView === 'dashboard' && dashboardMode === 'cff' ? 'cff-panel' : ''}`} aria-live="polite">
           {loading ? (
             <div className="state-message">
               <RefreshCw size={20} className="spin" />
               Carregando dados
             </div>
+          ) : activeView === 'dashboard' && dashboardMode === 'cff' ? (
+            cffRows.length === 0 ? (
+              <div className="state-message">Nenhum registro encontrado.</div>
+            ) : (
+              <>
+                <div className="cff-panel-head">
+                  <div>
+                    <h3>Cronograma Físico-Financeiro</h3>
+                    <p>{cffBudgetLabel}</p>
+                  </div>
+                  <div className="cff-panel-meta">
+                    <span>Data de referência</span>
+                    <strong>{cffReferenceDate ? formatDate(cffReferenceDate) : '-'}</strong>
+                  </div>
+                </div>
+                <div className="cff-summary-panel">
+                  <div className="cff-summary-head">
+                    <div>
+                      <h4>Base, previsto e realizado mês a mês</h4>
+                      <p>{cffDisplayMode === 'acumulada' ? 'Valores acumulados' : 'Valores mensais'}</p>
+                    </div>
+                    <span>
+                      {cffLevelFilter === 'all'
+                        ? 'Todos os níveis'
+                        : `Nível ${cffLevelFilter.replace('level', '')}`}
+                    </span>
+                  </div>
+                  {cffMonthlyRows.length > 0 ? (
+                    <div className="table-scroll cff-summary-scroll">
+                      <table className="cff-summary-table">
+                        <thead>
+                          <tr>
+                            <th>Mês</th>
+                            <th className="align-right">Base</th>
+                            <th className="align-right">Previsto</th>
+                            <th className="align-right">Realizado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cffMonthlyRows.map((row) => (
+                            <tr key={String(row.data || '')}>
+                              <td>{formatMonthLabel(row.data)}</td>
+                              <td className="align-right">{formatPercent(row.baseExibida)}</td>
+                              <td className="align-right">{formatPercent(row.previstoExibido)}</td>
+                              <td className="align-right">{formatPercent(row.realizadoExibido)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="state-message cff-summary-empty">
+                      Sem resumo mensal disponível para a seleção atual.
+                    </div>
+                  )}
+                </div>
+                <div className="table-scroll cff-scroll">
+                  <table className={`cff-table ${cffDenseMode ? 'dense' : ''}`}>
+                    <thead>
+                      <tr>
+                        <th>Código WBS</th>
+                        <th>Atividade</th>
+                        <th>Data de início</th>
+                        <th>Data de fim</th>
+                        <th className="align-right">Material</th>
+                        <th className="align-right">Mão de obra</th>
+                        <th className="align-right">Total</th>
+                        <th className="align-right">Base</th>
+                        <th className="align-right">Previsto</th>
+                        <th className="align-right">Realizado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cffRows.map((record, index) => (
+                        <tr key={String(record.firestore_id || record.id_prevision || index)}>
+                          <td>{String(record.codigo || '-')}</td>
+                          <td>
+                            <div className="primary-cell">
+                              <strong>{String(record.descricao || '-')}</strong>
+                              <small>{String(record.orcamento_nome || `Nível ${record.nivel || '-'}`)}</small>
+                            </div>
+                          </td>
+                          <td>{formatDate(record.data_inicio_obra || record.data_inicio)}</td>
+                          <td>{formatDate(record.data_fim_obra || record.data_fim)}</td>
+                          <td className="align-right">{formatCurrency(record.custo_material)}</td>
+                          <td className="align-right">{formatCurrency(record.custo_mao_obra)}</td>
+                          <td className="align-right total-cell">{formatCurrency(record.custo_total)}</td>
+                          <td className="align-right">{formatPercent(record.cffBase ?? record.peso_base)}</td>
+                          <td className="align-right">{formatPercent(record.cffPrevisto ?? record.peso_previsto)}</td>
+                          <td className="align-right">{formatPercent(record.cffRealizado ?? record.peso_realizado)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )
           ) : visibleRecords.length === 0 ? (
             <div className="state-message">Nenhum registro encontrado.</div>
           ) : (
@@ -946,13 +1312,13 @@ function App() {
         {activeView !== 'projects' && (
           <footer className="pagination">
             <span>
-              Página {page + 1} · {visibleRecords.length} registros exibidos
+              PÃ¡gina {page + 1} Â· {visibleRecords.length} registros exibidos
             </span>
             <div>
               <button
                 type="button"
-                title="Página anterior"
-                aria-label="Página anterior"
+                title="PÃ¡gina anterior"
+                aria-label="PÃ¡gina anterior"
                 disabled={page === 0 || loading}
                 onClick={() => setPage((current) => Math.max(0, current - 1))}
               >
@@ -960,8 +1326,8 @@ function App() {
               </button>
               <button
                 type="button"
-                title="Próxima página"
-                aria-label="Próxima página"
+                title="PrÃ³xima pÃ¡gina"
+                aria-label="PrÃ³xima pÃ¡gina"
                 disabled={!hasMore || loading}
                 onClick={() => setPage((current) => current + 1)}
               >
@@ -976,3 +1342,4 @@ function App() {
 }
 
 export default App
+

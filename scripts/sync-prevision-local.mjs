@@ -14,7 +14,7 @@ async function loadBackendEnvironment() {
   }
 
   const serviceAccountJson = await readFile(
-    resolve(projectRoot, 'service-account-dadosprevision.json'),
+    resolve(projectRoot, 'service-account-dadosprevision-new.json'),
   )
   process.env.FIREBASE_SERVICE_ACCOUNT_BASE64 = serviceAccountJson.toString('base64')
   process.env.PREVISION_API_MODE = 'graphql'
@@ -68,6 +68,7 @@ console.log(`${snapshot.size} documento(s) salvos no Firestore.`)
 if (result.totals) {
   const labels = {
     activities: 'atividade(s)',
+    microservices: 'microservico(s)',
     floors: 'pavimento(s)',
     services: 'servico(s)',
     milestones: 'marco(s)',

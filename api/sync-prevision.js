@@ -61,6 +61,7 @@ function normalizeProject(project, data, counts) {
     status: data.updateProcessStatus || project.updateProcessStatus || 'unknown',
     desativado: Boolean(data.archivedAt || project.archivedAt),
     total_atividades: counts.activities,
+    total_microservicos: counts.microservices ?? 0,
     total_pavimentos: counts.floors,
     total_servicos: counts.services,
     total_marcos: counts.milestones,
@@ -87,6 +88,16 @@ function normalizeActivity(item, project, projectName, context) {
   const lastMeasurement = measurements.at(-1)
   const predecessors = item.predecessorsPage?.nodes || []
   const successors = item.successorsPage?.nodes || []
+  const microservices = (item.jobs || []).map((job) => ({
+    id_prevision: String(job.id),
+    nome: job.name || '-',
+    codigo_eap: job.wbsCode || null,
+    progresso_realizado: normalizeProgress(job.percentageCompleted),
+    progresso_esperado: normalizeProgress(job.expectedPercentageCompleted),
+    data_inicio: job.startAt || null,
+    data_fim: job.endAt || null,
+    duracao_dias: job.duration ?? null,
+  }))
 
   return clean({
     ...projectReference(project, projectName),
@@ -170,6 +181,9 @@ function normalizeActivity(item, project, projectName, context) {
     custo_orcado: report.linked_cost ?? item.budgetCost ?? null,
     parte: item.part ?? null,
     possui_etapas: Boolean(item.hasJobs),
+    total_microservicos: microservices.length,
+    microservicos_nomes: microservices.map((job) => job.nome).join(', ') || null,
+    microservicos: microservices,
     excluido_em: item.deletedAt || null,
   })
 }
@@ -298,11 +312,84 @@ function joinUnique(values, maxLength = 2000) {
   return joined.length > maxLength ? `${joined.slice(0, maxLength - 3)}...` : joined || null
 }
 
+function normalizeCffPointSeries(points, fallbackLength = 0) {
+  const series = Array.isArray(points) ? points : []
+  const length = Math.max(series.length, fallbackLength)
+  return Array.from({ length }, (_, index) => ({
+    x: series[index]?.x || null,
+    y: Number(series[index]?.y) || 0,
+  }))
+}
+
+function buildCffMonthlySummary(report, projectReferenceData) {
+  const dates = Array.isArray(report.data?.dates) ? report.data.dates.map((date) => String(date)) : []
+  const rows = Array.isArray(report.data?.rows) ? report.data.rows : []
+  const summaries = new Map()
+
+  function ensureLevel(levelKey) {
+    if (!summaries.has(levelKey)) {
+      summaries.set(
+        levelKey,
+        dates.map((date) => ({
+          data: date || null,
+          base: 0,
+          previsto: 0,
+          realizado: 0,
+        })),
+      )
+    }
+    return summaries.get(levelKey)
+  }
+
+  function addSeries(target, source, field) {
+    source.forEach((point, index) => {
+      if (!target[index]) return
+      target[index][field] += Number(point?.y) || 0
+    })
+  }
+
+  const overall = ensureLevel('all')
+
+  for (const row of rows) {
+    const item = row.budgetItem || row.budget_item || {}
+    const levelKey = String(item.level ?? '0')
+    const levelSeries = ensureLevel(levelKey)
+    const basePoints = normalizeCffPointSeries(row.basePoints || row.base_points, dates.length)
+    const expectedPoints = normalizeCffPointSeries(row.expectedPoints || row.expected_points, dates.length)
+    const realizedPoints = normalizeCffPointSeries(row.realizedPoints || row.realized_points, dates.length)
+
+    addSeries(overall, basePoints, 'base')
+    addSeries(overall, expectedPoints, 'previsto')
+    addSeries(overall, realizedPoints, 'realizado')
+    addSeries(levelSeries, basePoints, 'base')
+    addSeries(levelSeries, expectedPoints, 'previsto')
+    addSeries(levelSeries, realizedPoints, 'realizado')
+  }
+
+  return {
+    ...projectReferenceData,
+    orcamento_id: report.budgetId,
+    orcamento_nome: report.name || `Orçamento ${report.budgetId}`,
+    datas: dates,
+    niveis: [...summaries.entries()]
+      .map(([nivel, meses]) => ({
+        nivel,
+        meses,
+      }))
+      .sort((left, right) => {
+        if (left.nivel === 'all') return -1
+        if (right.nivel === 'all') return 1
+        return Number(left.nivel) - Number(right.nivel)
+      }),
+  }
+}
+
 function normalizeAnalytics(project, data) {
   const projectReferenceData = {
     projeto_id: String(project.id),
     projeto_nome: project.name || '-',
   }
+  const projectSummary = data.projectSummary || {}
   const releasedBudgetIds = new Set(
     data.contractWhitelistedBudgetReports.map((budget) => String(budget.id)),
   )
@@ -334,11 +421,14 @@ function normalizeAnalytics(project, data) {
       return {
         ...projectReferenceData,
         orcamento_id: report.budgetId,
+        orcamento_nome: report.name || `Orçamento ${report.budgetId}`,
         id_prevision: String(item.id || `${report.budgetId}_${row.code}`),
         codigo: row.code || item.code || null,
         descricao: item.description || '-',
         nivel: item.level ?? null,
         tipo_grupo: item.groupType || item.group_type || null,
+        data_inicio_obra: projectSummary.startAt || null,
+        data_fim_obra: projectSummary.endAt || project.finishProjectDate || project.activeBaselineEndDate || null,
         data_inicio: row.startAt || row.start_at || null,
         data_fim: row.endAt || row.end_at || null,
         custo_mao_obra: item.laborCost ?? item.labor_cost ?? null,
@@ -367,6 +457,9 @@ function normalizeAnalytics(project, data) {
         ultimo_realizado: lastRealizedPoint?.y ?? null,
       }
     }),
+  )
+  const cffSummaries = data.cffReports.map((report) =>
+    buildCffMonthlySummary(report, projectReferenceData),
   )
   const dashboardStates = data.dashboardWeights.map((dashboard) => ({
     ...projectReferenceData,
@@ -482,6 +575,7 @@ function normalizeAnalytics(project, data) {
     ...projectReferenceData,
     orcamentos: budgets,
     itens_orcamento: budgetItems,
+    cff_resumo: cffSummaries,
     dashboard_estados: dashboardStates,
     dashboard_geral: general,
     dashboard_mensal: monthly,
@@ -544,14 +638,15 @@ async function synchronizeAll(apiKey, restToken = '', requestedProjectId = '') {
     baselines: 0,
     responsibles: 0,
     restrictions: 0,
+    microservices: 0,
   }
 
   for (const project of projects) {
-    const data = await fetchProjectData(apiKey, project, restToken)
-    const projectName = data.details.name || project.name
+    const projectData = await fetchProjectData(apiKey, project, restToken)
+    const projectName = projectData.details.name || project.name
     const baselineByActivityId = new Map()
 
-    for (const baselineStep of data.baselineSteps) {
+    for (const baselineStep of projectData.baselineSteps) {
       for (const activity of baselineStep.activities || []) {
         baselineByActivityId.set(String(activity.id), baselineStep)
       }
@@ -560,39 +655,45 @@ async function synchronizeAll(apiKey, restToken = '', requestedProjectId = '') {
     const activityContext = {
       baselineByActivityId,
       scheduleById: new Map(
-        data.scheduleActivities.map((activity) => [String(activity.id), activity]),
+        projectData.scheduleActivities.map((activity) => [String(activity.id), activity]),
       ),
-      criticalActivityIds: new Set(data.details.criticalPath || []),
-      referenceDate: data.details.summary?.lastMeasurement || null,
+      criticalActivityIds: new Set(projectData.details.criticalPath || []),
+      referenceDate: projectData.details.summary?.lastMeasurement || null,
     }
     const normalized = {
-      activities: data.activities.map((item) =>
+      activities: projectData.activities.map((item) =>
         normalizeActivity(item, project, projectName, activityContext),
       ),
-      floors: data.floors.map((item) => normalizeFloor(item, project, projectName)),
-      services: data.services.map((item) => normalizeService(item, project, projectName)),
-      milestones: data.milestones.map((item) => normalizeMilestone(item, project, projectName)),
-      baselines: data.baselines.map((item) => normalizeBaseline(item, project, projectName)),
-      responsibles: data.responsibles.map((item) =>
+      floors: projectData.floors.map((item) => normalizeFloor(item, project, projectName)),
+      services: projectData.services.map((item) => normalizeService(item, project, projectName)),
+      milestones: projectData.milestones.map((item) => normalizeMilestone(item, project, projectName)),
+      baselines: projectData.baselines.map((item) => normalizeBaseline(item, project, projectName)),
+      responsibles: projectData.responsibles.map((item) =>
         normalizeResponsible(item, project, projectName),
       ),
       restrictions: kanban.tasks
         .filter((task) => String(task.project?.id) === String(project.id))
         .map(normalizeRestriction),
     }
+    const microservicesCount = normalized.activities.reduce(
+      (total, activity) => total + (activity.total_microservicos || 0),
+      0,
+    )
 
     for (const [key, collectionName] of Object.entries(COLLECTIONS)) {
       await syncCollectionForProject(db, collectionName, String(project.id), normalized[key])
       totals[key] += normalized[key].length
     }
+    totals.microservices += microservicesCount
 
     await db
       .collection('prevision_projetos')
       .doc(String(project.id))
       .set(
         {
-          ...normalizeProject(project, data.details, {
+          ...normalizeProject(project, projectData.details, {
             activities: normalized.activities.length,
+            microservices: microservicesCount,
             floors: normalized.floors.length,
             services: normalized.services.length,
             milestones: normalized.milestones.length,
