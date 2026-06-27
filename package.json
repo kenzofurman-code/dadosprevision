@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "seed:firestore": "node scripts/seed-firestore.mjs",
     "sync:local": "node scripts/sync-prevision-local.mjs",
-    "sync:restrictions": "node scripts/sync-prevision-local.mjs restrictions"
+    "sync:restrictions": "node scripts/sync-prevision-local.mjs restrictions",
+    "sync:analytics": "node scripts/sync-prevision-local.mjs analytics"
   },
   "dependencies": {
     "firebase": "^12.15.0",

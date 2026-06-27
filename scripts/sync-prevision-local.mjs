@@ -41,7 +41,8 @@ function createResponse() {
 await loadBackendEnvironment()
 const argument = process.argv[2] || ''
 const restrictionsOnly = argument === 'restrictions'
-const projectId = restrictionsOnly ? '' : argument
+const analyticsOnly = argument === 'analytics'
+const projectId = restrictionsOnly || analyticsOnly ? process.argv[3] || '' : argument
 
 const [{ default: syncHandler }, { getDb }] = await Promise.all([
   import('../api/sync-prevision.js'),
@@ -54,6 +55,7 @@ const result = await syncHandler(
     body: {
       ...(projectId ? { projectId } : {}),
       ...(restrictionsOnly ? { scope: 'restrictions' } : {}),
+      ...(analyticsOnly ? { scope: 'analytics' } : {}),
     },
   },
   createResponse(),
@@ -72,6 +74,10 @@ if (result.totals) {
     baselines: 'linha(s) de base',
     responsibles: 'responsavel(is)',
     restrictions: 'restricao(oes)',
+    budgets: 'orcamento(s)',
+    budgetItems: 'item(ns) de orcamento',
+    dashboards: 'dashboard(s)',
+    monthly: 'registro(s) mensal(is)',
   }
 
   for (const [key, label] of Object.entries(labels)) {

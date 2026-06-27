@@ -115,6 +115,14 @@ projeto. Para sincronizar somente as restricoes:
 npm run sync:restrictions
 ```
 
+Os modulos de Orcamento e Dashboard ficam consolidados em
+`prevision_analiticos`, com relatorios, itens CFF, curva mensal, informacoes
+gerais, estados e evolucao por servico/lote. Para atualizar somente esses dados:
+
+```bash
+npm run sync:analytics
+```
+
 ## Sincronizacao com Prevision
 
 Para atualizar diariamente, crie uma Cloud Function agendada no Firebase que:

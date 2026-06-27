@@ -9,6 +9,16 @@ const COLLECTIONS = {
   responsibles: 'prevision_responsaveis',
 }
 
+const ANALYTICS_FIELDS = {
+  budgets: 'orcamentos',
+  budgetItems: 'itens_orcamento',
+  dashboard: 'dashboard_geral',
+  dashboardMonthly: 'dashboard_mensal',
+  dashboardServices: 'dashboard_servicos',
+  dashboardFloors: 'dashboard_lotes',
+  dashboardStates: 'dashboard_estados',
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET')
@@ -18,7 +28,7 @@ export default async function handler(req, res) {
   const type = String(req.query?.type || '')
   const collectionName = COLLECTIONS[type]
 
-  if (!collectionName && type !== 'restrictions') {
+  if (!collectionName && type !== 'restrictions' && !ANALYTICS_FIELDS[type]) {
     return res.status(400).json({ error: 'Tipo de dado invalido.' })
   }
 
@@ -32,6 +42,25 @@ export default async function handler(req, res) {
       const allRecords = projects
         .filter((project) => !projectId || String(project.id_prevision) === projectId)
         .flatMap((project) => project.restricoes || [])
+      const start = page * pageSize
+      const records = allRecords.slice(start, start + pageSize)
+
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).json({
+        ok: true,
+        type,
+        records,
+        page,
+        hasMore: start + pageSize < allRecords.length,
+      })
+    }
+
+    if (ANALYTICS_FIELDS[type]) {
+      const documents = await readCollection('prevision_analiticos')
+      const field = ANALYTICS_FIELDS[type]
+      const allRecords = documents
+        .filter((document) => !projectId || String(document.projeto_id) === projectId)
+        .flatMap((document) => document[field] || [])
       const start = page * pageSize
       const records = allRecords.slice(start, start + pageSize)
 

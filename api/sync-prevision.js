@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from 'node:util'
 import { getDb } from '../lib/firebase-admin.js'
 import {
   fetchAllProjectIds,
+  fetchAnalyticsData,
   fetchKanbanData,
   fetchProjectData,
   sanitizePrevisionApiKey,
@@ -285,6 +286,184 @@ function normalizeRestriction(task) {
   })
 }
 
+function sumPoints(points) {
+  return Object.values(points || {}).reduce((total, value) => total + (Number(value) || 0), 0)
+}
+
+function normalizeAnalytics(project, data) {
+  const projectReferenceData = {
+    projeto_id: String(project.id),
+    projeto_nome: project.name || '-',
+  }
+  const releasedBudgetIds = new Set(
+    data.contractWhitelistedBudgetReports.map((budget) => String(budget.id)),
+  )
+  const budgets = data.budgetReports.map((budget) => ({
+    ...projectReferenceData,
+    id_prevision: String(budget.id),
+    nome: budget.name || '-',
+    custo_total: budget.totalCost ?? null,
+    custo_fisico: budget.totalPhysicalCost ?? null,
+    custo_pesos: budget.weightsCost ?? null,
+    pesos_validos: Boolean(budget.validBudgetWeights),
+    origem_erp: Boolean(budget.isSourceFromErp),
+    status_integracao: budget.integrationStatus || null,
+    ultima_integracao: budget.lastIntegrationDate || null,
+    liberado_contrato: releasedBudgetIds.has(String(budget.id)),
+    dashboard_id: budget.dashboardWeight?.id || null,
+    perspectiva: budget.dashboardWeight?.perspective || null,
+    padrao: Boolean(budget.dashboardWeight?.primary),
+  }))
+  const budgetItems = data.cffReports.flatMap((report) =>
+    (report.data?.rows || []).map((row) => {
+      const item = row.budget_item || {}
+      return {
+        ...projectReferenceData,
+        orcamento_id: report.budgetId,
+        id_prevision: String(item.id || `${report.budgetId}_${row.code}`),
+        codigo: row.code || item.code || null,
+        descricao: item.description || '-',
+        nivel: item.level ?? null,
+        tipo_grupo: item.group_type || null,
+        data_inicio: row.start_at || null,
+        data_fim: row.end_at || null,
+        custo_mao_obra: item.labor_cost ?? null,
+        custo_material: item.material_cost ?? null,
+        custo_total:
+          item.total ??
+          item.total_cost ??
+          (Number(item.labor_cost) || 0) + (Number(item.material_cost) || 0),
+        ignorado_erp: Boolean(item.ignored_on_erp),
+        peso_base: sumPoints(row.base_points),
+        peso_previsto: sumPoints(row.expected_points),
+        peso_realizado: sumPoints(row.realized_points),
+        total_pesos_atividades: (row.activity_weights || []).length,
+      }
+    }),
+  )
+  const dashboardStates = data.dashboardWeights.map((dashboard) => ({
+    ...projectReferenceData,
+    id_prevision: String(dashboard.id),
+    nome: dashboard.name || null,
+    categoria: dashboard.category || null,
+    perspectiva: dashboard.perspective || null,
+    padrao: Boolean(dashboard.primary),
+    possui_orcamento: Boolean(dashboard.hasBudgetLink),
+    status: dashboard.dashboardStatus?.status || null,
+    atualizado_em: dashboard.dashboardStatus?.updatedAt || null,
+  }))
+  const general = []
+  const monthly = []
+  const serviceEvolution = []
+  const floorEvolution = []
+
+  for (const dashboard of data.dashboards) {
+    const perspective = dashboard.perspective
+    const details = dashboard.data.detailedDashboard || {}
+    const info = details.generalInfo || {}
+    general.push({
+      ...projectReferenceData,
+      perspectiva: perspective,
+      custo: info.cost ?? null,
+      custo_realizado: info.realized_cost ?? null,
+      data_inicio: info.start_at || null,
+      data_fim: info.end_at || null,
+      ultima_medicao: info.last_measurement || null,
+      progresso_previsto: info.expected ?? null,
+      progresso_realizado: info.realized ?? null,
+      atraso_dias: info.delay ?? null,
+      idp: info.idp ?? null,
+      dias_desde_inicio: info.days_since_start ?? null,
+      dias_ate_fim: info.days_to_end ?? null,
+    })
+
+    const progression = details.monthlyProgress || {}
+    let accumulatedBase = 0
+    let accumulatedExpected = 0
+    let accumulatedRealized = 0
+    for (let index = 0; index < (progression.dates || []).length; index += 1) {
+      const base = Number(progression.base?.[index]) || 0
+      const expected = Number(progression.expected?.[index]) || 0
+      const realized = Number(progression.realized?.[index]) || 0
+      accumulatedBase += base
+      accumulatedExpected += expected
+      accumulatedRealized += realized
+      monthly.push({
+        ...projectReferenceData,
+        perspectiva: perspective,
+        data: progression.dates[index],
+        base_mes: base,
+        previsto_mes: expected,
+        realizado_mes: realized,
+        curva_base: accumulatedBase,
+        curva_prevista: accumulatedExpected,
+        curva_realizada: accumulatedRealized,
+      })
+    }
+
+    serviceEvolution.push(
+      ...(dashboard.data.workPackageEvolution || []).map((item) => ({
+        ...projectReferenceData,
+        perspectiva: perspective,
+        id_prevision: String(item.service_id),
+        nome: item.name,
+        cor: item.color || null,
+        posicao: item.position ?? null,
+        data_base_inicio: item.base_start_at || null,
+        data_base_fim: item.base_end_at || null,
+        data_prevista_inicio: item.expected_start_at || null,
+        data_prevista_fim: item.expected_end_at || null,
+        duracao_base: item.base_duration ?? null,
+        duracao_prevista: item.expected_duration ?? null,
+        base: item.base ?? null,
+        previsto: item.expected ?? null,
+        realizado: item.realized ?? null,
+        atraso_dias: item.delay ?? null,
+        delta: item.delta ?? null,
+        idp: item.idp ?? null,
+        custo_base: item.base_cost ?? null,
+        custo_total: item.total_cost ?? null,
+      })),
+    )
+    floorEvolution.push(
+      ...(dashboard.data.floorEvolution || []).map((item) => ({
+        ...projectReferenceData,
+        perspectiva: perspective,
+        id_prevision: String(item.floor_id),
+        nome: item.name,
+        grupo_repeticao: item.replication_group || null,
+        posicao: item.position ?? null,
+        data_base_inicio: item.base_start_at || null,
+        data_base_fim: item.base_end_at || null,
+        data_prevista_inicio: item.expected_start_at || null,
+        data_prevista_fim: item.expected_end_at || null,
+        duracao_base: item.base_duration ?? null,
+        duracao_prevista: item.expected_duration ?? null,
+        base: item.base ?? null,
+        previsto: item.expected ?? null,
+        realizado: item.realized ?? null,
+        atraso_dias: item.delay ?? null,
+        delta: item.delta ?? null,
+        idp: item.idp ?? null,
+        custo_base: item.base_cost ?? null,
+        custo_total: item.total_cost ?? null,
+      })),
+    )
+  }
+
+  return clean({
+    ...projectReferenceData,
+    orcamentos: budgets,
+    itens_orcamento: budgetItems,
+    dashboard_estados: dashboardStates,
+    dashboard_geral: general,
+    dashboard_mensal: monthly,
+    dashboard_servicos: serviceEvolution,
+    dashboard_lotes: floorEvolution,
+    atualizado_em: new Date().toISOString(),
+  })
+}
+
 async function syncCollectionForProject(db, collectionName, projectId, items) {
   const collection = db.collection(collectionName)
   const existing = await collection.where('projeto_id', '==', projectId).get()
@@ -442,6 +621,61 @@ async function synchronizeRestrictions(apiKey, requestedProjectId = '') {
   }
 }
 
+async function synchronizeAnalytics(apiKey, requestedProjectId = '') {
+  const db = getDb()
+  const allProjects = await fetchAllProjectIds(apiKey)
+  const projects = requestedProjectId
+    ? allProjects.filter((project) => String(project.id) === requestedProjectId)
+    : allProjects
+
+  if (!projects.length) {
+    throw new Error('Projeto nao encontrado na Prevision.')
+  }
+
+  const totals = {
+    projects: projects.length,
+    budgets: 0,
+    budgetItems: 0,
+    dashboards: 0,
+    monthly: 0,
+    services: 0,
+    floors: 0,
+  }
+
+  for (const project of projects) {
+    const data = await fetchAnalyticsData(apiKey, project)
+    const normalized = normalizeAnalytics(project, data)
+    const documentSize = Buffer.byteLength(JSON.stringify(normalized))
+
+    if (documentSize > 900000) {
+      throw new Error(
+        `Dados analiticos do projeto ${project.name} excedem o tamanho seguro do Firestore.`,
+      )
+    }
+
+    await db
+      .collection('prevision_analiticos')
+      .doc(String(project.id))
+      .set(normalized)
+    await db.collection('prevision_projetos').doc(String(project.id)).set(
+      {
+        total_orcamentos: normalized.orcamentos.length,
+        total_dashboards: normalized.dashboard_estados.length,
+      },
+      { merge: true },
+    )
+
+    totals.budgets += normalized.orcamentos.length
+    totals.budgetItems += normalized.itens_orcamento.length
+    totals.dashboards += normalized.dashboard_estados.length
+    totals.monthly += normalized.dashboard_mensal.length
+    totals.services += normalized.dashboard_servicos.length
+    totals.floors += normalized.dashboard_lotes.length
+  }
+
+  return totals
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
@@ -464,6 +698,8 @@ export default async function handler(req, res) {
     const totals =
       req.body?.scope === 'restrictions'
         ? await synchronizeRestrictions(apiKey, requestedProjectId)
+        : req.body?.scope === 'analytics'
+          ? await synchronizeAnalytics(apiKey, requestedProjectId)
         : await synchronizeAll(apiKey, restToken, requestedProjectId)
     return res.status(200).json({ ok: true, imported: totals.projects, totals })
   } catch (error) {

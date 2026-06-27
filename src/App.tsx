@@ -4,6 +4,7 @@ import {
   Building2,
   ChevronLeft,
   ChevronRight,
+  ChartNoAxesCombined,
   Database,
   Flag,
   History,
@@ -13,6 +14,7 @@ import {
   Search,
   ShieldAlert,
   Users,
+  WalletCards,
   Wrench,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -27,8 +29,12 @@ type DataView =
   | 'baselines'
   | 'responsibles'
   | 'restrictions'
+  | 'budgets'
+  | 'dashboard'
 
 type ActivityMode = 'planning' | 'progress' | 'resources'
+type BudgetMode = 'reports' | 'items'
+type DashboardMode = 'general' | 'monthly' | 'services' | 'floors' | 'states'
 
 type DataRecord = Record<string, string | number | boolean | null | undefined>
 
@@ -62,6 +68,8 @@ const tabs: TabDefinition[] = [
   { key: 'baselines', label: 'Linhas de base', icon: History, totalField: 'total_linhas_base' },
   { key: 'responsibles', label: 'Responsáveis', icon: Users, totalField: 'total_responsaveis' },
   { key: 'restrictions', label: 'Restrições', icon: ShieldAlert, totalField: 'total_restricoes' },
+  { key: 'budgets', label: 'Orçamento', icon: WalletCards, totalField: 'total_orcamentos' },
+  { key: 'dashboard', label: 'Dashboard', icon: ChartNoAxesCombined, totalField: 'total_dashboards' },
 ]
 
 const dataViews = new Set<DataView>([
@@ -72,6 +80,8 @@ const dataViews = new Set<DataView>([
   'baselines',
   'responsibles',
   'restrictions',
+  'budgets',
+  'dashboard',
 ])
 
 const numberFormatter = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 })
@@ -101,6 +111,12 @@ function formatCurrency(value?: string | number | boolean | null) {
 function formatPercent(value?: string | number | boolean | null) {
   const number = Number(value)
   return Number.isFinite(number) ? `${numberFormatter.format(number * 100)}%` : '-'
+}
+
+function formatPerspective(value?: string | number | boolean | null) {
+  if (value === 'monetary') return 'Financeiro'
+  if (value === 'physical') return 'Físico'
+  return String(value || '-')
 }
 
 function projectStatus(record: DataRecord) {
@@ -300,6 +316,46 @@ const columns: Record<DataView, Column[]> = {
       align: 'right',
     },
   ],
+  budgets: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    { label: 'Orçamento', render: (record) => String(record.nome || '-') },
+    { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
+    { label: 'Custo total', render: (record) => formatCurrency(record.custo_total), align: 'right' },
+    { label: 'Custo físico', render: (record) => formatCurrency(record.custo_fisico), align: 'right' },
+    { label: 'Custo dos pesos', render: (record) => formatCurrency(record.custo_pesos), align: 'right' },
+    {
+      label: 'Pesos',
+      render: (record) => (
+        <StatusBadge
+          status={
+            record.pesos_validos
+              ? { label: 'Válidos', className: 'success' }
+              : { label: 'Revisar', className: 'warning' }
+          }
+        />
+      ),
+    },
+    { label: 'Contrato', render: (record) => (record.liberado_contrato ? 'Liberado' : '-') },
+    { label: 'Padrão', render: (record) => (record.padrao ? 'Sim' : 'Não') },
+    { label: 'Integração', render: (record) => String(record.status_integracao || '-') },
+  ],
+  dashboard: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
+    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
+    { label: 'Término', render: (record) => formatDate(record.data_fim) },
+    { label: 'Última medição', render: (record) => formatDate(record.ultima_medicao) },
+    { label: 'Previsto', render: (record) => formatPercent(record.progresso_previsto), align: 'right' },
+    { label: 'Realizado', render: (record) => formatPercent(record.progresso_realizado), align: 'right' },
+    { label: 'IDP', render: (record) => formatNumber(record.idp), align: 'right' },
+    { label: 'Atraso', render: (record) => formatNumber(record.atraso_dias, ' d'), align: 'right' },
+    { label: 'Custo', render: (record) => formatCurrency(record.custo), align: 'right' },
+    {
+      label: 'Custo realizado',
+      render: (record) => formatCurrency(record.custo_realizado),
+      align: 'right',
+    },
+  ],
 }
 
 const activityColumns: Record<ActivityMode, Column[]> = {
@@ -366,6 +422,83 @@ const activityColumns: Record<ActivityMode, Column[]> = {
   ],
 }
 
+const budgetColumns: Record<BudgetMode, Column[]> = {
+  reports: columns.budgets,
+  items: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    { label: 'Código', render: (record) => String(record.codigo || '-') },
+    { label: 'Descrição', render: (record) => String(record.descricao || '-') },
+    { label: 'Nível', render: (record) => formatNumber(record.nivel), align: 'right' },
+    { label: 'Tipo', render: (record) => String(record.tipo_grupo || '-') },
+    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
+    { label: 'Término', render: (record) => formatDate(record.data_fim) },
+    { label: 'Mão de obra', render: (record) => formatCurrency(record.custo_mao_obra), align: 'right' },
+    { label: 'Material', render: (record) => formatCurrency(record.custo_material), align: 'right' },
+    { label: 'Custo total', render: (record) => formatCurrency(record.custo_total), align: 'right' },
+    { label: 'Base', render: (record) => formatPercent(record.peso_base), align: 'right' },
+    { label: 'Previsto', render: (record) => formatPercent(record.peso_previsto), align: 'right' },
+    { label: 'Realizado', render: (record) => formatPercent(record.peso_realizado), align: 'right' },
+    {
+      label: 'Pesos atividades',
+      render: (record) => formatNumber(record.total_pesos_atividades),
+      align: 'right',
+    },
+  ],
+}
+
+const dashboardColumns: Record<DashboardMode, Column[]> = {
+  general: columns.dashboard,
+  monthly: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
+    { label: 'Competência', render: (record) => formatDate(record.data) },
+    { label: 'Base mês', render: (record) => formatPercent(record.base_mes), align: 'right' },
+    { label: 'Previsto mês', render: (record) => formatPercent(record.previsto_mes), align: 'right' },
+    { label: 'Realizado mês', render: (record) => formatPercent(record.realizado_mes), align: 'right' },
+    { label: 'Curva base', render: (record) => formatPercent(record.curva_base), align: 'right' },
+    { label: 'Curva prevista', render: (record) => formatPercent(record.curva_prevista), align: 'right' },
+    { label: 'Curva realizada', render: (record) => formatPercent(record.curva_realizada), align: 'right' },
+  ],
+  services: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    { label: 'Serviço', render: (record) => String(record.nome || '-') },
+    { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
+    { label: 'Início base', render: (record) => formatDate(record.data_base_inicio) },
+    { label: 'Fim base', render: (record) => formatDate(record.data_base_fim) },
+    { label: 'Base', render: (record) => formatPercent(record.base), align: 'right' },
+    { label: 'Previsto', render: (record) => formatPercent(record.previsto), align: 'right' },
+    { label: 'Realizado', render: (record) => formatPercent(record.realizado), align: 'right' },
+    { label: 'IDP', render: (record) => formatNumber(record.idp), align: 'right' },
+    { label: 'Atraso', render: (record) => formatNumber(record.atraso_dias, ' d'), align: 'right' },
+    { label: 'Custo base', render: (record) => formatCurrency(record.custo_base), align: 'right' },
+    { label: 'Custo total', render: (record) => formatCurrency(record.custo_total), align: 'right' },
+  ],
+  floors: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    { label: 'Lote', render: (record) => String(record.nome || '-') },
+    { label: 'Grupo', render: (record) => String(record.grupo_repeticao || '-') },
+    { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
+    { label: 'Início base', render: (record) => formatDate(record.data_base_inicio) },
+    { label: 'Fim base', render: (record) => formatDate(record.data_base_fim) },
+    { label: 'Base', render: (record) => formatPercent(record.base), align: 'right' },
+    { label: 'Previsto', render: (record) => formatPercent(record.previsto), align: 'right' },
+    { label: 'Realizado', render: (record) => formatPercent(record.realizado), align: 'right' },
+    { label: 'IDP', render: (record) => formatNumber(record.idp), align: 'right' },
+    { label: 'Atraso', render: (record) => formatNumber(record.atraso_dias, ' d'), align: 'right' },
+    { label: 'Custo total', render: (record) => formatCurrency(record.custo_total), align: 'right' },
+  ],
+  states: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    { label: 'Dashboard', render: (record) => String(record.nome || '-') },
+    { label: 'Categoria', render: (record) => String(record.categoria || '-') },
+    { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
+    { label: 'Padrão', render: (record) => (record.padrao ? 'Sim' : 'Não') },
+    { label: 'Orçamento', render: (record) => (record.possui_orcamento ? 'Vinculado' : '-') },
+    { label: 'Status', render: (record) => String(record.status || '-') },
+    { label: 'Atualizado em', render: (record) => formatDate(record.atualizado_em) },
+  ],
+}
+
 async function fetchJson(url: string, options?: RequestInit, timeoutMs = 30000) {
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
@@ -401,6 +534,8 @@ function App() {
   const [records, setRecords] = useState<DataRecord[]>([])
   const [activeView, setActiveView] = useState<DataView>('projects')
   const [activityMode, setActivityMode] = useState<ActivityMode>('planning')
+  const [budgetMode, setBudgetMode] = useState<BudgetMode>('reports')
+  const [dashboardMode, setDashboardMode] = useState<DashboardMode>('general')
   const [selectedProject, setSelectedProject] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
@@ -417,8 +552,22 @@ function App() {
 
   const loadCurrentView = useCallback(async () => {
     if (!dataViews.has(activeView)) return
+    const requestedType =
+      activeView === 'budgets'
+        ? budgetMode === 'items'
+          ? 'budgetItems'
+          : 'budgets'
+        : activeView === 'dashboard'
+          ? {
+              general: 'dashboard',
+              monthly: 'dashboardMonthly',
+              services: 'dashboardServices',
+              floors: 'dashboardFloors',
+              states: 'dashboardStates',
+            }[dashboardMode]
+          : activeView
     const params = new URLSearchParams({
-      type: activeView,
+      type: requestedType,
       page: String(page),
       limit: String(PAGE_SIZE),
     })
@@ -427,7 +576,7 @@ function App() {
     const payload = await fetchJson(`/api/data?${params}`)
     setRecords(Array.isArray(payload.records) ? payload.records : [])
     setHasMore(Boolean(payload.hasMore))
-  }, [activeView, page, selectedProject])
+  }, [activeView, budgetMode, dashboardMode, page, selectedProject])
 
   const reload = useCallback(async () => {
     try {
@@ -459,6 +608,9 @@ function App() {
           body: JSON.stringify({
             ...(selectedProject ? { projectId: selectedProject } : {}),
             ...(activeView === 'restrictions' ? { scope: 'restrictions' } : {}),
+            ...(activeView === 'budgets' || activeView === 'dashboard'
+              ? { scope: 'analytics' }
+              : {}),
           }),
         },
         300000,
@@ -466,6 +618,10 @@ function App() {
       if (activeView === 'restrictions') {
         setMessage(
           `${integerFormatter.format(payload.totals?.restrictions ?? 0)} restrições atualizadas.`,
+        )
+      } else if (activeView === 'budgets' || activeView === 'dashboard') {
+        setMessage(
+          `${integerFormatter.format(payload.totals?.budgets ?? 0)} orçamentos e ${integerFormatter.format(payload.totals?.dashboards ?? 0)} dashboards atualizados.`,
         )
       } else {
         const total = payload.totals?.activities ?? 0
@@ -527,7 +683,13 @@ function App() {
 
   const activeTab = tabs.find((tab) => tab.key === activeView) || tabs[0]
   const currentColumns =
-    activeView === 'activities' ? activityColumns[activityMode] : columns[activeView]
+    activeView === 'activities'
+      ? activityColumns[activityMode]
+      : activeView === 'budgets'
+        ? budgetColumns[budgetMode]
+        : activeView === 'dashboard'
+          ? dashboardColumns[dashboardMode]
+          : columns[activeView]
 
   function changeView(view: DataView) {
     setActiveView(view)
@@ -563,6 +725,8 @@ function App() {
               ? 'Sincronizando...'
               : activeView === 'restrictions'
                 ? 'Sincronizar restrições'
+                : activeView === 'budgets' || activeView === 'dashboard'
+                  ? 'Sincronizar análises'
               : selectedProject
                 ? 'Sincronizar projeto'
                 : 'Sincronizar tudo'}
@@ -636,6 +800,53 @@ function App() {
               >
                 Recursos e custos
               </button>
+            </div>
+          )}
+          {activeView === 'budgets' && (
+            <div className="activity-modes" aria-label="Detalhamento do orçamento">
+              <button
+                type="button"
+                className={budgetMode === 'reports' ? 'active' : ''}
+                onClick={() => {
+                  setBudgetMode('reports')
+                  setPage(0)
+                }}
+              >
+                Relatórios
+              </button>
+              <button
+                type="button"
+                className={budgetMode === 'items' ? 'active' : ''}
+                onClick={() => {
+                  setBudgetMode('items')
+                  setPage(0)
+                }}
+              >
+                Itens / CFF
+              </button>
+            </div>
+          )}
+          {activeView === 'dashboard' && (
+            <div className="activity-modes" aria-label="Detalhamento do dashboard">
+              {[
+                ['general', 'Geral'],
+                ['monthly', 'Curva mensal'],
+                ['services', 'Serviços'],
+                ['floors', 'Lotes'],
+                ['states', 'Estados'],
+              ].map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={dashboardMode === mode ? 'active' : ''}
+                  onClick={() => {
+                    setDashboardMode(mode as DashboardMode)
+                    setPage(0)
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           )}
           <div className="filters">
