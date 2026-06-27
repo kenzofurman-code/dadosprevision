@@ -39,13 +39,17 @@ function createResponse() {
 }
 
 await loadBackendEnvironment()
+const projectId = process.argv[2] || ''
 
 const [{ default: syncHandler }, { getDb }] = await Promise.all([
   import('../api/sync-prevision.js'),
   import('../lib/firebase-admin.js'),
 ])
 
-const result = await syncHandler({ method: 'POST' }, createResponse())
+const result = await syncHandler(
+  { method: 'POST', body: projectId ? { projectId } : {} },
+  createResponse(),
+)
 const snapshot = await getDb().collection('prevision_projetos').get()
 
 console.log(`${result.imported} projeto(s) recebidos da Prevision.`)

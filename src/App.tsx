@@ -26,6 +26,8 @@ type DataView =
   | 'baselines'
   | 'responsibles'
 
+type ActivityMode = 'planning' | 'progress' | 'resources'
+
 type DataRecord = Record<string, string | number | boolean | null | undefined>
 
 type Project = DataRecord & {
@@ -152,13 +154,31 @@ const columns: Record<DataView, Column[]> = {
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     { label: 'EAP', render: (record) => String(record.codigo_eap || '-') },
     { label: 'Serviço', render: (record) => String(record.servico_nome || '-') },
+    { label: 'Pos. serviço', render: (record) => formatNumber(record.posicao_servico), align: 'right' },
     { label: 'Pavimento', render: (record) => String(record.pavimento_nome || '-') },
+    { label: 'Grupo', render: (record) => String(record.grupo_repeticao || '-') },
+    { label: 'Parte', render: (record) => String(record.contador_parte || '-') },
+    { label: 'Nível', render: (record) => String(record.nivel_atividade || '-') },
+    { label: 'Categoria', render: (record) => String(record.categorizacao || '-') },
+    {
+      label: 'Crítico',
+      render: (record) => (
+        <StatusBadge
+          status={
+            String(record.caminho_critico).toLocaleLowerCase('pt-BR') === 'sim'
+              ? { label: 'Sim', className: 'danger' }
+              : { label: 'Não', className: 'neutral' }
+          }
+        />
+      ),
+    },
+    { label: 'LB início', render: (record) => formatDate(record.linha_base_inicio) },
+    { label: 'LB término', render: (record) => formatDate(record.linha_base_fim) },
     { label: 'Início', render: (record) => formatDate(record.data_inicio) },
     { label: 'Término', render: (record) => formatDate(record.data_fim) },
     { label: 'Duração', render: (record) => formatNumber(record.duracao_dias, ' d'), align: 'right' },
-    { label: 'Previsto', render: (record) => formatPercent(record.progresso_esperado), align: 'right' },
-    { label: 'Realizado', render: (record) => formatPercent(record.progresso_realizado), align: 'right' },
-    { label: 'Custo', render: (record) => formatCurrency(record.custo_orcado), align: 'right' },
+    { label: 'Predecessoras', render: (record) => String(record.predecessoras || '-') },
+    { label: 'Sucessoras', render: (record) => String(record.sucessoras || '-') },
     { label: 'Status', render: (record) => <StatusBadge status={activityStatus(record)} /> },
   ],
   floors: [
@@ -238,6 +258,70 @@ const columns: Record<DataView, Column[]> = {
   ],
 }
 
+const activityColumns: Record<ActivityMode, Column[]> = {
+  planning: columns.activities,
+  progress: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    { label: 'EAP', render: (record) => String(record.codigo_eap || '-') },
+    { label: 'Serviço', render: (record) => String(record.servico_nome || '-') },
+    { label: 'Pavimento', render: (record) => String(record.pavimento_nome || '-') },
+    { label: '1ª medição', render: (record) => formatDate(record.primeira_medicao_em) },
+    { label: 'Última medição', render: (record) => formatDate(record.ultima_medicao_em) },
+    { label: 'Referência', render: (record) => formatDate(record.data_referencia) },
+    { label: 'Base físico', render: (record) => formatPercent(record.progresso_fisico_base), align: 'right' },
+    { label: 'Previsto', render: (record) => formatPercent(record.progresso_esperado), align: 'right' },
+    { label: 'Realizado', render: (record) => formatPercent(record.progresso_realizado), align: 'right' },
+    { label: 'Últ. base', render: (record) => formatPercent(record.ultima_medicao_base), align: 'right' },
+    {
+      label: 'Últ. previsto',
+      render: (record) => formatPercent(record.ultima_medicao_esperado),
+      align: 'right',
+    },
+    {
+      label: 'Últ. realizado',
+      render: (record) => formatPercent(record.ultima_medicao_realizado),
+      align: 'right',
+    },
+    { label: 'Unidade', render: (record) => String(record.unidade_simbolo || record.unidade_nome || '-') },
+    { label: 'Qtd. total', render: (record) => formatNumber(record.quantidade_unidade), align: 'right' },
+    { label: 'Base unidade', render: (record) => formatNumber(record.progresso_unidade_base), align: 'right' },
+    {
+      label: 'Previsto unidade',
+      render: (record) => formatNumber(record.progresso_unidade_esperado),
+      align: 'right',
+    },
+    {
+      label: 'Realizado unidade',
+      render: (record) => formatNumber(record.progresso_unidade_realizado),
+      align: 'right',
+    },
+    { label: 'Saldo', render: (record) => formatNumber(record.saldo_unidade), align: 'right' },
+    { label: 'Início real', render: (record) => formatDate(record.data_real_inicio) },
+    { label: 'Término real', render: (record) => formatDate(record.data_real_fim) },
+    { label: 'Duração real', render: (record) => String(record.duracao_real || '-') },
+    { label: 'Motivos de atraso', render: (record) => String(record.motivos_atraso || '-') },
+  ],
+  resources: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    { label: 'EAP', render: (record) => String(record.codigo_eap || '-') },
+    { label: 'Serviço', render: (record) => String(record.servico_nome || '-') },
+    { label: 'Pavimento', render: (record) => String(record.pavimento_nome || '-') },
+    { label: 'Materiais', render: (record) => String(record.recursos_materiais || '-') },
+    { label: 'Responsável', render: (record) => String(record.responsavel || '-') },
+    { label: 'Custo vinculado', render: (record) => formatCurrency(record.custo_vinculado), align: 'right' },
+    {
+      label: 'Custo linha base',
+      render: (record) => formatCurrency(record.custo_linha_base),
+      align: 'right',
+    },
+    { label: 'Unidade', render: (record) => String(record.unidade_simbolo || record.unidade_nome || '-') },
+    {
+      label: 'Descrição realizada',
+      render: (record) => String(record.progresso_unidade_descricao || '-'),
+    },
+  ],
+}
+
 async function fetchJson(url: string, options?: RequestInit, timeoutMs = 30000) {
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
@@ -272,6 +356,7 @@ function App() {
   const [projects, setProjects] = useState<Project[]>([])
   const [records, setRecords] = useState<DataRecord[]>([])
   const [activeView, setActiveView] = useState<DataView>('projects')
+  const [activityMode, setActivityMode] = useState<ActivityMode>('planning')
   const [selectedProject, setSelectedProject] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
@@ -386,6 +471,8 @@ function App() {
   }, [activeView, projects, records, search, selectedProject])
 
   const activeTab = tabs.find((tab) => tab.key === activeView) || tabs[0]
+  const currentColumns =
+    activeView === 'activities' ? activityColumns[activityMode] : columns[activeView]
 
   function changeView(view: DataView) {
     setActiveView(view)
@@ -469,6 +556,31 @@ function App() {
             <activeTab.icon size={18} />
             <h2>{activeTab.label}</h2>
           </div>
+          {activeView === 'activities' && (
+            <div className="activity-modes" aria-label="Detalhamento das atividades">
+              <button
+                type="button"
+                className={activityMode === 'planning' ? 'active' : ''}
+                onClick={() => setActivityMode('planning')}
+              >
+                Planejamento
+              </button>
+              <button
+                type="button"
+                className={activityMode === 'progress' ? 'active' : ''}
+                onClick={() => setActivityMode('progress')}
+              >
+                Medições
+              </button>
+              <button
+                type="button"
+                className={activityMode === 'resources' ? 'active' : ''}
+                onClick={() => setActivityMode('resources')}
+              >
+                Recursos e custos
+              </button>
+            </div>
+          )}
           <div className="filters">
             <label>
               <span>Projeto</span>
@@ -510,7 +622,7 @@ function App() {
               <table>
                 <thead>
                   <tr>
-                    {columns[activeView].map((column) => (
+                    {currentColumns.map((column) => (
                       <th key={column.label} className={column.align === 'right' ? 'align-right' : ''}>
                         {column.label}
                       </th>
@@ -520,7 +632,7 @@ function App() {
                 <tbody>
                   {visibleRecords.map((record, index) => (
                     <tr key={String(record.firestore_id || record.id_prevision || index)}>
-                      {columns[activeView].map((column) => (
+                      {currentColumns.map((column) => (
                         <td
                           key={column.label}
                           className={column.align === 'right' ? 'align-right' : ''}

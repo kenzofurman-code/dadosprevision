@@ -201,6 +201,38 @@ button:disabled {
   letter-spacing: 0;
 }
 
+.activity-modes {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid #cbd5d2;
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.activity-modes button {
+  min-height: 36px;
+  border: 0;
+  border-right: 1px solid #dbe2e0;
+  border-radius: 0;
+  background: #ffffff;
+  color: #5b6b67;
+  padding: 0 11px;
+  font-size: 11px;
+}
+
+.activity-modes button:last-child {
+  border-right: 0;
+}
+
+.activity-modes button:hover:not(:disabled) {
+  background: #edf3f1;
+}
+
+.activity-modes button.active {
+  background: #dceae6;
+  color: #173f38;
+}
+
 .filters {
   gap: 10px;
 }
@@ -440,6 +472,10 @@ td strong {
   .toolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .activity-modes {
+    align-self: flex-start;
   }
 
   .header-actions button {

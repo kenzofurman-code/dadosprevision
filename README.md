@@ -127,7 +127,14 @@ Variaveis privadas necessarias na Vercel:
 ```env
 PREVISION_API_MODE=graphql
 PREVISION_API_KEY=sua_chave_prevision
+PREVISION_REST_TOKEN=jwt_rest_opcional
 FIREBASE_SERVICE_ACCOUNT_BASE64=service_account_json_em_base64
 ```
 
 Para GraphQL, a Prevision exige o header `UserAuthorization` no formato `token SUA_CHAVE`. A rota ja monta esse header automaticamente.
+
+`PREVISION_REST_TOKEN` e uma credencial JWT separada, fornecida pela Prevision
+para a API REST. Quando configurada, a sincronizacao usa o relatorio analitico
+`/construction/api/v1/projects/{project_id}/schedule` para preencher materiais,
+responsaveis, progresso unitario, datas reais e motivos de atraso. Sem ela, o
+painel preenche os campos disponiveis pelo GraphQL.
