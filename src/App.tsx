@@ -34,7 +34,7 @@ type DataView =
 
 type ActivityMode = 'planning' | 'progress' | 'resources'
 type BudgetMode = 'reports' | 'items'
-type DashboardMode = 'general' | 'monthly' | 'services' | 'floors' | 'states'
+type DashboardMode = 'general' | 'monthly' | 'cff' | 'services' | 'floors' | 'states'
 
 type DataRecord = Record<string, string | number | boolean | null | undefined>
 
@@ -459,6 +459,31 @@ const dashboardColumns: Record<DashboardMode, Column[]> = {
     { label: 'Curva prevista', render: (record) => formatPercent(record.curva_prevista), align: 'right' },
     { label: 'Curva realizada', render: (record) => formatPercent(record.curva_realizada), align: 'right' },
   ],
+  cff: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    { label: 'Código', render: (record) => String(record.codigo || '-') },
+    { label: 'Descrição', render: (record) => String(record.descricao || '-') },
+    { label: 'Nível', render: (record) => formatNumber(record.nivel), align: 'right' },
+    { label: 'Serviços', render: (record) => String(record.servicos || '-') },
+    { label: 'Lotes', render: (record) => String(record.lotes || '-') },
+    { label: 'Atividades', render: (record) => formatNumber(record.total_pesos_atividades), align: 'right' },
+    { label: 'Etapas', render: (record) => formatNumber(record.total_pesos_etapas), align: 'right' },
+    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
+    { label: 'Término', render: (record) => formatDate(record.data_fim) },
+    { label: 'Custo total', render: (record) => formatCurrency(record.custo_total), align: 'right' },
+    { label: 'Peso base', render: (record) => formatPercent(record.peso_base), align: 'right' },
+    { label: 'Peso previsto', render: (record) => formatPercent(record.peso_previsto), align: 'right' },
+    { label: 'Peso realizado', render: (record) => formatPercent(record.peso_realizado), align: 'right' },
+    {
+      label: 'Última competência',
+      render: (record) => formatDate(record.ultima_competencia_realizada),
+    },
+    {
+      label: 'Último realizado',
+      render: (record) => formatPercent(record.ultimo_realizado),
+      align: 'right',
+    },
+  ],
   services: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     { label: 'Serviço', render: (record) => String(record.nome || '-') },
@@ -561,6 +586,7 @@ function App() {
           ? {
               general: 'dashboard',
               monthly: 'dashboardMonthly',
+              cff: 'budgetItems',
               services: 'dashboardServices',
               floors: 'dashboardFloors',
               states: 'dashboardStates',
@@ -831,6 +857,7 @@ function App() {
               {[
                 ['general', 'Geral'],
                 ['monthly', 'Curva mensal'],
+                ['cff', 'CFF'],
                 ['services', 'Serviços'],
                 ['floors', 'Lotes'],
                 ['states', 'Estados'],

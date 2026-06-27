@@ -287,7 +287,15 @@ function normalizeRestriction(task) {
 }
 
 function sumPoints(points) {
+  if (Array.isArray(points)) {
+    return points.reduce((total, point) => total + (Number(point?.y) || 0), 0)
+  }
   return Object.values(points || {}).reduce((total, value) => total + (Number(value) || 0), 0)
+}
+
+function joinUnique(values, maxLength = 2000) {
+  const joined = [...new Set(values.filter(Boolean))].join(', ')
+  return joined.length > maxLength ? `${joined.slice(0, maxLength - 3)}...` : joined || null
 }
 
 function normalizeAnalytics(project, data) {
@@ -316,7 +324,13 @@ function normalizeAnalytics(project, data) {
   }))
   const budgetItems = data.cffReports.flatMap((report) =>
     (report.data?.rows || []).map((row) => {
-      const item = row.budget_item || {}
+      const item = row.budgetItem || row.budget_item || {}
+      const weights = item.budgetWeights || row.activity_weights || []
+      const jobWeights = weights.flatMap((weight) => weight.jobBudgetWeights || [])
+      const realizedPoints = row.realizedPoints || row.realized_points || []
+      const lastRealizedPoint = Array.isArray(realizedPoints)
+        ? realizedPoints.at(-1)
+        : null
       return {
         ...projectReferenceData,
         orcamento_id: report.budgetId,
@@ -324,20 +338,33 @@ function normalizeAnalytics(project, data) {
         codigo: row.code || item.code || null,
         descricao: item.description || '-',
         nivel: item.level ?? null,
-        tipo_grupo: item.group_type || null,
-        data_inicio: row.start_at || null,
-        data_fim: row.end_at || null,
-        custo_mao_obra: item.labor_cost ?? null,
-        custo_material: item.material_cost ?? null,
+        tipo_grupo: item.groupType || item.group_type || null,
+        data_inicio: row.startAt || row.start_at || null,
+        data_fim: row.endAt || row.end_at || null,
+        custo_mao_obra: item.laborCost ?? item.labor_cost ?? null,
+        custo_material: item.materialCost ?? item.material_cost ?? null,
         custo_total:
+          item.totalCost ??
           item.total ??
           item.total_cost ??
-          (Number(item.labor_cost) || 0) + (Number(item.material_cost) || 0),
-        ignorado_erp: Boolean(item.ignored_on_erp),
-        peso_base: sumPoints(row.base_points),
-        peso_previsto: sumPoints(row.expected_points),
-        peso_realizado: sumPoints(row.realized_points),
-        total_pesos_atividades: (row.activity_weights || []).length,
+          (Number(item.laborCost ?? item.labor_cost) || 0) +
+            (Number(item.materialCost ?? item.material_cost) || 0),
+        ignorado_erp: Boolean(item.ignoredOnErp ?? item.ignored_on_erp),
+        peso_base: sumPoints(row.basePoints || row.base_points),
+        peso_previsto: sumPoints(row.expectedPoints || row.expected_points),
+        peso_realizado: sumPoints(realizedPoints),
+        peso_vinculado: weights.reduce(
+          (total, weight) => total + (Number(weight.percentage) || 0),
+          0,
+        ),
+        total_pesos_atividades: weights.length,
+        total_pesos_etapas: jobWeights.length,
+        atividades: joinUnique(weights.map((weight) => String(weight.activity?.id || ''))),
+        servicos: joinUnique(weights.map((weight) => weight.activity?.service?.name)),
+        lotes: joinUnique(weights.map((weight) => weight.activity?.floor?.name)),
+        etapas: joinUnique(jobWeights.map((weight) => weight.job?.name)),
+        ultima_competencia_realizada: lastRealizedPoint?.x || null,
+        ultimo_realizado: lastRealizedPoint?.y ?? null,
       }
     }),
   )

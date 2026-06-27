@@ -117,7 +117,9 @@ npm run sync:restrictions
 
 Os modulos de Orcamento e Dashboard ficam consolidados em
 `prevision_analiticos`, com relatorios, itens CFF, curva mensal, informacoes
-gerais, estados e evolucao por servico/lote. Para atualizar somente esses dados:
+gerais, estados e evolucao por servico/lote. O modo Dashboard > CFF tambem
+relaciona os pesos a atividades, etapas, servicos e lotes. Para atualizar somente
+esses dados:
 
 ```bash
 npm run sync:analytics
