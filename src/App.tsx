@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   Building2,
@@ -64,6 +64,12 @@ type CffMonthlyPoint = {
   base: number
   previsto: number
   realizado: number
+}
+
+type CffMonthlyRow = CffMonthlyPoint & {
+  baseExibida: number
+  previstoExibido: number
+  realizadoExibido: number
 }
 
 type CffSummary = {
@@ -628,6 +634,7 @@ function App() {
   const [cffSummaries, setCffSummaries] = useState<CffSummary[]>([])
   const [cffBudgetFilter, setCffBudgetFilter] = useState<'all' | string>('all')
   const [cffLevelFilter, setCffLevelFilter] = useState<string>('level1')
+  const [cffMonthFilter, setCffMonthFilter] = useState<'all' | string>('all')
   const [cffDisplayMode, setCffDisplayMode] = useState<'percentual' | 'acumulada'>('percentual')
   const [cffDenseMode, setCffDenseMode] = useState(false)
   const [selectedProject, setSelectedProject] = useState('')
@@ -638,6 +645,7 @@ function App() {
   const [synchronizing, setSynchronizing] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const cffMonthInitialized = useRef(false)
 
   const loadProjects = useCallback(async () => {
     const payload = await fetchJson('/api/projects')
@@ -922,9 +930,48 @@ function App() {
         baseExibida: cffDisplayMode === 'acumulada' ? cumulativeBase : row.base,
         previstoExibido: cffDisplayMode === 'acumulada' ? cumulativePrevisto : row.previsto,
         realizadoExibido: cffDisplayMode === 'acumulada' ? cumulativeRealizado : row.realizado,
-      }
+      } satisfies CffMonthlyRow
     })
   }, [activeView, dashboardMode, cffSummaries, cffBudgetFilter, cffLevelFilter, cffDisplayMode])
+
+  const cffMonthOptions = useMemo(
+    () =>
+      cffMonthlyRows
+        .map((row) => String(row.data || '').trim())
+        .filter(Boolean),
+    [cffMonthlyRows],
+  )
+
+  useEffect(() => {
+    if (activeView !== 'dashboard' || dashboardMode !== 'cff') return
+    if (cffMonthOptions.length === 0) return
+
+    const latestMonth = cffMonthOptions.at(-1) || 'all'
+
+    if (cffMonthFilter === 'all' && !cffMonthInitialized.current) {
+      cffMonthInitialized.current = true
+      setCffMonthFilter(latestMonth)
+      return
+    }
+
+    if (cffMonthFilter !== 'all' && !cffMonthOptions.includes(cffMonthFilter)) {
+      setCffMonthFilter(latestMonth)
+    }
+  }, [activeView, dashboardMode, cffMonthFilter, cffMonthOptions])
+
+  const cffVisibleMonthlyRows = useMemo(() => {
+    if (cffMonthFilter === 'all') return cffMonthlyRows
+    return cffMonthlyRows.filter((row) => String(row.data || '') === cffMonthFilter)
+  }, [cffMonthlyRows, cffMonthFilter])
+
+  const cffSelectedMonthRow = useMemo(() => {
+    if (cffMonthFilter === 'all') return cffMonthlyRows[0] || null
+    return cffMonthlyRows.find((row) => String(row.data || '') === cffMonthFilter) || null
+  }, [cffMonthlyRows, cffMonthFilter])
+
+  const cffSelectedMonthLabel = cffMonthFilter === 'all'
+    ? 'Todos os meses'
+    : formatMonthLabel(cffMonthFilter)
 
   const activeTab = tabs.find((tab) => tab.key === activeView) || tabs[0]
   const currentColumns =
@@ -1144,6 +1191,17 @@ function App() {
                     ))}
                   </select>
                 </label>
+                <label className="cff-select-field">
+                  <span>Mês</span>
+                  <select value={cffMonthFilter} onChange={(event) => setCffMonthFilter(event.target.value)}>
+                    <option value="all">Todos</option>
+                    {cffMonthOptions.map((month) => (
+                      <option key={month} value={month}>
+                        {formatMonthLabel(month)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <div className="cff-toggle-group" role="group" aria-label="Controles do CFF">
                   <button
                     type="button"
@@ -1228,7 +1286,14 @@ function App() {
                   <div className="cff-summary-head">
                     <div>
                       <h4>Base, previsto e realizado mês a mês</h4>
-                      <p>{cffDisplayMode === 'acumulada' ? 'Valores acumulados' : 'Valores mensais'}</p>
+                      <p>
+                        {cffDisplayMode === 'acumulada'
+                          ? 'Valores acumulados'
+                          : 'Valores mensais'}
+                        {cffMonthFilter === 'all'
+                          ? ' para toda a seleção'
+                          : ` em ${cffSelectedMonthLabel}`}
+                      </p>
                     </div>
                     <span>
                       {cffLevelFilter === 'all'
@@ -1236,7 +1301,23 @@ function App() {
                         : `Nível ${cffLevelFilter.replace('level', '')}`}
                     </span>
                   </div>
-                  {cffMonthlyRows.length > 0 ? (
+                  {cffMonthFilter !== 'all' && cffSelectedMonthRow && (
+                    <div className="cff-kpi-grid" aria-label="Indicadores do mês selecionado">
+                      <div className="cff-kpi-card">
+                        <span>Base</span>
+                        <strong>{formatPercent(cffSelectedMonthRow.baseExibida)}</strong>
+                      </div>
+                      <div className="cff-kpi-card">
+                        <span>Previsto</span>
+                        <strong>{formatPercent(cffSelectedMonthRow.previstoExibido)}</strong>
+                      </div>
+                      <div className="cff-kpi-card">
+                        <span>Realizado</span>
+                        <strong>{formatPercent(cffSelectedMonthRow.realizadoExibido)}</strong>
+                      </div>
+                    </div>
+                  )}
+                  {cffVisibleMonthlyRows.length > 0 ? (
                     <div className="table-scroll cff-summary-scroll">
                       <table className="cff-summary-table">
                         <thead>
@@ -1248,7 +1329,7 @@ function App() {
                           </tr>
                         </thead>
                         <tbody>
-                          {cffMonthlyRows.map((row) => (
+                          {cffVisibleMonthlyRows.map((row) => (
                             <tr key={String(row.data || '')}>
                               <td>{formatMonthLabel(row.data)}</td>
                               <td className="align-right">{formatPercent(row.baseExibida)}</td>

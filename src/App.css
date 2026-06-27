@@ -601,6 +601,36 @@ td strong {
   border-bottom: 1px solid #dfe7e4;
 }
 
+.cff-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cff-kpi-card {
+  display: grid;
+  gap: 6px;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid #d9e4e0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.cff-kpi-card span {
+  color: #74837f;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.cff-kpi-card strong {
+  color: #173f38;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .cff-summary-head {
   display: flex;
   align-items: end;
@@ -756,6 +786,10 @@ td strong {
   .cff-search-field {
     min-width: 0;
     width: 100%;
+  }
+
+  .cff-kpi-grid {
+    grid-template-columns: 1fr;
   }
 
   .cff-panel-meta {
