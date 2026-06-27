@@ -429,14 +429,34 @@ td strong {
 }
 
 .pagination {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding-top: 10px;
   color: #697975;
   font-size: 12px;
 }
 
 .pagination div {
+  display: inline-flex;
   gap: 6px;
+}
+
+.pagination-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #697975;
+  font-size: 12px;
+}
+
+.pagination-size span {
+  white-space: nowrap;
+}
+
+.pagination-size select {
+  min-width: 180px;
 }
 
 .pagination button {
@@ -800,6 +820,11 @@ td strong {
     align-items: stretch;
   }
 
+  .pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .cff-toolbar-actions,
   .cff-panel-head {
     align-items: stretch;
@@ -855,5 +880,15 @@ td strong {
 
   .data-tabs button {
     padding: 0 10px;
+  }
+
+  .pagination-size {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .pagination-size select {
+    min-width: 0;
+    flex: 1;
   }
 }

@@ -92,6 +92,7 @@ type TabDefinition = {
 }
 
 const PAGE_SIZE = 100
+const PAGE_SIZE_OPTIONS = [10, 50, 100, 150]
 
 const tabs: TabDefinition[] = [
   { key: 'projects', label: 'Projetos', icon: Building2 },
@@ -640,6 +641,7 @@ function App() {
   const [selectedProject, setSelectedProject] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE)
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
   const [synchronizing, setSynchronizing] = useState(false)
@@ -674,7 +676,7 @@ function App() {
     const params = new URLSearchParams({
       type: requestedType,
       page: String(page),
-      limit: String(PAGE_SIZE),
+      limit: String(pageSize),
     })
     if (selectedProject) params.set('projectId', selectedProject)
 
@@ -682,7 +684,7 @@ function App() {
     setRecords(Array.isArray(payload.records) ? payload.records : [])
     setCffSummaries(Array.isArray((payload as any).summary) ? (payload as any).summary : [])
     setHasMore(Boolean(payload.hasMore))
-  }, [activeView, activityMode, budgetMode, dashboardMode, page, selectedProject])
+  }, [activeView, activityMode, budgetMode, dashboardMode, page, pageSize, selectedProject])
 
   const reload = useCallback(async () => {
     try {
@@ -977,6 +979,11 @@ function App() {
 
   function changeProject(projectId: string) {
     setSelectedProject(projectId)
+    setPage(0)
+  }
+
+  function changePageSize(nextSize: number) {
+    setPageSize(nextSize)
     setPage(0)
   }
 
@@ -1375,6 +1382,19 @@ function App() {
             <span>
               Página {page + 1} · {visibleRecords.length} registros exibidos
             </span>
+            <label className="pagination-size">
+              <span>Mostrar linhas</span>
+              <select
+                value={pageSize}
+                onChange={(event) => changePageSize(Number(event.target.value))}
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    Mostrar {size} linhas
+                  </option>
+                ))}
+              </select>
+            </label>
             <div>
               <button
                 type="button"
