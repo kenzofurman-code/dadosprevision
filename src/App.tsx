@@ -627,7 +627,7 @@ function App() {
   const [dashboardMode, setDashboardMode] = useState<DashboardMode>('general')
   const [cffSummaries, setCffSummaries] = useState<CffSummary[]>([])
   const [cffBudgetFilter, setCffBudgetFilter] = useState<'all' | string>('all')
-  const [cffLevelFilter, setCffLevelFilter] = useState<'all' | 'level1'>('level1')
+  const [cffLevelFilter, setCffLevelFilter] = useState<string>('level1')
   const [cffDisplayMode, setCffDisplayMode] = useState<'percentual' | 'acumulada'>('percentual')
   const [cffDenseMode, setCffDenseMode] = useState(false)
   const [selectedProject, setSelectedProject] = useState('')
@@ -834,12 +834,42 @@ function App() {
   )
 
   const cffLevelOptions = useMemo(
-    () =>
-      [...new Set((records as CffRecord[]).map((record) => Number(record.nivel ?? 0)).filter((value) => Number.isFinite(value) && value > 0))]
-        .sort((left, right) => left - right)
-        .map((value) => String(value)),
-    [records],
+    () => {
+      const levels = new Set<string>()
+
+      for (const summary of cffSummaries) {
+        for (const entry of summary.niveis || []) {
+          const level = String(entry.nivel || '').trim()
+          if (level && level !== 'all') {
+            levels.add(level)
+          }
+        }
+      }
+
+      if (levels.size === 0) {
+        for (const record of records as CffRecord[]) {
+          const levelValue = Number(record.nivel ?? 0)
+          if (Number.isFinite(levelValue) && levelValue > 0) {
+            levels.add(String(levelValue))
+          }
+        }
+      }
+
+      return [...levels].sort((left, right) => Number(left) - Number(right))
+    },
+    [cffSummaries, records],
   )
+
+  useEffect(() => {
+    if (activeView !== 'dashboard' || dashboardMode !== 'cff') return
+    if (cffLevelFilter === 'all') return
+    if (cffLevelOptions.length === 0) return
+
+    const selectedLevel = cffLevelFilter.replace('level', '')
+    if (!cffLevelOptions.includes(selectedLevel)) {
+      setCffLevelFilter(`level${cffLevelOptions[0]}`)
+    }
+  }, [activeView, dashboardMode, cffLevelFilter, cffLevelOptions])
 
   const cffBudgetLabel = cffBudgetFilter === 'all'
     ? (cffBudgetNames[0] || cffSummaryBudgetNames[0] || 'Cronograma Físico-Financeiro')
@@ -1105,7 +1135,7 @@ function App() {
                 </label>
                 <label className="cff-select-field">
                   <span>Nível</span>
-                  <select value={cffLevelFilter} onChange={(event) => setCffLevelFilter(event.target.value as 'all' | 'level1')}>
+                  <select value={cffLevelFilter} onChange={(event) => setCffLevelFilter(event.target.value)}>
                     <option value="all">Todos</option>
                     {cffLevelOptions.map((level) => (
                       <option key={level} value={`level${level}`}>
