@@ -1,0 +1,79 @@
+query KanbanStepsAndTasks($first: Int!, $after: String) {
+  me {
+    taskSummary {
+      userTasks
+      lateTasks
+      weekTasks
+    }
+    kanbanStepsPage(first: 100) {
+      nodes {
+        id
+        name
+        phase
+        position
+      }
+    }
+    tasksPage(first: $first, after: $after) {
+      nodes {
+        id
+        title
+        description
+        createdAt
+        dueAt
+        doneAt
+        delay
+        baseAttribute
+        timeOperation
+        kanbanStep {
+          id
+          name
+          phase
+          position
+        }
+        project {
+          id
+          name
+        }
+        activity {
+          id
+          wbsCode
+          floor {
+            id
+            name
+          }
+          service {
+            id
+            name
+          }
+        }
+        labels {
+          id
+          name
+          color
+        }
+        users {
+          id
+          profile {
+            id
+            name
+            email
+            department
+            job
+          }
+        }
+        taskChecklists {
+          id
+          description
+          status
+          dueAt
+          doneAt
+          position
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

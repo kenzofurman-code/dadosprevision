@@ -107,6 +107,14 @@ A sincronizacao detalhada popula as colecoes:
 
 O painel apresenta cada conjunto em uma tabela paginada, com filtro por projeto.
 
+As restricoes Kanban ficam agrupadas no campo `restricoes` de cada documento em
+`prevision_projetos`, reduzindo centenas de gravacoes a uma atualizacao por
+projeto. Para sincronizar somente as restricoes:
+
+```bash
+npm run sync:restrictions
+```
+
 ## Sincronizacao com Prevision
 
 Para atualizar diariamente, crie uma Cloud Function agendada no Firebase que:

@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from 'node:util'
 import { getDb } from '../lib/firebase-admin.js'
 import {
   fetchAllProjectIds,
+  fetchKanbanData,
   fetchProjectData,
   sanitizePrevisionApiKey,
   sanitizeRestToken,
@@ -64,6 +65,7 @@ function normalizeProject(project, data, counts) {
     total_marcos: counts.milestones,
     total_linhas_base: counts.baselines,
     total_responsaveis: counts.responsibles,
+    total_restricoes: counts.restrictions ?? 0,
     atualizado_em: new Date().toISOString(),
   })
 }
@@ -235,6 +237,54 @@ function normalizeResponsible(item, project, projectName) {
   })
 }
 
+function normalizeRestriction(task) {
+  const checklist = task.taskChecklists || []
+
+  return clean({
+    projeto_id: String(task.project.id),
+    projeto_nome: task.project.name || '-',
+    id_prevision: String(task.id),
+    titulo: task.title || '-',
+    descricao: task.description || null,
+    criado_em: task.createdAt || null,
+    vencimento_em: task.dueAt || null,
+    concluido_em: task.doneAt || null,
+    atraso_dias: task.delay ?? null,
+    atributo_base: task.baseAttribute || null,
+    operacao_tempo: task.timeOperation || null,
+    etapa_id: task.kanbanStep?.id || null,
+    etapa_nome: task.kanbanStep?.name || null,
+    etapa_fase: task.kanbanStep?.phase || null,
+    etapa_posicao: task.kanbanStep?.position ?? null,
+    atividade_id: task.activity?.id || null,
+    codigo_eap: task.activity?.wbsCode || null,
+    pavimento_id: task.activity?.floor?.id || null,
+    pavimento_nome: task.activity?.floor?.name || null,
+    servico_id: task.activity?.service?.id || null,
+    servico_nome: task.activity?.service?.name || null,
+    etiquetas: (task.labels || []).map((label) => ({
+      id: String(label.id),
+      nome: label.name,
+      cor: label.color,
+    })),
+    etiquetas_nomes: (task.labels || []).map((label) => label.name).join(', ') || null,
+    usuarios: (task.users || []).map((user) => ({
+      id: String(user.id),
+      nome: user.profile?.name || user.profile?.email || '-',
+      email: user.profile?.email || null,
+      departamento: user.profile?.department || null,
+      cargo: user.profile?.job || null,
+    })),
+    usuarios_nomes:
+      (task.users || [])
+        .map((user) => user.profile?.name || user.profile?.email)
+        .filter(Boolean)
+        .join(', ') || null,
+    checklist_total: checklist.length,
+    checklist_concluido: checklist.filter((item) => item.status).length,
+  })
+}
+
 async function syncCollectionForProject(db, collectionName, projectId, items) {
   const collection = db.collection(collectionName)
   const existing = await collection.where('projeto_id', '==', projectId).get()
@@ -270,6 +320,7 @@ async function syncCollectionForProject(db, collectionName, projectId, items) {
 async function synchronizeAll(apiKey, restToken = '', requestedProjectId = '') {
   const db = getDb()
   const allProjects = await fetchAllProjectIds(apiKey)
+  const kanban = await fetchKanbanData(apiKey)
   const projects = requestedProjectId
     ? allProjects.filter((project) => String(project.id) === requestedProjectId)
     : allProjects
@@ -286,6 +337,7 @@ async function synchronizeAll(apiKey, restToken = '', requestedProjectId = '') {
     milestones: 0,
     baselines: 0,
     responsibles: 0,
+    restrictions: 0,
   }
 
   for (const project of projects) {
@@ -318,6 +370,9 @@ async function synchronizeAll(apiKey, restToken = '', requestedProjectId = '') {
       responsibles: data.responsibles.map((item) =>
         normalizeResponsible(item, project, projectName),
       ),
+      restrictions: kanban.tasks
+        .filter((task) => String(task.project?.id) === String(project.id))
+        .map(normalizeRestriction),
     }
 
     for (const [key, collectionName] of Object.entries(COLLECTIONS)) {
@@ -328,17 +383,63 @@ async function synchronizeAll(apiKey, restToken = '', requestedProjectId = '') {
     await db
       .collection('prevision_projetos')
       .doc(String(project.id))
-      .set(normalizeProject(project, data.details, {
-        activities: normalized.activities.length,
-        floors: normalized.floors.length,
-        services: normalized.services.length,
-        milestones: normalized.milestones.length,
-        baselines: normalized.baselines.length,
-        responsibles: normalized.responsibles.length,
-      }))
+      .set(
+        {
+          ...normalizeProject(project, data.details, {
+            activities: normalized.activities.length,
+            floors: normalized.floors.length,
+            services: normalized.services.length,
+            milestones: normalized.milestones.length,
+            baselines: normalized.baselines.length,
+            responsibles: normalized.responsibles.length,
+            restrictions: normalized.restrictions.length,
+          }),
+          restricoes: normalized.restrictions,
+        },
+        { merge: true },
+      )
   }
 
   return totals
+}
+
+async function synchronizeRestrictions(apiKey, requestedProjectId = '') {
+  const db = getDb()
+  const [projects, kanban] = await Promise.all([
+    fetchAllProjectIds(apiKey),
+    fetchKanbanData(apiKey),
+  ])
+  const selectedProjects = requestedProjectId
+    ? projects.filter((project) => String(project.id) === requestedProjectId)
+    : projects
+
+  if (!selectedProjects.length) {
+    throw new Error('Projeto nao encontrado na Prevision.')
+  }
+
+  let restrictions = 0
+
+  for (const project of selectedProjects) {
+    const normalized = kanban.tasks
+      .filter((task) => String(task.project?.id) === String(project.id))
+      .map(normalizeRestriction)
+
+    await db.collection('prevision_projetos').doc(String(project.id)).set(
+      {
+        total_restricoes: normalized.length,
+        restricoes: normalized,
+      },
+      { merge: true },
+    )
+    restrictions += normalized.length
+  }
+
+  return {
+    projects: selectedProjects.length,
+    restrictions,
+    summary: kanban.summary,
+    steps: kanban.steps.length,
+  }
 }
 
 export default async function handler(req, res) {
@@ -360,7 +461,10 @@ export default async function handler(req, res) {
       ? sanitizeRestToken(process.env.PREVISION_REST_TOKEN)
       : ''
     const requestedProjectId = req.body?.projectId ? String(req.body.projectId) : ''
-    const totals = await synchronizeAll(apiKey, restToken, requestedProjectId)
+    const totals =
+      req.body?.scope === 'restrictions'
+        ? await synchronizeRestrictions(apiKey, requestedProjectId)
+        : await synchronizeAll(apiKey, restToken, requestedProjectId)
     return res.status(200).json({ ok: true, imported: totals.projects, totals })
   } catch (error) {
     console.error(error)

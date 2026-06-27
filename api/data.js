@@ -1,4 +1,4 @@
-import { readCollectionPage } from '../lib/firestore-reader.js'
+import { readCollection, readCollectionPage } from '../lib/firestore-reader.js'
 
 const COLLECTIONS = {
   activities: 'prevision_atividades',
@@ -18,7 +18,7 @@ export default async function handler(req, res) {
   const type = String(req.query?.type || '')
   const collectionName = COLLECTIONS[type]
 
-  if (!collectionName) {
+  if (!collectionName && type !== 'restrictions') {
     return res.status(400).json({ error: 'Tipo de dado invalido.' })
   }
 
@@ -26,6 +26,25 @@ export default async function handler(req, res) {
     const page = Math.max(0, Number(req.query?.page) || 0)
     const pageSize = Math.min(200, Math.max(10, Number(req.query?.limit) || 100))
     const projectId = String(req.query?.projectId || '')
+
+    if (type === 'restrictions') {
+      const projects = await readCollection('prevision_projetos')
+      const allRecords = projects
+        .filter((project) => !projectId || String(project.id_prevision) === projectId)
+        .flatMap((project) => project.restricoes || [])
+      const start = page * pageSize
+      const records = allRecords.slice(start, start + pageSize)
+
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).json({
+        ok: true,
+        type,
+        records,
+        page,
+        hasMore: start + pageSize < allRecords.length,
+      })
+    }
+
     const { records, hasMore } = await readCollectionPage(collectionName, {
       page,
       pageSize,

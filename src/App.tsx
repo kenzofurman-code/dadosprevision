@@ -11,6 +11,7 @@ import {
   ListChecks,
   RefreshCw,
   Search,
+  ShieldAlert,
   Users,
   Wrench,
 } from 'lucide-react'
@@ -25,6 +26,7 @@ type DataView =
   | 'milestones'
   | 'baselines'
   | 'responsibles'
+  | 'restrictions'
 
 type ActivityMode = 'planning' | 'progress' | 'resources'
 
@@ -59,6 +61,7 @@ const tabs: TabDefinition[] = [
   { key: 'milestones', label: 'Marcos', icon: Flag, totalField: 'total_marcos' },
   { key: 'baselines', label: 'Linhas de base', icon: History, totalField: 'total_linhas_base' },
   { key: 'responsibles', label: 'Responsáveis', icon: Users, totalField: 'total_responsaveis' },
+  { key: 'restrictions', label: 'Restrições', icon: ShieldAlert, totalField: 'total_restricoes' },
 ]
 
 const dataViews = new Set<DataView>([
@@ -68,6 +71,7 @@ const dataViews = new Set<DataView>([
   'milestones',
   'baselines',
   'responsibles',
+  'restrictions',
 ])
 
 const numberFormatter = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 })
@@ -118,6 +122,18 @@ function activityStatus(record: DataRecord) {
   if (end && end < today) return { label: 'Atrasada', className: 'danger' }
   if (start && start > today) return { label: 'Planejada', className: 'info' }
   return { label: 'Em andamento', className: 'warning' }
+}
+
+function restrictionStatus(record: DataRecord) {
+  if (record.concluido_em || record.etapa_fase === 'done') {
+    return { label: 'Concluída', className: 'success' }
+  }
+
+  const dueDate = String(record.vencimento_em || '').slice(0, 10)
+  const today = new Date().toISOString().slice(0, 10)
+  if (dueDate && dueDate < today) return { label: 'Atrasada', className: 'danger' }
+  if (record.etapa_fase === 'started') return { label: 'Em andamento', className: 'warning' }
+  return { label: 'A fazer', className: 'info' }
 }
 
 function StatusBadge({ status }: { status: { label: string; className: string } }) {
@@ -255,6 +271,34 @@ const columns: Record<DataView, Column[]> = {
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     { label: 'Responsável', render: (record) => String(record.nome || '-') },
     { label: 'ID Prevision', render: (record) => String(record.id_prevision || '-') },
+  ],
+  restrictions: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    {
+      label: 'Restrição',
+      render: (record) => (
+        <div className="primary-cell">
+          <strong>{String(record.titulo || '-')}</strong>
+          <small>{String(record.descricao || `ID ${record.id_prevision || '-'}`)}</small>
+        </div>
+      ),
+    },
+    { label: 'Etapa', render: (record) => String(record.etapa_nome || '-') },
+    { label: 'Situação', render: (record) => <StatusBadge status={restrictionStatus(record)} /> },
+    { label: 'Prazo', render: (record) => formatDate(record.vencimento_em) },
+    { label: 'Concluída em', render: (record) => formatDate(record.concluido_em) },
+    { label: 'Atraso', render: (record) => formatNumber(record.atraso_dias, ' d'), align: 'right' },
+    { label: 'EAP', render: (record) => String(record.codigo_eap || '-') },
+    { label: 'Serviço', render: (record) => String(record.servico_nome || '-') },
+    { label: 'Pavimento', render: (record) => String(record.pavimento_nome || '-') },
+    { label: 'Etiquetas', render: (record) => String(record.etiquetas_nomes || '-') },
+    { label: 'Responsáveis', render: (record) => String(record.usuarios_nomes || '-') },
+    {
+      label: 'Checklist',
+      render: (record) =>
+        `${integerFormatter.format(Number(record.checklist_concluido) || 0)}/${integerFormatter.format(Number(record.checklist_total) || 0)}`,
+      align: 'right',
+    },
   ],
 }
 
@@ -412,12 +456,23 @@ function App() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(selectedProject ? { projectId: selectedProject } : {}),
+          body: JSON.stringify({
+            ...(selectedProject ? { projectId: selectedProject } : {}),
+            ...(activeView === 'restrictions' ? { scope: 'restrictions' } : {}),
+          }),
         },
         300000,
       )
-      const total = payload.totals?.activities ?? 0
-      setMessage(`${payload.imported} projeto(s) e ${integerFormatter.format(total)} atividades atualizados.`)
+      if (activeView === 'restrictions') {
+        setMessage(
+          `${integerFormatter.format(payload.totals?.restrictions ?? 0)} restrições atualizadas.`,
+        )
+      } else {
+        const total = payload.totals?.activities ?? 0
+        setMessage(
+          `${payload.imported} projeto(s) e ${integerFormatter.format(total)} atividades atualizados.`,
+        )
+      }
       await reload()
     } catch (syncError) {
       setError(syncError instanceof Error ? syncError.message : 'Erro ao sincronizar com a Prevision.')
@@ -506,6 +561,8 @@ function App() {
             <Database size={16} />
             {synchronizing
               ? 'Sincronizando...'
+              : activeView === 'restrictions'
+                ? 'Sincronizar restrições'
               : selectedProject
                 ? 'Sincronizar projeto'
                 : 'Sincronizar tudo'}

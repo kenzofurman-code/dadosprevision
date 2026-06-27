@@ -9,7 +9,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "seed:firestore": "node scripts/seed-firestore.mjs",
-    "sync:local": "node scripts/sync-prevision-local.mjs"
+    "sync:local": "node scripts/sync-prevision-local.mjs",
+    "sync:restrictions": "node scripts/sync-prevision-local.mjs restrictions"
   },
   "dependencies": {
     "firebase": "^12.15.0",

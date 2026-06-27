@@ -7,9 +7,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    const projects = (await readCollection('prevision_projetos')).sort((first, second) =>
-      String(first.nome_projeto || '').localeCompare(String(second.nome_projeto || ''), 'pt-BR'),
-    )
+    const projects = (await readCollection('prevision_projetos'))
+      .map(({ restricoes: _restrictions, ...project }) => project)
+      .sort((first, second) =>
+        String(first.nome_projeto || '').localeCompare(String(second.nome_projeto || ''), 'pt-BR'),
+      )
 
     res.setHeader('Cache-Control', 'no-store')
     return res.status(200).json({ ok: true, projects })
