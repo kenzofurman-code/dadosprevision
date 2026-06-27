@@ -32,6 +32,7 @@ export default async function handler(req, res) {
     !collectionName &&
     type !== 'restrictions' &&
     type !== 'activityJobs' &&
+    type !== 'dashboardCff' &&
     !ANALYTICS_FIELDS[type]
   ) {
     return res.status(400).json({ error: 'Tipo de dado invalido.' })

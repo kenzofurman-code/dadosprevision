@@ -91,12 +91,12 @@ const tabs: TabDefinition[] = [
   { key: 'projects', label: 'Projetos', icon: Building2 },
   { key: 'activities', label: 'Atividades', icon: ListChecks, totalField: 'total_atividades' },
   { key: 'floors', label: 'Pavimentos', icon: Layers3, totalField: 'total_pavimentos' },
-  { key: 'services', label: 'ServiÃ§os', icon: Wrench, totalField: 'total_servicos' },
+  { key: 'services', label: 'Serviços', icon: Wrench, totalField: 'total_servicos' },
   { key: 'milestones', label: 'Marcos', icon: Flag, totalField: 'total_marcos' },
   { key: 'baselines', label: 'Linhas de base', icon: History, totalField: 'total_linhas_base' },
-  { key: 'responsibles', label: 'ResponsÃ¡veis', icon: Users, totalField: 'total_responsaveis' },
-  { key: 'restrictions', label: 'RestriÃ§Ãµes', icon: ShieldAlert, totalField: 'total_restricoes' },
-  { key: 'budgets', label: 'OrÃ§amento', icon: WalletCards, totalField: 'total_orcamentos' },
+  { key: 'responsibles', label: 'Responsáveis', icon: Users, totalField: 'total_responsaveis' },
+  { key: 'restrictions', label: 'Restrições', icon: ShieldAlert, totalField: 'total_restricoes' },
+  { key: 'budgets', label: 'Orçamento', icon: WalletCards, totalField: 'total_orcamentos' },
   { key: 'dashboard', label: 'Dashboard', icon: ChartNoAxesCombined, totalField: 'total_dashboards' },
 ]
 
@@ -157,7 +157,7 @@ function formatMonthLabel(value?: string | null) {
 
 function formatPerspective(value?: string | number | boolean | null) {
   if (value === 'monetary') return 'Financeiro'
-  if (value === 'physical') return 'FÃ­sico'
+  if (value === 'physical') return 'Físico'
   return String(value || '-')
 }
 
@@ -165,14 +165,14 @@ function projectStatus(record: DataRecord) {
   if (record.desativado) return { label: 'Arquivado', className: 'neutral' }
   if (record.status_dashboard === 'outdated') return { label: 'Desatualizado', className: 'warning' }
   if (record.status === 'finished') return { label: 'Atualizado', className: 'success' }
-  if (record.status === 'never_updated') return { label: 'Sem atualizaÃ§Ã£o', className: 'neutral' }
+  if (record.status === 'never_updated') return { label: 'Sem atualização', className: 'neutral' }
   return { label: String(record.status || 'Ativo'), className: 'info' }
 }
 
 function activityStatus(record: DataRecord) {
-  if (record.excluido_em) return { label: 'ExcluÃ­da', className: 'neutral' }
+  if (record.excluido_em) return { label: 'Excluída', className: 'neutral' }
   const progress = Number(record.progresso_realizado)
-  if (progress >= 1) return { label: 'ConcluÃ­da', className: 'success' }
+  if (progress >= 1) return { label: 'Concluída', className: 'success' }
 
   const today = new Date().toISOString().slice(0, 10)
   const start = String(record.data_inicio || '').slice(0, 10)
@@ -184,7 +184,7 @@ function activityStatus(record: DataRecord) {
 
 function restrictionStatus(record: DataRecord) {
   if (record.concluido_em || record.etapa_fase === 'done') {
-    return { label: 'ConcluÃ­da', className: 'success' }
+    return { label: 'Concluída', className: 'success' }
   }
 
   const dueDate = String(record.vencimento_em || '').slice(0, 10)
@@ -210,13 +210,13 @@ const columns: Record<DataView, Column[]> = {
       ),
     },
     { label: 'Fase', render: (record) => String(record.fase || '-') },
-    { label: 'Ãrea', render: (record) => formatNumber(record.area, ' mÂ²'), align: 'right' },
-    { label: 'InÃ­cio', render: (record) => formatDate(record.data_inicio) },
-    { label: 'TÃ©rmino', render: (record) => formatDate(record.data_fim) },
+    { label: 'Área', render: (record) => formatNumber(record.area, ' m²'), align: 'right' },
+    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
+    { label: 'Término', render: (record) => formatDate(record.data_fim) },
     { label: 'Previsto', render: (record) => formatPercent(record.progresso_esperado), align: 'right' },
     { label: 'Realizado', render: (record) => formatPercent(record.progresso_realizado), align: 'right' },
     { label: 'IDP', render: (record) => formatNumber(record.idp), align: 'right' },
-    { label: 'OrÃ§amento', render: (record) => formatCurrency(record.custo_orcado), align: 'right' },
+    { label: 'Orçamento', render: (record) => formatCurrency(record.custo_orcado), align: 'right' },
     {
       label: 'Atraso',
       render: (record) => formatNumber(record.atraso_dias, ' d'),
@@ -227,30 +227,30 @@ const columns: Record<DataView, Column[]> = {
   activities: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     { label: 'EAP', render: (record) => String(record.codigo_eap || '-') },
-    { label: 'ServiÃ§o', render: (record) => String(record.servico_nome || '-') },
-    { label: 'Pos. serviÃ§o', render: (record) => formatNumber(record.posicao_servico), align: 'right' },
+    { label: 'Serviço', render: (record) => String(record.servico_nome || '-') },
+    { label: 'Pos. serviço', render: (record) => formatNumber(record.posicao_servico), align: 'right' },
     { label: 'Pavimento', render: (record) => String(record.pavimento_nome || '-') },
     { label: 'Grupo', render: (record) => String(record.grupo_repeticao || '-') },
     { label: 'Parte', render: (record) => String(record.contador_parte || '-') },
-    { label: 'NÃ­vel', render: (record) => String(record.nivel_atividade || '-') },
+    { label: 'Nível', render: (record) => String(record.nivel_atividade || '-') },
     { label: 'Categoria', render: (record) => String(record.categorizacao || '-') },
     {
-      label: 'CrÃ­tico',
+      label: 'Crítico',
       render: (record) => (
         <StatusBadge
           status={
             String(record.caminho_critico).toLocaleLowerCase('pt-BR') === 'sim'
               ? { label: 'Sim', className: 'danger' }
-              : { label: 'NÃ£o', className: 'neutral' }
+              : { label: 'Não', className: 'neutral' }
           }
         />
       ),
     },
-    { label: 'LB inÃ­cio', render: (record) => formatDate(record.linha_base_inicio) },
-    { label: 'LB tÃ©rmino', render: (record) => formatDate(record.linha_base_fim) },
-    { label: 'InÃ­cio da obra', render: (record) => formatDate(record.data_inicio_obra) },
+    { label: 'LB início', render: (record) => formatDate(record.linha_base_inicio) },
+    { label: 'LB término', render: (record) => formatDate(record.linha_base_fim) },
+    { label: 'Início da obra', render: (record) => formatDate(record.data_inicio_obra) },
     { label: 'Fim da obra', render: (record) => formatDate(record.data_fim_obra) },
-    { label: 'DuraÃ§Ã£o', render: (record) => formatNumber(record.duracao_dias, ' d'), align: 'right' },
+    { label: 'Duração', render: (record) => formatNumber(record.duracao_dias, ' d'), align: 'right' },
     { label: 'Predecessoras', render: (record) => String(record.predecessoras || '-') },
     { label: 'Sucessoras', render: (record) => String(record.sucessoras || '-') },
     { label: 'Status', render: (record) => <StatusBadge status={activityStatus(record)} /> },
@@ -259,15 +259,15 @@ const columns: Record<DataView, Column[]> = {
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     { label: 'Pavimento', render: (record) => String(record.nome || '-') },
     { label: 'Grupo', render: (record) => String(record.grupo_repeticao || '-') },
-    { label: 'PosiÃ§Ã£o', render: (record) => formatNumber(record.posicao), align: 'right' },
-    { label: 'Ãrea', render: (record) => formatNumber(record.area, ' mÂ²'), align: 'right' },
-    { label: 'InÃ­cio', render: (record) => formatDate(record.data_inicio) },
-    { label: 'TÃ©rmino', render: (record) => formatDate(record.data_fim) },
+    { label: 'Posição', render: (record) => formatNumber(record.posicao), align: 'right' },
+    { label: 'Área', render: (record) => formatNumber(record.area, ' m²'), align: 'right' },
+    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
+    { label: 'Término', render: (record) => formatDate(record.data_fim) },
   ],
   services: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     {
-      label: 'ServiÃ§o',
+      label: 'Serviço',
       render: (record) => (
         <span className="color-label">
           <i style={{ backgroundColor: String(record.cor || '#98a2b3') }} />
@@ -275,13 +275,13 @@ const columns: Record<DataView, Column[]> = {
         </span>
       ),
     },
-    { label: 'PosiÃ§Ã£o', render: (record) => formatNumber(record.posicao), align: 'right' },
+    { label: 'Posição', render: (record) => formatNumber(record.posicao), align: 'right' },
     { label: 'Unidade', render: (record) => String(record.unidade || '-') },
-    { label: 'InÃ­cio', render: (record) => formatDate(record.data_inicio) },
-    { label: 'TÃ©rmino', render: (record) => formatDate(record.data_fim) },
+    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
+    { label: 'Término', render: (record) => formatDate(record.data_fim) },
     {
       label: 'Etapas',
-      render: (record) => (record.possui_etapas ? 'Configuradas' : 'NÃ£o configuradas'),
+      render: (record) => (record.possui_etapas ? 'Configuradas' : 'Não configuradas'),
     },
   ],
   milestones: [
@@ -296,7 +296,7 @@ const columns: Record<DataView, Column[]> = {
       ),
     },
     { label: 'Data', render: (record) => formatDate(record.data) },
-    { label: 'ReferÃªncia', render: (record) => String(record.atributo_base || '-') },
+    { label: 'Referência', render: (record) => String(record.atributo_base || '-') },
     {
       label: 'Defasagem',
       render: (record) => formatNumber(record.defasagem_dias, ' d'),
@@ -304,14 +304,14 @@ const columns: Record<DataView, Column[]> = {
     },
     {
       label: 'Visibilidade',
-      render: (record) => (record.visivel_na_obra ? 'VisÃ­vel na obra' : 'Oculto'),
+      render: (record) => (record.visivel_na_obra ? 'Visível na obra' : 'Oculto'),
     },
   ],
   baselines: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     { label: 'ID', render: (record) => String(record.id_prevision || '-') },
     { label: 'Criada em', render: (record) => formatDate(record.criado_em) },
-    { label: 'VersÃ£o LOB', render: (record) => String(record.versao_lob_id || '-') },
+    { label: 'Versão LOB', render: (record) => String(record.versao_lob_id || '-') },
     {
       label: 'Status',
       render: (record) => (
@@ -319,7 +319,7 @@ const columns: Record<DataView, Column[]> = {
           status={
             record.ativa
               ? { label: 'Ativa', className: 'success' }
-              : { label: 'HistÃ³rica', className: 'neutral' }
+              : { label: 'Histórica', className: 'neutral' }
           }
         />
       ),
@@ -327,13 +327,13 @@ const columns: Record<DataView, Column[]> = {
   ],
   responsibles: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
-    { label: 'ResponsÃ¡vel', render: (record) => String(record.nome || '-') },
+    { label: 'Responsável', render: (record) => String(record.nome || '-') },
     { label: 'ID Prevision', render: (record) => String(record.id_prevision || '-') },
   ],
   restrictions: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     {
-      label: 'RestriÃ§Ã£o',
+      label: 'Restrição',
       render: (record) => (
         <div className="primary-cell">
           <strong>{String(record.titulo || '-')}</strong>
@@ -342,15 +342,15 @@ const columns: Record<DataView, Column[]> = {
       ),
     },
     { label: 'Etapa', render: (record) => String(record.etapa_nome || '-') },
-    { label: 'SituaÃ§Ã£o', render: (record) => <StatusBadge status={restrictionStatus(record)} /> },
+    { label: 'Situação', render: (record) => <StatusBadge status={restrictionStatus(record)} /> },
     { label: 'Prazo', render: (record) => formatDate(record.vencimento_em) },
-    { label: 'ConcluÃ­da em', render: (record) => formatDate(record.concluido_em) },
+    { label: 'Concluída em', render: (record) => formatDate(record.concluido_em) },
     { label: 'Atraso', render: (record) => formatNumber(record.atraso_dias, ' d'), align: 'right' },
     { label: 'EAP', render: (record) => String(record.codigo_eap || '-') },
-    { label: 'ServiÃ§o', render: (record) => String(record.servico_nome || '-') },
+    { label: 'Serviço', render: (record) => String(record.servico_nome || '-') },
     { label: 'Pavimento', render: (record) => String(record.pavimento_nome || '-') },
     { label: 'Etiquetas', render: (record) => String(record.etiquetas_nomes || '-') },
-    { label: 'ResponsÃ¡veis', render: (record) => String(record.usuarios_nomes || '-') },
+    { label: 'Responsáveis', render: (record) => String(record.usuarios_nomes || '-') },
     {
       label: 'Checklist',
       render: (record) =>
@@ -360,10 +360,10 @@ const columns: Record<DataView, Column[]> = {
   ],
   budgets: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
-    { label: 'OrÃ§amento', render: (record) => String(record.nome || '-') },
+    { label: 'Orçamento', render: (record) => String(record.nome || '-') },
     { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
     { label: 'Custo total', render: (record) => formatCurrency(record.custo_total), align: 'right' },
-    { label: 'Custo fÃ­sico', render: (record) => formatCurrency(record.custo_fisico), align: 'right' },
+    { label: 'Custo físico', render: (record) => formatCurrency(record.custo_fisico), align: 'right' },
     { label: 'Custo dos pesos', render: (record) => formatCurrency(record.custo_pesos), align: 'right' },
     {
       label: 'Pesos',
@@ -371,22 +371,22 @@ const columns: Record<DataView, Column[]> = {
         <StatusBadge
           status={
             record.pesos_validos
-              ? { label: 'VÃ¡lidos', className: 'success' }
+              ? { label: 'Válidos', className: 'success' }
               : { label: 'Revisar', className: 'warning' }
           }
         />
       ),
     },
     { label: 'Contrato', render: (record) => (record.liberado_contrato ? 'Liberado' : '-') },
-    { label: 'PadrÃ£o', render: (record) => (record.padrao ? 'Sim' : 'NÃ£o') },
-    { label: 'IntegraÃ§Ã£o', render: (record) => String(record.status_integracao || '-') },
+    { label: 'Padrão', render: (record) => (record.padrao ? 'Sim' : 'Não') },
+    { label: 'Integração', render: (record) => String(record.status_integracao || '-') },
   ],
   dashboard: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
-    { label: 'InÃ­cio', render: (record) => formatDate(record.data_inicio) },
-    { label: 'TÃ©rmino', render: (record) => formatDate(record.data_fim) },
-    { label: 'Ãšltima mediÃ§Ã£o', render: (record) => formatDate(record.ultima_medicao) },
+    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
+    { label: 'Término', render: (record) => formatDate(record.data_fim) },
+    { label: 'Última medição', render: (record) => formatDate(record.ultima_medicao) },
     { label: 'Previsto', render: (record) => formatPercent(record.progresso_previsto), align: 'right' },
     { label: 'Realizado', render: (record) => formatPercent(record.progresso_realizado), align: 'right' },
     { label: 'IDP', render: (record) => formatNumber(record.idp), align: 'right' },
@@ -405,10 +405,10 @@ const activityColumns: Record<ActivityMode, Column[]> = {
   jobs: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     { label: 'EAP atividade', render: (record) => String(record.atividade_eap || '-') },
-    { label: 'ServiÃ§o', render: (record) => String(record.servico_nome || '-') },
+    { label: 'Serviço', render: (record) => String(record.servico_nome || '-') },
     { label: 'Pavimento', render: (record) => String(record.pavimento_nome || '-') },
     {
-      label: 'MicroserviÃ§o',
+      label: 'Microserviço',
       render: (record) => (
         <div className="primary-cell">
           <strong>{String(record.nome || '-')}</strong>
@@ -417,9 +417,9 @@ const activityColumns: Record<ActivityMode, Column[]> = {
       ),
     },
     { label: 'EAP job', render: (record) => String(record.codigo_eap || '-') },
-    { label: 'InÃ­cio', render: (record) => formatDate(record.data_inicio) },
-    { label: 'TÃ©rmino', render: (record) => formatDate(record.data_fim) },
-    { label: 'DuraÃ§Ã£o', render: (record) => formatNumber(record.duracao_dias, ' d'), align: 'right' },
+    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
+    { label: 'Término', render: (record) => formatDate(record.data_fim) },
+    { label: 'Duração', render: (record) => formatNumber(record.duracao_dias, ' d'), align: 'right' },
     { label: 'Previsto', render: (record) => formatPercent(record.progresso_esperado), align: 'right' },
     { label: 'Realizado', render: (record) => formatPercent(record.progresso_realizado), align: 'right' },
     { label: 'Status', render: (record) => <StatusBadge status={activityStatus(record)} /> },
@@ -427,22 +427,22 @@ const activityColumns: Record<ActivityMode, Column[]> = {
   progress: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     { label: 'EAP', render: (record) => String(record.codigo_eap || '-') },
-    { label: 'ServiÃ§o', render: (record) => String(record.servico_nome || '-') },
+    { label: 'Serviço', render: (record) => String(record.servico_nome || '-') },
     { label: 'Pavimento', render: (record) => String(record.pavimento_nome || '-') },
-    { label: '1Âª mediÃ§Ã£o', render: (record) => formatDate(record.primeira_medicao_em) },
-    { label: 'Ãšltima mediÃ§Ã£o', render: (record) => formatDate(record.ultima_medicao_em) },
-    { label: 'ReferÃªncia', render: (record) => formatDate(record.data_referencia) },
-    { label: 'Base fÃ­sico', render: (record) => formatPercent(record.progresso_fisico_base), align: 'right' },
+    { label: '1ª medição', render: (record) => formatDate(record.primeira_medicao_em) },
+    { label: 'Última medição', render: (record) => formatDate(record.ultima_medicao_em) },
+    { label: 'Referência', render: (record) => formatDate(record.data_referencia) },
+    { label: 'Base físico', render: (record) => formatPercent(record.progresso_fisico_base), align: 'right' },
     { label: 'Previsto', render: (record) => formatPercent(record.progresso_esperado), align: 'right' },
     { label: 'Realizado', render: (record) => formatPercent(record.progresso_realizado), align: 'right' },
-    { label: 'Ãšlt. base', render: (record) => formatPercent(record.ultima_medicao_base), align: 'right' },
+    { label: 'Últ. base', render: (record) => formatPercent(record.ultima_medicao_base), align: 'right' },
     {
-      label: 'Ãšlt. previsto',
+      label: 'Últ. previsto',
       render: (record) => formatPercent(record.ultima_medicao_esperado),
       align: 'right',
     },
     {
-      label: 'Ãšlt. realizado',
+      label: 'Últ. realizado',
       render: (record) => formatPercent(record.ultima_medicao_realizado),
       align: 'right',
     },
@@ -460,18 +460,18 @@ const activityColumns: Record<ActivityMode, Column[]> = {
       align: 'right',
     },
     { label: 'Saldo', render: (record) => formatNumber(record.saldo_unidade), align: 'right' },
-    { label: 'InÃ­cio real', render: (record) => formatDate(record.data_real_inicio) },
-    { label: 'TÃ©rmino real', render: (record) => formatDate(record.data_real_fim) },
-    { label: 'DuraÃ§Ã£o real', render: (record) => String(record.duracao_real || '-') },
+    { label: 'Início real', render: (record) => formatDate(record.data_real_inicio) },
+    { label: 'Término real', render: (record) => formatDate(record.data_real_fim) },
+    { label: 'Duração real', render: (record) => String(record.duracao_real || '-') },
     { label: 'Motivos de atraso', render: (record) => String(record.motivos_atraso || '-') },
   ],
   resources: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     { label: 'EAP', render: (record) => String(record.codigo_eap || '-') },
-    { label: 'ServiÃ§o', render: (record) => String(record.servico_nome || '-') },
+    { label: 'Serviço', render: (record) => String(record.servico_nome || '-') },
     { label: 'Pavimento', render: (record) => String(record.pavimento_nome || '-') },
     { label: 'Materiais', render: (record) => String(record.recursos_materiais || '-') },
-    { label: 'ResponsÃ¡vel', render: (record) => String(record.responsavel || '-') },
+    { label: 'Responsável', render: (record) => String(record.responsavel || '-') },
     { label: 'Custo vinculado', render: (record) => formatCurrency(record.custo_vinculado), align: 'right' },
     {
       label: 'Custo linha base',
@@ -480,7 +480,7 @@ const activityColumns: Record<ActivityMode, Column[]> = {
     },
     { label: 'Unidade', render: (record) => String(record.unidade_simbolo || record.unidade_nome || '-') },
     {
-      label: 'DescriÃ§Ã£o realizada',
+      label: 'Descrição realizada',
       render: (record) => String(record.progresso_unidade_descricao || '-'),
     },
   ],
@@ -490,13 +490,13 @@ const budgetColumns: Record<BudgetMode, Column[]> = {
   reports: columns.budgets,
   items: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
-    { label: 'CÃ³digo', render: (record) => String(record.codigo || '-') },
-    { label: 'DescriÃ§Ã£o', render: (record) => String(record.descricao || '-') },
-    { label: 'NÃ­vel', render: (record) => formatNumber(record.nivel), align: 'right' },
+    { label: 'Código', render: (record) => String(record.codigo || '-') },
+    { label: 'Descrição', render: (record) => String(record.descricao || '-') },
+    { label: 'Nível', render: (record) => formatNumber(record.nivel), align: 'right' },
     { label: 'Tipo', render: (record) => String(record.tipo_grupo || '-') },
-    { label: 'InÃ­cio', render: (record) => formatDate(record.data_inicio) },
-    { label: 'TÃ©rmino', render: (record) => formatDate(record.data_fim) },
-    { label: 'MÃ£o de obra', render: (record) => formatCurrency(record.custo_mao_obra), align: 'right' },
+    { label: 'Início', render: (record) => formatDate(record.data_inicio) },
+    { label: 'Término', render: (record) => formatDate(record.data_fim) },
+    { label: 'Mão de obra', render: (record) => formatCurrency(record.custo_mao_obra), align: 'right' },
     { label: 'Material', render: (record) => formatCurrency(record.custo_material), align: 'right' },
     { label: 'Custo total', render: (record) => formatCurrency(record.custo_total), align: 'right' },
     { label: 'Base', render: (record) => formatPercent(record.peso_base), align: 'right' },
@@ -515,10 +515,10 @@ const dashboardColumns: Record<DashboardMode, Column[]> = {
   monthly: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
-    { label: 'CompetÃªncia', render: (record) => formatDate(record.data) },
-    { label: 'Base mÃªs', render: (record) => formatPercent(record.base_mes), align: 'right' },
-    { label: 'Previsto mÃªs', render: (record) => formatPercent(record.previsto_mes), align: 'right' },
-    { label: 'Realizado mÃªs', render: (record) => formatPercent(record.realizado_mes), align: 'right' },
+    { label: 'Competência', render: (record) => formatDate(record.data) },
+    { label: 'Base mês', render: (record) => formatPercent(record.base_mes), align: 'right' },
+    { label: 'Previsto mês', render: (record) => formatPercent(record.previsto_mes), align: 'right' },
+    { label: 'Realizado mês', render: (record) => formatPercent(record.realizado_mes), align: 'right' },
     { label: 'Curva base', render: (record) => formatPercent(record.curva_base), align: 'right' },
     { label: 'Curva prevista', render: (record) => formatPercent(record.curva_prevista), align: 'right' },
     { label: 'Curva realizada', render: (record) => formatPercent(record.curva_realizada), align: 'right' },
@@ -550,9 +550,9 @@ const dashboardColumns: Record<DashboardMode, Column[]> = {
   ],
   services: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
-    { label: 'ServiÃ§o', render: (record) => String(record.nome || '-') },
+    { label: 'Serviço', render: (record) => String(record.nome || '-') },
     { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
-    { label: 'InÃ­cio base', render: (record) => formatDate(record.data_base_inicio) },
+    { label: 'Início base', render: (record) => formatDate(record.data_base_inicio) },
     { label: 'Fim base', render: (record) => formatDate(record.data_base_fim) },
     { label: 'Base', render: (record) => formatPercent(record.base), align: 'right' },
     { label: 'Previsto', render: (record) => formatPercent(record.previsto), align: 'right' },
@@ -567,7 +567,7 @@ const dashboardColumns: Record<DashboardMode, Column[]> = {
     { label: 'Lote', render: (record) => String(record.nome || '-') },
     { label: 'Grupo', render: (record) => String(record.grupo_repeticao || '-') },
     { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
-    { label: 'InÃ­cio base', render: (record) => formatDate(record.data_base_inicio) },
+    { label: 'Início base', render: (record) => formatDate(record.data_base_inicio) },
     { label: 'Fim base', render: (record) => formatDate(record.data_base_fim) },
     { label: 'Base', render: (record) => formatPercent(record.base), align: 'right' },
     { label: 'Previsto', render: (record) => formatPercent(record.previsto), align: 'right' },
@@ -581,8 +581,8 @@ const dashboardColumns: Record<DashboardMode, Column[]> = {
     { label: 'Dashboard', render: (record) => String(record.nome || '-') },
     { label: 'Categoria', render: (record) => String(record.categoria || '-') },
     { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
-    { label: 'PadrÃ£o', render: (record) => (record.padrao ? 'Sim' : 'NÃ£o') },
-    { label: 'OrÃ§amento', render: (record) => (record.possui_orcamento ? 'Vinculado' : '-') },
+    { label: 'Padrão', render: (record) => (record.padrao ? 'Sim' : 'Não') },
+    { label: 'Orçamento', render: (record) => (record.possui_orcamento ? 'Vinculado' : '-') },
     { label: 'Status', render: (record) => String(record.status || '-') },
     { label: 'Atualizado em', render: (record) => formatDate(record.atualizado_em) },
   ],
@@ -603,7 +603,7 @@ async function fetchJson(url: string, options?: RequestInit, timeoutMs = 30000) 
     if (!response.ok) {
       throw new Error(
         payload?.error ||
-          `O servidor respondeu HTTP ${response.status}. Confira os logs da funÃ§Ã£o na Vercel.`,
+          `O servidor respondeu HTTP ${response.status}. Confira os logs da função na Vercel.`,
       )
     }
     if (!payload) throw new Error('O servidor respondeu sem dados.')
@@ -715,11 +715,11 @@ function App() {
       )
       if (activeView === 'restrictions') {
         setMessage(
-          `${integerFormatter.format(payload.totals?.restrictions ?? 0)} restriÃ§Ãµes atualizadas.`,
+          `${integerFormatter.format(payload.totals?.restrictions ?? 0)} restrições atualizadas.`,
         )
       } else if (activeView === 'budgets' || activeView === 'dashboard') {
         setMessage(
-          `${integerFormatter.format(payload.totals?.budgets ?? 0)} orÃ§amentos e ${integerFormatter.format(payload.totals?.dashboards ?? 0)} dashboards atualizados.`,
+          `${integerFormatter.format(payload.totals?.budgets ?? 0)} orçamentos e ${integerFormatter.format(payload.totals?.dashboards ?? 0)} dashboards atualizados.`,
         )
       } else {
         const total = payload.totals?.activities ?? 0
@@ -969,9 +969,9 @@ function App() {
             {synchronizing
               ? 'Sincronizando...'
               : activeView === 'restrictions'
-                ? 'Sincronizar restriÃ§Ãµes'
+                ? 'Sincronizar restrições'
                 : activeView === 'budgets' || activeView === 'dashboard'
-                  ? 'Sincronizar anÃ¡lises'
+                  ? 'Sincronizar análises'
               : selectedProject
                 ? 'Sincronizar projeto'
                 : 'Sincronizar tudo'}
@@ -989,12 +989,12 @@ function App() {
           <small>Atividades</small>
         </div>
         <div>
-          <span>{integerFormatter.format(totals.area)} mÂ²</span>
-          <small>Ãrea planejada</small>
+          <span>{integerFormatter.format(totals.area)} m²</span>
+          <small>Área planejada</small>
         </div>
         <div>
           <span>{currencyFormatter.format(totals.budget)}</span>
-          <small>OrÃ§amento total</small>
+          <small>Orçamento total</small>
         </div>
       </section>
 
@@ -1039,14 +1039,14 @@ function App() {
                   setPage(0)
                 }}
               >
-                MicroserviÃ§os
+                Microserviços
               </button>
               <button
                 type="button"
                 className={activityMode === 'progress' ? 'active' : ''}
                 onClick={() => setActivityMode('progress')}
               >
-                MediÃ§Ãµes
+                Medições
               </button>
               <button
                 type="button"
@@ -1058,7 +1058,7 @@ function App() {
             </div>
           )}
           {activeView === 'budgets' && (
-            <div className="activity-modes" aria-label="Detalhamento do orÃ§amento">
+            <div className="activity-modes" aria-label="Detalhamento do orçamento">
               <button
                 type="button"
                 className={budgetMode === 'reports' ? 'active' : ''}
@@ -1067,7 +1067,7 @@ function App() {
                   setPage(0)
                 }}
               >
-                RelatÃ³rios
+                Relatórios
               </button>
               <button
                 type="button"
@@ -1087,7 +1087,7 @@ function App() {
                 ['general', 'Geral'],
                 ['monthly', 'Curva mensal'],
                 ['cff', 'CFF'],
-                ['services', 'ServiÃ§os'],
+                ['services', 'Serviços'],
                 ['floors', 'Lotes'],
                 ['states', 'Estados'],
               ].map(([mode, label]) => (
@@ -1342,13 +1342,13 @@ function App() {
         {activeView !== 'projects' && (
           <footer className="pagination">
             <span>
-              PÃ¡gina {page + 1} Â· {visibleRecords.length} registros exibidos
+              Página {page + 1} · {visibleRecords.length} registros exibidos
             </span>
             <div>
               <button
                 type="button"
-                title="PÃ¡gina anterior"
-                aria-label="PÃ¡gina anterior"
+                title="Página anterior"
+                aria-label="Página anterior"
                 disabled={page === 0 || loading}
                 onClick={() => setPage((current) => Math.max(0, current - 1))}
               >
@@ -1356,8 +1356,8 @@ function App() {
               </button>
               <button
                 type="button"
-                title="PrÃ³xima pÃ¡gina"
-                aria-label="PrÃ³xima pÃ¡gina"
+                title="Próxima página"
+                aria-label="Próxima página"
                 disabled={!hasMore || loading}
                 onClick={() => setPage((current) => current + 1)}
               >
