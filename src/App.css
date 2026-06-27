@@ -550,6 +550,29 @@ td strong {
   padding-top: 0;
 }
 
+.cff-month-summary-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 16px 16px 8px;
+}
+
+.cff-month-summary-label h3 {
+  margin: 0;
+  color: #17201e;
+  font-size: 18px;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.cff-month-summary-label span {
+  color: #7a8985;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .cff-panel-head {
   display: flex;
   align-items: end;
@@ -662,6 +685,10 @@ td strong {
 
 .cff-summary-scroll {
   max-height: 220px;
+}
+
+.cff-summary-inline {
+  margin: 0 16px 8px;
 }
 
 .cff-summary-table {

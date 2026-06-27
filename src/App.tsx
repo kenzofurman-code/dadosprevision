@@ -959,20 +959,6 @@ function App() {
     }
   }, [activeView, dashboardMode, cffMonthFilter, cffMonthOptions])
 
-  const cffVisibleMonthlyRows = useMemo(() => {
-    if (cffMonthFilter === 'all') return cffMonthlyRows
-    return cffMonthlyRows.filter((row) => String(row.data || '') === cffMonthFilter)
-  }, [cffMonthlyRows, cffMonthFilter])
-
-  const cffSelectedMonthRow = useMemo(() => {
-    if (cffMonthFilter === 'all') return cffMonthlyRows[0] || null
-    return cffMonthlyRows.find((row) => String(row.data || '') === cffMonthFilter) || null
-  }, [cffMonthlyRows, cffMonthFilter])
-
-  const cffSelectedMonthLabel = cffMonthFilter === 'all'
-    ? 'Todos os meses'
-    : formatMonthLabel(cffMonthFilter)
-
   const activeTab = tabs.find((tab) => tab.key === activeView) || tabs[0]
   const currentColumns =
     activeView === 'activities'
@@ -1272,64 +1258,33 @@ function App() {
               <div className="state-message">Nenhum registro encontrado.</div>
             ) : (
               <>
-                <div className="cff-panel-head">
-                  <div>
-                    <h3>Cronograma Físico-Financeiro</h3>
-                    <p>{cffBudgetLabel}</p>
-                  </div>
-                  <div className="cff-panel-meta">
-                    <span>Data de referência</span>
-                    <strong>{cffReferenceDate ? formatDate(cffReferenceDate) : '-'}</strong>
-                  </div>
+                <div className="cff-month-summary-label">
+                  <h3>Cronograma Físico-Financeiro</h3>
+                  <span>
+                    {cffBudgetLabel}
+                    {' '}
+                    {cffReferenceDate ? `· referência ${formatDate(cffReferenceDate)}` : ''}
+                  </span>
                 </div>
-                <div className="cff-summary-panel">
-                  <div className="cff-summary-head">
-                    <div>
-                      <h4>Base, previsto e realizado mês a mês</h4>
-                      <p>
-                        {cffDisplayMode === 'acumulada'
-                          ? 'Valores acumulados'
-                          : 'Valores mensais'}
-                        {cffMonthFilter === 'all'
-                          ? ' para toda a seleção'
-                          : ` em ${cffSelectedMonthLabel}`}
-                      </p>
-                    </div>
-                    <span>
-                      {cffLevelFilter === 'all'
-                        ? 'Todos os níveis'
-                        : `Nível ${cffLevelFilter.replace('level', '')}`}
-                    </span>
-                  </div>
-                  {cffMonthFilter !== 'all' && cffSelectedMonthRow && (
-                    <div className="cff-kpi-grid" aria-label="Indicadores do mês selecionado">
-                      <div className="cff-kpi-card">
-                        <span>Base</span>
-                        <strong>{formatPercent(cffSelectedMonthRow.baseExibida)}</strong>
-                      </div>
-                      <div className="cff-kpi-card">
-                        <span>Previsto</span>
-                        <strong>{formatPercent(cffSelectedMonthRow.previstoExibido)}</strong>
-                      </div>
-                      <div className="cff-kpi-card">
-                        <span>Realizado</span>
-                        <strong>{formatPercent(cffSelectedMonthRow.realizadoExibido)}</strong>
-                      </div>
-                    </div>
-                  )}
-                  {cffVisibleMonthlyRows.length > 0 ? (
-                    <div className="table-scroll cff-summary-scroll">
-                      <table className="cff-summary-table">
-                        <thead>
-                          <tr>
-                            <th>Mês</th>
-                            <th className="align-right">Base</th>
-                            <th className="align-right">Previsto</th>
-                            <th className="align-right">Realizado</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {cffVisibleMonthlyRows.map((row) => (
+                {cffMonthlyRows.length > 0 && (
+                  <div className="table-scroll cff-summary-scroll cff-summary-inline">
+                    <table className="cff-summary-table">
+                      <thead>
+                        <tr>
+                          <th>Mês</th>
+                          <th className="align-right">Base</th>
+                          <th className="align-right">Previsto</th>
+                          <th className="align-right">Realizado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cffMonthlyRows
+                          .filter((row) =>
+                            cffMonthFilter === 'all'
+                              ? true
+                              : String(row.data || '') === cffMonthFilter,
+                          )
+                          .map((row) => (
                             <tr key={String(row.data || '')}>
                               <td>{formatMonthLabel(row.data)}</td>
                               <td className="align-right">{formatPercent(row.baseExibida)}</td>
@@ -1337,15 +1292,10 @@ function App() {
                               <td className="align-right">{formatPercent(row.realizadoExibido)}</td>
                             </tr>
                           ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="state-message cff-summary-empty">
-                      Sem resumo mensal disponível para a seleção atual.
-                    </div>
-                  )}
-                </div>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
                 <div className="table-scroll cff-scroll">
                   <table className={`cff-table ${cffDenseMode ? 'dense' : ''}`}>
                     <thead>
