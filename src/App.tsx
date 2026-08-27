@@ -573,6 +573,7 @@ const dashboardColumns: Record<DashboardMode, Column[]> = {
     { label: 'Lotes', render: (record) => String(record.lotes || '-') },
     { label: 'Atividades', render: (record) => formatNumber(record.total_pesos_atividades), align: 'right' },
     { label: 'Etapas', render: (record) => formatNumber(record.total_pesos_etapas), align: 'right' },
+
     { label: 'Início da obra', render: (record) => formatDate(record.data_inicio_obra) },
     { label: 'Fim da obra', render: (record) => formatDate(record.data_fim_obra) },
     { label: 'Custo total', render: (record) => formatCurrency(record.custo_total), align: 'right' },
@@ -659,6 +660,138 @@ async function fetchJson(url: string, options?: RequestInit, timeoutMs = 30000) 
   }
 }
 
+type ProjectWeek = {
+  semana_indice: number
+  semana_inicio: string
+  semana_fim: string
+  data: string
+  label: string
+}
+
+function parseDateUtc(dateStr: string) {
+  if (!dateStr) return null
+  const [year, month, day] = dateStr.slice(0, 10).split('-').map(Number)
+  if (!year || !month || !day) return null
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0))
+}
+
+function getProjectWeeks(startDateStr: string, endDateStr: string): ProjectWeek[] {
+  const start = parseDateUtc(startDateStr)
+  const end = parseDateUtc(endDateStr)
+  if (!start || !end) return []
+
+  const weeks: ProjectWeek[] = []
+  const current = new Date(start)
+  const dayOfWeek = current.getUTCDay()
+  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+  current.setUTCDate(current.getUTCDate() + diffToMonday)
+
+  let weekIndex = 1
+  while (current <= end) {
+    const weekStart = new Date(current)
+    const weekEnd = new Date(current)
+    weekEnd.setUTCDate(weekEnd.getUTCDate() + 6)
+
+    const startIso = weekStart.toISOString().slice(0, 10)
+    const endIso = weekEnd.toISOString().slice(0, 10)
+
+    weeks.push({
+      semana_indice: weekIndex,
+      semana_inicio: startIso,
+      semana_fim: endIso,
+      data: endIso,
+      label: `Semana ${weekIndex} (${startIso.slice(8, 10)}/${startIso.slice(5, 7)} a ${endIso.slice(8, 10)}/${endIso.slice(5, 7)}/${endIso.slice(0, 4)})`,
+    })
+
+    current.setUTCDate(current.getUTCDate() + 7)
+    weekIndex++
+  }
+  return weeks
+}
+
+function calculateItemWeeklyProgress(item: CffRecord, weekStartStr: string, weekEndStr: string) {
+  const itemStartStr = String(item.data_inicio_obra || item.data_inicio || '2026-03-02').slice(0, 10)
+  const itemEndStr = String(item.data_fim_obra || item.data_fim || '2029-11-30').slice(0, 10)
+
+  if (weekEndStr < itemStartStr) {
+    return {
+      baseSemana: 0,
+      previstoSemana: 0,
+      realizadoSemana: 0,
+      baseAcumulada: 0,
+      previstoAcumulado: 0,
+      realizadoAcumulado: 0,
+    }
+  }
+
+  const monthlyPoints = item.pontos_mensais || []
+  if (monthlyPoints.length === 0) {
+    const isPast = weekStartStr > itemEndStr
+    return {
+      baseSemana: 0,
+      previstoSemana: 0,
+      realizadoSemana: 0,
+      baseAcumulada: isPast ? Number(item.peso_base ?? 1) : 0,
+      previstoAcumulado: isPast ? Number(item.peso_previsto ?? 1) : 0,
+      realizadoAcumulado: isPast ? Number(item.peso_realizado ?? 0) : 0,
+    }
+  }
+
+  const monthKey = weekEndStr.slice(0, 7)
+  const monthIndex = monthlyPoints.findIndex((p) => String(p.data || '').startsWith(monthKey))
+  const matchingMonthPoint =
+    monthIndex >= 0
+      ? monthlyPoints[monthIndex]
+      : monthlyPoints.find((p) => String(p.data || '') >= weekEndStr) ||
+        monthlyPoints[monthlyPoints.length - 1]
+
+  const monthExpected = Number(matchingMonthPoint?.previsto) || 0
+  const monthBase = Number(matchingMonthPoint?.base) || 0
+  const monthRealized = Number(matchingMonthPoint?.realizado) || 0
+
+  const [year, month] = (matchingMonthPoint?.data || weekEndStr).slice(0, 10).split('-').map(Number)
+  const daysInMonth = new Date(year, month, 0).getDate() || 30
+
+  const overlapStart = weekStartStr > itemStartStr ? weekStartStr : itemStartStr
+  const overlapEnd = weekEndStr < itemEndStr ? weekEndStr : itemEndStr
+  let overlapDays = 0
+  if (overlapEnd >= overlapStart) {
+    const dStart = new Date(overlapStart).getTime()
+    const dEnd = new Date(overlapEnd).getTime()
+    overlapDays = Math.max(0, Math.round((dEnd - dStart) / (1000 * 60 * 60 * 24)) + 1)
+  }
+
+  const fraction = Math.min(1, overlapDays / daysInMonth)
+
+  const previstoSemana = monthExpected * fraction
+  const baseSemana = monthBase * fraction
+  const realizadoSemana = monthRealized * fraction
+
+  const prevMonthIndex = monthIndex > 0 ? monthIndex - 1 : -1
+  const prevPrevistoAccum =
+    prevMonthIndex >= 0 ? Number(monthlyPoints[prevMonthIndex].previsto_acumulado ?? 0) : 0
+  const prevBaseAccum =
+    prevMonthIndex >= 0 ? Number(monthlyPoints[prevMonthIndex].base_acumulada ?? 0) : 0
+  const prevRealizadoAccum =
+    prevMonthIndex >= 0 ? Number(monthlyPoints[prevMonthIndex].realizado_acumulado ?? 0) : 0
+
+  const dayOfMonth = Math.min(daysInMonth, Number(weekEndStr.slice(8, 10)) || 7)
+  const monthProgressFraction = Math.min(1, Math.max(0, dayOfMonth / daysInMonth))
+
+  const previstoAcumulado = Math.min(1, prevPrevistoAccum + monthExpected * monthProgressFraction)
+  const baseAcumulada = Math.min(1, prevBaseAccum + monthBase * monthProgressFraction)
+  const realizadoAcumulado = Math.min(1, prevRealizadoAccum + monthRealized * monthProgressFraction)
+
+  return {
+    baseSemana,
+    previstoSemana,
+    realizadoSemana,
+    baseAcumulada,
+    previstoAcumulado,
+    realizadoAcumulado,
+  }
+}
+
 function App() {
   const [projects, setProjects] = useState<Project[]>([])
   const [records, setRecords] = useState<DataRecord[]>([])
@@ -669,7 +802,9 @@ function App() {
   const [cffSummaries, setCffSummaries] = useState<CffSummary[]>([])
   const [cffBudgetFilter, setCffBudgetFilter] = useState<'all' | string>('all')
   const [cffLevelFilter, setCffLevelFilter] = useState<string>('level1')
+  const [cffGranularity, setCffGranularity] = useState<'monthly' | 'weekly'>('weekly')
   const [cffMonthFilter, setCffMonthFilter] = useState<'all' | string>('all')
+  const [cffWeekFilter, setCffWeekFilter] = useState<'all' | string>('all')
   const [cffDisplayMode, setCffDisplayMode] = useState<'percentual' | 'acumulada'>('percentual')
   const [cffDenseMode, setCffDenseMode] = useState(false)
   const [selectedProject, setSelectedProject] = useState('')
@@ -682,6 +817,7 @@ function App() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const cffMonthInitialized = useRef(false)
+  const cffWeekInitialized = useRef(false)
 
   const loadProjects = useCallback(async () => {
     const payload = await fetchJson('/api/projects')
@@ -826,6 +962,40 @@ function App() {
     )
   }, [activeView, projects, records, search, selectedProject])
 
+  const cffWeekOptions = useMemo(() => {
+    const source = visibleRecords as CffRecord[]
+    const startDateStr = source[0]?.data_inicio_obra || source[0]?.data_inicio || '2026-03-02'
+    const endDateStr = source[0]?.data_fim_obra || source[0]?.data_fim || '2029-11-30'
+    return getProjectWeeks(String(startDateStr), String(endDateStr))
+  }, [visibleRecords])
+
+  const cffDefaultWeek = useMemo(() => {
+    if (cffWeekOptions.length === 0) return 'all'
+    const todayIso = new Date().toISOString().slice(0, 10)
+    const currentWeek = cffWeekOptions.find(
+      (w) => w.semana_inicio <= todayIso && w.semana_fim >= todayIso,
+    )
+    if (currentWeek) return currentWeek.data
+    const pastWeeks = cffWeekOptions.filter((w) => w.semana_fim <= todayIso)
+    if (pastWeeks.length > 0) return pastWeeks[pastWeeks.length - 1].data
+    return cffWeekOptions[0]?.data || 'all'
+  }, [cffWeekOptions])
+
+  useEffect(() => {
+    if (activeView !== 'dashboard' || dashboardMode !== 'cff') return
+    if (cffWeekOptions.length === 0) return
+
+    if (cffWeekFilter === 'all' && !cffWeekInitialized.current) {
+      cffWeekInitialized.current = true
+      setCffWeekFilter(cffDefaultWeek)
+      return
+    }
+
+    if (cffWeekFilter !== 'all' && !cffWeekOptions.some((w) => w.data === cffWeekFilter)) {
+      setCffWeekFilter(cffDefaultWeek)
+    }
+  }, [activeView, dashboardMode, cffWeekFilter, cffWeekOptions, cffDefaultWeek])
+
   const cffRows = useMemo<CffRecord[]>(() => {
     if (activeView !== 'dashboard' || dashboardMode !== 'cff') return []
 
@@ -854,23 +1024,51 @@ function App() {
       let previsto = 0
       let realizado = 0
 
-      if (cffMonthFilter === 'all') {
-        base = Number(record.peso_base) || 0
-        previsto = Number(record.peso_previsto) || 0
-        realizado = Number(record.peso_realizado) || 0
+      if (cffGranularity === 'weekly') {
+        if (cffWeekFilter === 'all') {
+          base = Number(record.peso_base) || 0
+          previsto = Number(record.peso_previsto) || 0
+          realizado = Number(record.peso_realizado) || 0
+        } else {
+          const weekObj = cffWeekOptions.find(
+            (w) => w.data === cffWeekFilter || String(w.semana_indice) === cffWeekFilter,
+          )
+          if (weekObj) {
+            const weeklyCalc = calculateItemWeeklyProgress(
+              record,
+              weekObj.semana_inicio,
+              weekObj.semana_fim,
+            )
+            if (cffDisplayMode === 'acumulada') {
+              base = weeklyCalc.baseAcumulada
+              previsto = weeklyCalc.previstoAcumulado
+              realizado = weeklyCalc.realizadoAcumulado
+            } else {
+              base = weeklyCalc.baseSemana
+              previsto = weeklyCalc.previstoSemana
+              realizado = weeklyCalc.realizadoSemana
+            }
+          }
+        }
       } else {
-        const matchingPoint = (record.pontos_mensais || []).find((pt) =>
-          String(pt.data || '').startsWith(cffMonthFilter.slice(0, 7)),
-        )
-        if (matchingPoint) {
-          if (cffDisplayMode === 'acumulada') {
-            base = Number(matchingPoint.base_acumulada ?? matchingPoint.base) || 0
-            previsto = Number(matchingPoint.previsto_acumulado ?? matchingPoint.previsto) || 0
-            realizado = Number(matchingPoint.realizado_acumulado ?? matchingPoint.realizado) || 0
-          } else {
-            base = Number(matchingPoint.base) || 0
-            previsto = Number(matchingPoint.previsto) || 0
-            realizado = Number(matchingPoint.realizado) || 0
+        if (cffMonthFilter === 'all') {
+          base = Number(record.peso_base) || 0
+          previsto = Number(record.peso_previsto) || 0
+          realizado = Number(record.peso_realizado) || 0
+        } else {
+          const matchingPoint = (record.pontos_mensais || []).find((pt) =>
+            String(pt.data || '').startsWith(cffMonthFilter.slice(0, 7)),
+          )
+          if (matchingPoint) {
+            if (cffDisplayMode === 'acumulada') {
+              base = Number(matchingPoint.base_acumulada ?? matchingPoint.base) || 0
+              previsto = Number(matchingPoint.previsto_acumulado ?? matchingPoint.previsto) || 0
+              realizado = Number(matchingPoint.realizado_acumulado ?? matchingPoint.realizado) || 0
+            } else {
+              base = Number(matchingPoint.base) || 0
+              previsto = Number(matchingPoint.previsto) || 0
+              realizado = Number(matchingPoint.realizado) || 0
+            }
           }
         }
       }
@@ -879,15 +1077,29 @@ function App() {
       cumulativePrevisto += previsto
       cumulativeRealizado += realizado
 
+      const isAll =
+        cffGranularity === 'weekly' ? cffWeekFilter === 'all' : cffMonthFilter === 'all'
+
       return {
         ...record,
         cffIndex: index + 1,
-        cffBase: cffMonthFilter === 'all' && cffDisplayMode === 'acumulada' ? cumulativeBase : base,
-        cffPrevisto: cffMonthFilter === 'all' && cffDisplayMode === 'acumulada' ? cumulativePrevisto : previsto,
-        cffRealizado: cffMonthFilter === 'all' && cffDisplayMode === 'acumulada' ? cumulativeRealizado : realizado,
+        cffBase: isAll && cffDisplayMode === 'acumulada' ? cumulativeBase : base,
+        cffPrevisto: isAll && cffDisplayMode === 'acumulada' ? cumulativePrevisto : previsto,
+        cffRealizado: isAll && cffDisplayMode === 'acumulada' ? cumulativeRealizado : realizado,
       } satisfies CffRecord
     })
-  }, [activeView, dashboardMode, visibleRecords, cffBudgetFilter, cffLevelFilter, cffMonthFilter, cffDisplayMode])
+  }, [
+    activeView,
+    dashboardMode,
+    visibleRecords,
+    cffBudgetFilter,
+    cffLevelFilter,
+    cffGranularity,
+    cffWeekFilter,
+    cffWeekOptions,
+    cffMonthFilter,
+    cffDisplayMode,
+  ])
 
   const cffBudgetNames = useMemo(
     () =>
@@ -942,10 +1154,6 @@ function App() {
   const cffBudgetLabel = cffBudgetFilter === 'all'
     ? (cffBudgetNames[0] || cffSummaryBudgetNames[0] || 'Cronograma Físico-Financeiro')
     : cffBudgetFilter
-
-  const cffReferenceDate = cffSummaries.find((summary) =>
-    cffBudgetFilter === 'all' ? true : String(summary.orcamento_nome || '') === cffBudgetFilter,
-  )?.datas?.at(-1) || cffRows[0]?.data_fim_obra || cffRows[0]?.data_fim || null
 
   const cffMonthlyRows = useMemo(() => {
     if (activeView !== 'dashboard' || dashboardMode !== 'cff') return []
@@ -1026,6 +1234,31 @@ function App() {
       setCffMonthFilter(cffDefaultMonth)
     }
   }, [activeView, dashboardMode, cffMonthFilter, cffMonthOptions, cffDefaultMonth])
+
+  const cffReferenceDate = useMemo(() => {
+    if (cffGranularity === 'weekly') {
+      if (cffWeekFilter !== 'all') return cffWeekFilter
+      return cffDefaultWeek !== 'all' ? cffDefaultWeek : null
+    }
+    if (cffMonthFilter !== 'all') return cffMonthFilter
+    return cffDefaultMonth !== 'all' ? cffDefaultMonth : null
+  }, [cffGranularity, cffWeekFilter, cffDefaultWeek, cffMonthFilter, cffDefaultMonth])
+
+  const cffSummaryTotals = useMemo(() => {
+    let totalBase = 0
+    let totalPrevisto = 0
+    let totalRealizado = 0
+    for (const row of cffRows) {
+      totalBase += Number(row.cffBase) || 0
+      totalPrevisto += Number(row.cffPrevisto) || 0
+      totalRealizado += Number(row.cffRealizado) || 0
+    }
+    return {
+      base: totalBase,
+      previsto: totalPrevisto,
+      realizado: totalRealizado,
+    }
+  }, [cffRows])
 
   const activeTab = tabs.find((tab) => tab.key === activeView) || tabs[0]
   const currentColumns =
@@ -1236,7 +1469,14 @@ function App() {
               <div className="cff-toolbar-copy">
                 <p>Cronograma Físico-Financeiro</p>
                 <h3>{cffBudgetLabel}</h3>
-                <span>Referência {cffReferenceDate ? formatDate(cffReferenceDate) : '-'}</span>
+                <span>
+                  {cffGranularity === 'weekly' && cffWeekFilter !== 'all'
+                    ? cffWeekOptions.find((w) => w.data === cffWeekFilter)?.label ||
+                      (cffReferenceDate ? `Semana com corte em ${formatDate(cffReferenceDate)}` : '-')
+                    : cffReferenceDate
+                      ? `Referência ${formatDate(cffReferenceDate)}`
+                      : '-'}
+                </span>
               </div>
               <div className="cff-toolbar-actions">
                 <label className="search-field cff-search-field">
@@ -1270,17 +1510,50 @@ function App() {
                     ))}
                   </select>
                 </label>
-                <label className="cff-select-field">
-                  <span>Mês</span>
-                  <select value={cffMonthFilter} onChange={(event) => setCffMonthFilter(event.target.value)}>
-                    <option value="all">Todos</option>
-                    {cffMonthOptions.map((month) => (
-                      <option key={month} value={month}>
-                        {formatMonthLabel(month)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <div className="cff-toggle-group" role="group" aria-label="Granularidade">
+                  <button
+                    type="button"
+                    className={cffGranularity === 'weekly' ? 'active' : ''}
+                    onClick={() => setCffGranularity('weekly')}
+                  >
+                    Semanal
+                  </button>
+                  <button
+                    type="button"
+                    className={cffGranularity === 'monthly' ? 'active' : ''}
+                    onClick={() => setCffGranularity('monthly')}
+                  >
+                    Mensal
+                  </button>
+                </div>
+                {cffGranularity === 'weekly' ? (
+                  <label className="cff-select-field">
+                    <span>Semana</span>
+                    <select
+                      value={cffWeekFilter}
+                      onChange={(event) => setCffWeekFilter(event.target.value)}
+                    >
+                      <option value="all">Todas as semanas (Total)</option>
+                      {cffWeekOptions.map((week) => (
+                        <option key={week.data} value={week.data}>
+                          {week.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <label className="cff-select-field">
+                    <span>Mês</span>
+                    <select value={cffMonthFilter} onChange={(event) => setCffMonthFilter(event.target.value)}>
+                      <option value="all">Todos os meses (Total)</option>
+                      {cffMonthOptions.map((month) => (
+                        <option key={month} value={month}>
+                          {formatMonthLabel(month)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <div className="cff-toggle-group" role="group" aria-label="Controles do CFF">
                   <button
                     type="button"
@@ -1356,38 +1629,82 @@ function App() {
                   <span>
                     {cffBudgetLabel}
                     {' '}
-                    {cffReferenceDate ? `· referência ${formatDate(cffReferenceDate)}` : ''}
+                    {cffGranularity === 'weekly' && cffWeekFilter !== 'all'
+                      ? `· ${cffWeekOptions.find((w) => w.data === cffWeekFilter)?.label || `corte ${formatDate(cffReferenceDate)}`}`
+                      : cffReferenceDate
+                        ? `· referência ${formatDate(cffReferenceDate)}`
+                        : ''}
                   </span>
                 </div>
-                {cffMonthlyRows.length > 0 && (
+                {cffGranularity === 'weekly' ? (
                   <div className="table-scroll cff-summary-scroll cff-summary-inline">
                     <table className="cff-summary-table">
                       <thead>
                         <tr>
-                          <th>Mês</th>
-                          <th className="align-right">Base</th>
-                          <th className="align-right">Previsto</th>
-                          <th className="align-right">Realizado</th>
+                          <th>Período Semanal</th>
+                          <th className="align-right">
+                            Base {cffDisplayMode === 'acumulada' ? 'Acumulada' : 'Semana'}
+                          </th>
+                          <th className="align-right">
+                            Previsto {cffDisplayMode === 'acumulada' ? 'Acumulado' : 'Semana'}
+                          </th>
+                          <th className="align-right">
+                            Realizado {cffDisplayMode === 'acumulada' ? 'Acumulado' : 'Semana'}
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
-                        {cffMonthlyRows
-                          .filter((row) =>
-                            cffMonthFilter === 'all'
-                              ? true
-                              : String(row.data || '') === cffMonthFilter,
-                          )
-                          .map((row) => (
-                            <tr key={String(row.data || '')}>
-                              <td>{formatMonthLabel(row.data)}</td>
-                              <td className="align-right">{formatPercent(row.baseExibida)}</td>
-                              <td className="align-right">{formatPercent(row.previstoExibido)}</td>
-                              <td className="align-right">{formatPercent(row.realizadoExibido)}</td>
-                            </tr>
-                          ))}
+                        <tr>
+                          <td>
+                            {cffWeekFilter === 'all'
+                              ? 'Todas as semanas (Total da Obra)'
+                              : cffWeekOptions.find((w) => w.data === cffWeekFilter)?.label ||
+                                `Semana com corte em ${formatDate(cffWeekFilter)}`}
+                          </td>
+                          <td className="align-right">{formatPercent(cffSummaryTotals.base)}</td>
+                          <td className="align-right">{formatPercent(cffSummaryTotals.previsto)}</td>
+                          <td className="align-right">{formatPercent(cffSummaryTotals.realizado)}</td>
+                        </tr>
                       </tbody>
                     </table>
                   </div>
+                ) : (
+                  cffMonthlyRows.length > 0 && (
+                    <div className="table-scroll cff-summary-scroll cff-summary-inline">
+                      <table className="cff-summary-table">
+                        <thead>
+                          <tr>
+                            <th>Mês</th>
+                            <th className="align-right">
+                              Base {cffDisplayMode === 'acumulada' ? 'Acumulada' : 'Mês'}
+                            </th>
+                            <th className="align-right">
+                              Previsto {cffDisplayMode === 'acumulada' ? 'Acumulado' : 'Mês'}
+                            </th>
+                            <th className="align-right">
+                              Realizado {cffDisplayMode === 'acumulada' ? 'Acumulado' : 'Mês'}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cffMonthlyRows
+                            .filter((row) =>
+                              cffMonthFilter === 'all'
+                                ? true
+                                : String(row.data || '') === cffMonthFilter,
+                            )
+                            .map((row) => (
+                              <tr key={String(row.data || '')}>
+                                <td>{formatMonthLabel(row.data)}</td>
+                                <td className="align-right">{formatPercent(row.baseExibida)}</td>
+                                <td className="align-right">{formatPercent(row.previstoExibido)}</td>
+                                <td className="align-right">{formatPercent(row.realizadoExibido)}</td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
                 )}
                 <div className="table-scroll cff-scroll">
                   <table className={`cff-table ${cffDenseMode ? 'dense' : ''}`}>
@@ -1400,9 +1717,15 @@ function App() {
                         <th className="align-right">Material</th>
                         <th className="align-right">Mão de obra</th>
                         <th className="align-right">Total</th>
-                        <th className="align-right">Base</th>
-                        <th className="align-right">Previsto</th>
-                        <th className="align-right">Realizado</th>
+                        <th className="align-right">
+                          Base {cffDisplayMode === 'acumulada' ? 'acum.' : cffGranularity === 'weekly' ? 'sem.' : 'mês'}
+                        </th>
+                        <th className="align-right">
+                          Previsto {cffDisplayMode === 'acumulada' ? 'acum.' : cffGranularity === 'weekly' ? 'sem.' : 'mês'}
+                        </th>
+                        <th className="align-right">
+                          Realizado {cffDisplayMode === 'acumulada' ? 'acum.' : cffGranularity === 'weekly' ? 'sem.' : 'mês'}
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1430,8 +1753,6 @@ function App() {
                 </div>
               </>
             )
-          ) : visibleRecords.length === 0 ? (
-            <div className="state-message">Nenhum registro encontrado.</div>
           ) : (
             <div className="table-scroll">
               <table>
