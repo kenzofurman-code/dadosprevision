@@ -34,11 +34,11 @@ type DataView =
   | 'budgets'
   | 'dashboard'
 
-type ActivityMode = 'planning' | 'jobs' | 'progress' | 'resources'
+type ActivityMode = 'planning' | 'jobs' | 'progress' | 'measurements' | 'resources'
 type BudgetMode = 'reports' | 'items'
-type DashboardMode = 'general' | 'monthly' | 'cff' | 'services' | 'floors' | 'states'
+type DashboardMode = 'general' | 'weekly' | 'monthly' | 'cff' | 'services' | 'floors' | 'states'
 
-type DataRecord = Record<string, string | number | boolean | null | undefined>
+type DataRecord = Record<string, any>
 
 type Project = DataRecord & {
   id_prevision?: string
@@ -57,6 +57,15 @@ type CffRecord = DataRecord & {
   cffBase: number
   cffPrevisto: number
   cffRealizado: number
+  pontos_mensais?: Array<{
+    data: string
+    base: number
+    previsto: number
+    realizado: number
+    base_acumulada: number
+    previsto_acumulado: number
+    realizado_acumulado: number
+  }>
 }
 
 type CffMonthlyPoint = {
@@ -478,8 +487,7 @@ const activityColumns: Record<ActivityMode, Column[]> = {
     { label: 'Serviço', render: (record) => String(record.servico_nome || '-') },
     { label: 'Pavimento', render: (record) => String(record.pavimento_nome || '-') },
     { label: 'Materiais', render: (record) => String(record.recursos_materiais || '-') },
-    { label: 'Responsável', render: (record) => String(record.responsavel || '-') },
-    { label: 'Custo vinculado', render: (record) => formatCurrency(record.custo_vinculado), align: 'right' },
+     { label: 'Custo vinculado', render: (record) => formatCurrency(record.custo_vinculado), align: 'right' },
     {
       label: 'Custo linha base',
       render: (record) => formatCurrency(record.custo_linha_base),
@@ -490,6 +498,19 @@ const activityColumns: Record<ActivityMode, Column[]> = {
       label: 'Descrição realizada',
       render: (record) => String(record.progresso_unidade_descricao || '-'),
     },
+  ],
+  measurements: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    { label: 'Data da medição', render: (record) => formatDate(record.data_medicao) },
+    { label: 'EAP', render: (record) => String(record.codigo_eap || '-') },
+    { label: 'Serviço', render: (record) => String(record.servico_nome || '-') },
+    { label: 'Pavimento', render: (record) => String(record.pavimento_nome || '-') },
+    { label: 'Base físico', render: (record) => formatPercent(record.progresso_base), align: 'right' },
+    { label: 'Previsto', render: (record) => formatPercent(record.progresso_esperado), align: 'right' },
+    { label: 'Realizado', render: (record) => formatPercent(record.progresso_realizado), align: 'right' },
+    { label: 'Unidade', render: (record) => String(record.unidade_simbolo || '-') },
+    { label: 'Motivos de atraso', render: (record) => String(record.motivos_atraso || '-') },
+    { label: 'Observações', render: (record) => String(record.observacoes || '-') },
   ],
 }
 
@@ -519,6 +540,19 @@ const budgetColumns: Record<BudgetMode, Column[]> = {
 
 const dashboardColumns: Record<DashboardMode, Column[]> = {
   general: columns.dashboard,
+  weekly: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
+    { label: 'Semana', render: (record) => `Semana ${record.semana_indice || '-'}` },
+    { label: 'Início', render: (record) => formatDate(record.semana_inicio) },
+    { label: 'Término', render: (record) => formatDate(record.semana_fim || record.data) },
+    { label: 'Base semana', render: (record) => formatPercent(record.base_semana), align: 'right' },
+    { label: 'Previsto semana', render: (record) => formatPercent(record.previsto_semana), align: 'right' },
+    { label: 'Realizado semana', render: (record) => formatPercent(record.realizado_semana), align: 'right' },
+    { label: 'Curva base', render: (record) => formatPercent(record.curva_base), align: 'right' },
+    { label: 'Curva prevista', render: (record) => formatPercent(record.curva_prevista), align: 'right' },
+    { label: 'Curva realizada', render: (record) => formatPercent(record.curva_realizada), align: 'right' },
+  ],
   monthly: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
     { label: 'Perspectiva', render: (record) => formatPerspective(record.perspectiva) },
@@ -659,6 +693,8 @@ function App() {
     const requestedType =
       activeView === 'activities' && activityMode === 'jobs'
         ? 'activityJobs'
+        : activeView === 'activities' && activityMode === 'measurements'
+        ? 'measurements'
         : activeView === 'budgets'
         ? budgetMode === 'items'
           ? 'budgetItems'
@@ -666,6 +702,7 @@ function App() {
         : activeView === 'dashboard'
           ? {
               general: 'dashboard',
+              weekly: 'dashboardWeekly',
               monthly: 'dashboardMonthly',
               cff: 'dashboardCff',
               services: 'dashboardServices',
@@ -813,9 +850,30 @@ function App() {
     let cumulativeRealizado = 0
 
     return sorted.map((record, index) => {
-      const base = Number(record.peso_base) || 0
-      const previsto = Number(record.peso_previsto) || 0
-      const realizado = Number(record.peso_realizado) || 0
+      let base = 0
+      let previsto = 0
+      let realizado = 0
+
+      if (cffMonthFilter === 'all') {
+        base = Number(record.peso_base) || 0
+        previsto = Number(record.peso_previsto) || 0
+        realizado = Number(record.peso_realizado) || 0
+      } else {
+        const matchingPoint = (record.pontos_mensais || []).find((pt) =>
+          String(pt.data || '').startsWith(cffMonthFilter.slice(0, 7)),
+        )
+        if (matchingPoint) {
+          if (cffDisplayMode === 'acumulada') {
+            base = Number(matchingPoint.base_acumulada ?? matchingPoint.base) || 0
+            previsto = Number(matchingPoint.previsto_acumulado ?? matchingPoint.previsto) || 0
+            realizado = Number(matchingPoint.realizado_acumulado ?? matchingPoint.realizado) || 0
+          } else {
+            base = Number(matchingPoint.base) || 0
+            previsto = Number(matchingPoint.previsto) || 0
+            realizado = Number(matchingPoint.realizado) || 0
+          }
+        }
+      }
 
       cumulativeBase += base
       cumulativePrevisto += previsto
@@ -824,12 +882,12 @@ function App() {
       return {
         ...record,
         cffIndex: index + 1,
-        cffBase: cffDisplayMode === 'acumulada' ? cumulativeBase : base,
-        cffPrevisto: cffDisplayMode === 'acumulada' ? cumulativePrevisto : previsto,
-        cffRealizado: cffDisplayMode === 'acumulada' ? cumulativeRealizado : realizado,
+        cffBase: cffMonthFilter === 'all' && cffDisplayMode === 'acumulada' ? cumulativeBase : base,
+        cffPrevisto: cffMonthFilter === 'all' && cffDisplayMode === 'acumulada' ? cumulativePrevisto : previsto,
+        cffRealizado: cffMonthFilter === 'all' && cffDisplayMode === 'acumulada' ? cumulativeRealizado : realizado,
       } satisfies CffRecord
     })
-  }, [activeView, dashboardMode, visibleRecords, cffBudgetFilter, cffLevelFilter, cffDisplayMode])
+  }, [activeView, dashboardMode, visibleRecords, cffBudgetFilter, cffLevelFilter, cffMonthFilter, cffDisplayMode])
 
   const cffBudgetNames = useMemo(
     () =>
@@ -944,22 +1002,30 @@ function App() {
     [cffMonthlyRows],
   )
 
+  const cffDefaultMonth = useMemo(() => {
+    if (cffMonthlyRows.length === 0) return 'all'
+    const withRealized = [...cffMonthlyRows].reverse().find((row) => Number(row.realizado) > 0)
+    if (withRealized?.data) return String(withRealized.data)
+    const currentPrefix = new Date().toISOString().slice(0, 7)
+    const currentMonthRow = cffMonthlyRows.find((row) => String(row.data || '').startsWith(currentPrefix))
+    if (currentMonthRow?.data) return String(currentMonthRow.data)
+    return String(cffMonthlyRows[0]?.data || 'all')
+  }, [cffMonthlyRows])
+
   useEffect(() => {
     if (activeView !== 'dashboard' || dashboardMode !== 'cff') return
     if (cffMonthOptions.length === 0) return
 
-    const latestMonth = cffMonthOptions.at(-1) || 'all'
-
     if (cffMonthFilter === 'all' && !cffMonthInitialized.current) {
       cffMonthInitialized.current = true
-      setCffMonthFilter(latestMonth)
+      setCffMonthFilter(cffDefaultMonth)
       return
     }
 
     if (cffMonthFilter !== 'all' && !cffMonthOptions.includes(cffMonthFilter)) {
-      setCffMonthFilter(latestMonth)
+      setCffMonthFilter(cffDefaultMonth)
     }
-  }, [activeView, dashboardMode, cffMonthFilter, cffMonthOptions])
+  }, [activeView, dashboardMode, cffMonthFilter, cffMonthOptions, cffDefaultMonth])
 
   const activeTab = tabs.find((tab) => tab.key === activeView) || tabs[0]
   const currentColumns =
@@ -1067,7 +1133,10 @@ function App() {
               <button
                 type="button"
                 className={activityMode === 'planning' ? 'active' : ''}
-                onClick={() => setActivityMode('planning')}
+                onClick={() => {
+                  setActivityMode('planning')
+                  setPage(0)
+                }}
               >
                 Planejamento
               </button>
@@ -1084,14 +1153,30 @@ function App() {
               <button
                 type="button"
                 className={activityMode === 'progress' ? 'active' : ''}
-                onClick={() => setActivityMode('progress')}
+                onClick={() => {
+                  setActivityMode('progress')
+                  setPage(0)
+                }}
               >
-                Medições
+                Avanço atual
+              </button>
+              <button
+                type="button"
+                className={activityMode === 'measurements' ? 'active' : ''}
+                onClick={() => {
+                  setActivityMode('measurements')
+                  setPage(0)
+                }}
+              >
+                Histórico de medições
               </button>
               <button
                 type="button"
                 className={activityMode === 'resources' ? 'active' : ''}
-                onClick={() => setActivityMode('resources')}
+                onClick={() => {
+                  setActivityMode('resources')
+                  setPage(0)
+                }}
               >
                 Recursos e custos
               </button>
@@ -1125,6 +1210,7 @@ function App() {
             <div className="activity-modes" aria-label="Detalhamento do dashboard">
               {[
                 ['general', 'Geral'],
+                ['weekly', 'Curva semanal'],
                 ['monthly', 'Curva mensal'],
                 ['cff', 'CFF'],
                 ['services', 'Serviços'],
@@ -1423,4 +1509,3 @@ function App() {
 }
 
 export default App
-

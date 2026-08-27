@@ -7,12 +7,14 @@ const COLLECTIONS = {
   milestones: 'prevision_marcos',
   baselines: 'prevision_linhas_base',
   responsibles: 'prevision_responsaveis',
+  cffItems: 'prevision_cff_itens',
+  measurements: 'prevision_medicoes',
 }
 
 const ANALYTICS_FIELDS = {
   budgets: 'orcamentos',
-  budgetItems: 'itens_orcamento',
   dashboard: 'dashboard_geral',
+  dashboardWeekly: 'dashboard_semanal',
   dashboardMonthly: 'dashboard_mensal',
   dashboardServices: 'dashboard_servicos',
   dashboardFloors: 'dashboard_lotes',
@@ -33,6 +35,7 @@ export default async function handler(req, res) {
     type !== 'restrictions' &&
     type !== 'activityJobs' &&
     type !== 'dashboardCff' &&
+    type !== 'budgetItems' &&
     !ANALYTICS_FIELDS[type]
   ) {
     return res.status(400).json({ error: 'Tipo de dado invalido.' })
@@ -42,6 +45,7 @@ export default async function handler(req, res) {
     const page = Math.max(0, Number(req.query?.page) || 0)
     const pageSize = Math.min(200, Math.max(10, Number(req.query?.limit) || 100))
     const projectId = String(req.query?.projectId || '')
+    const date = String(req.query?.date || '')
 
     if (type === 'restrictions') {
       const projects = await readCollection('prevision_projetos')
@@ -90,15 +94,28 @@ export default async function handler(req, res) {
       })
     }
 
-    if (type === 'dashboardCff') {
+    if (type === 'dashboardCff' || type === 'budgetItems') {
+      const { records: cffRecords, hasMore } = await readCollectionPage('prevision_cff_itens', {
+        page,
+        pageSize,
+        projectId,
+      })
+
       const documents = await readCollection('prevision_analiticos')
       const scopedDocuments = documents.filter(
         (document) => !projectId || String(document.projeto_id) === projectId,
       )
-      const allItems = scopedDocuments.flatMap((document) => document.itens_orcamento || [])
       const allSummaries = scopedDocuments.flatMap((document) => document.cff_resumo || [])
-      const start = page * pageSize
-      const records = allItems.slice(start, start + pageSize)
+
+      // Fallback to legacy document.itens_orcamento if prevision_cff_itens not yet synced
+      let records = cffRecords
+      let paginationHasMore = hasMore
+      if (records.length === 0) {
+        const legacyItems = scopedDocuments.flatMap((document) => document.itens_orcamento || [])
+        const start = page * pageSize
+        records = legacyItems.slice(start, start + pageSize)
+        paginationHasMore = start + pageSize < legacyItems.length
+      }
 
       res.setHeader('Cache-Control', 'no-store')
       return res.status(200).json({
@@ -107,7 +124,7 @@ export default async function handler(req, res) {
         records,
         summary: allSummaries,
         page,
-        hasMore: start + pageSize < allItems.length,
+        hasMore: paginationHasMore,
       })
     }
 
@@ -135,6 +152,7 @@ export default async function handler(req, res) {
       page,
       pageSize,
       projectId,
+      date,
     })
 
     res.setHeader('Cache-Control', 'no-store')

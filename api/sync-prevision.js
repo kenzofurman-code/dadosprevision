@@ -11,6 +11,7 @@ import {
 
 const COLLECTIONS = {
   activities: 'prevision_atividades',
+  measurements: 'prevision_medicoes',
   floors: 'prevision_pavimentos',
   services: 'prevision_servicos',
   milestones: 'prevision_marcos',
@@ -61,6 +62,7 @@ function normalizeProject(project, data, counts) {
     status: data.updateProcessStatus || project.updateProcessStatus || 'unknown',
     desativado: Boolean(data.archivedAt || project.archivedAt),
     total_atividades: counts.activities,
+    total_medicoes: counts.measurements ?? 0,
     total_microservicos: counts.microservices ?? 0,
     total_pavimentos: counts.floors,
     total_servicos: counts.services,
@@ -185,6 +187,35 @@ function normalizeActivity(item, project, projectName, context) {
     microservicos_nomes: microservices.map((job) => job.nome).join(', ') || null,
     microservicos: microservices,
     excluido_em: item.deletedAt || null,
+  })
+}
+
+function normalizeMeasurement(measure, activity, project, projectName) {
+  return clean({
+    ...projectReference(project, projectName),
+    id_prevision: String(measure.id),
+    atividade_id: String(activity.id),
+    codigo_eap: activity.wbsCode || null,
+    atividade_nome: activity.name || null,
+    servico_id: activity.service?.id ? String(activity.service.id) : null,
+    servico_nome: activity.service?.name || null,
+    pavimento_id: activity.floor?.id ? String(activity.floor.id) : null,
+    pavimento_nome: activity.floor?.name || null,
+    unidade_simbolo: activity.measurementUnit?.symbol || activity.measurementUnit?.name || null,
+    data_medicao: measure.measuredIn || null,
+    progresso_base: normalizeProgress(measure.progress?.base ?? measure.basePercentageCompleted),
+    progresso_esperado: normalizeProgress(
+      measure.progress?.expected ?? measure.expectedPercentageCompleted,
+    ),
+    progresso_realizado: normalizeProgress(
+      measure.progress?.realized ?? measure.percentageCompleted,
+    ),
+    motivos_atraso: Array.isArray(measure.delayReasons)
+      ? measure.delayReasons.join(', ')
+      : measure.delayReasons || null,
+    observacoes: Array.isArray(measure.notes)
+      ? measure.notes.join(', ')
+      : measure.notes || null,
   })
 }
 
@@ -384,6 +415,69 @@ function buildCffMonthlySummary(report, projectReferenceData) {
   }
 }
 
+function aggregateSCurveToWeekly(sCurveData, projectReferenceData, perspective) {
+  if (!sCurveData || !Array.isArray(sCurveData.dates) || sCurveData.dates.length === 0) return []
+  const { dates, base = [], expected = [], realized = [] } = sCurveData
+
+  const weeklyMap = new Map()
+
+  for (let i = 0; i < dates.length; i += 1) {
+    const dateStr = dates[i]
+    const dateObj = new Date(dateStr)
+    if (Number.isNaN(dateObj.getTime())) continue
+    const dayOfWeek = dateObj.getUTCDay()
+    const daysToSunday = (7 - dayOfWeek) % 7
+    const endOfWeek = new Date(dateObj)
+    endOfWeek.setUTCDate(dateObj.getUTCDate() + daysToSunday)
+    const weekEndStr = endOfWeek.toISOString().slice(0, 10)
+
+    const startOfWeek = new Date(endOfWeek)
+    startOfWeek.setUTCDate(endOfWeek.getUTCDate() - 6)
+    const weekStartStr = startOfWeek.toISOString().slice(0, 10)
+
+    weeklyMap.set(weekEndStr, {
+      semana_inicio: weekStartStr,
+      semana_fim: weekEndStr,
+      base: Number(base[i]) || 0,
+      expected: Number(expected[i]) || 0,
+      realized: Number(realized[i]) || 0,
+    })
+  }
+
+  const weeklyEntries = [...weeklyMap.values()].sort((left, right) =>
+    left.semana_fim.localeCompare(right.semana_fim),
+  )
+
+  let prevBase = 0
+  let prevExpected = 0
+  let prevRealized = 0
+
+  return weeklyEntries.map((week, idx) => {
+    const basePeriod = Math.max(0, week.base - prevBase)
+    const expectedPeriod = Math.max(0, week.expected - prevExpected)
+    const realizedPeriod = Math.max(0, week.realized - prevRealized)
+
+    prevBase = week.base
+    prevExpected = week.expected
+    prevRealized = week.realized
+
+    return {
+      ...projectReferenceData,
+      perspectiva: perspective,
+      semana_indice: idx + 1,
+      semana_inicio: week.semana_inicio,
+      semana_fim: week.semana_fim,
+      data: week.semana_fim,
+      base_semana: basePeriod,
+      previsto_semana: expectedPeriod,
+      realizado_semana: realizedPeriod,
+      curva_base: week.base,
+      curva_prevista: week.expected,
+      curva_realizada: week.realized,
+    }
+  })
+}
+
 function normalizeAnalytics(project, data) {
   const projectReferenceData = {
     projeto_id: String(project.id),
@@ -409,20 +503,46 @@ function normalizeAnalytics(project, data) {
     perspectiva: budget.dashboardWeight?.perspective || null,
     padrao: Boolean(budget.dashboardWeight?.primary),
   }))
-  const budgetItems = data.cffReports.flatMap((report) =>
-    (report.data?.rows || []).map((row) => {
+  const budgetItems = data.cffReports.flatMap((report) => {
+    const dates = Array.isArray(report.data?.dates) ? report.data.dates.map(String) : []
+    return (report.data?.rows || []).map((row) => {
       const item = row.budgetItem || row.budget_item || {}
       const weights = item.budgetWeights || row.activity_weights || []
       const jobWeights = weights.flatMap((weight) => weight.jobBudgetWeights || [])
-      const realizedPoints = row.realizedPoints || row.realized_points || []
-      const lastRealizedPoint = Array.isArray(realizedPoints)
-        ? realizedPoints.at(-1)
-        : null
+      const basePoints = normalizeCffPointSeries(row.basePoints || row.base_points, dates.length)
+      const expectedPoints = normalizeCffPointSeries(row.expectedPoints || row.expected_points, dates.length)
+      const realizedPoints = normalizeCffPointSeries(row.realizedPoints || row.realized_points, dates.length)
+
+      let cumBase = 0
+      let cumPrevisto = 0
+      let cumRealizado = 0
+      const pontosMensais = dates.map((date, idx) => {
+        const b = Number(basePoints[idx]?.y) || 0
+        const p = Number(expectedPoints[idx]?.y) || 0
+        const r = Number(realizedPoints[idx]?.y) || 0
+        cumBase += b
+        cumPrevisto += p
+        cumRealizado += r
+        return {
+          data: date,
+          base: b,
+          previsto: p,
+          realizado: r,
+          base_acumulada: cumBase,
+          previsto_acumulado: cumPrevisto,
+          realizado_acumulado: cumRealizado,
+        }
+      })
+
+      const lastRealizedPoint =
+        realizedPoints.filter((pt) => Number(pt.y) > 0).at(-1) || realizedPoints.at(-1) || null
+      const uniqueId = String(item.id || `${report.budgetId}_${row.code || item.code || Math.random()}`)
+
       return {
         ...projectReferenceData,
-        orcamento_id: report.budgetId,
+        orcamento_id: String(report.budgetId),
         orcamento_nome: report.name || `Orçamento ${report.budgetId}`,
-        id_prevision: String(item.id || `${report.budgetId}_${row.code}`),
+        id_prevision: uniqueId,
         codigo: row.code || item.code || null,
         descricao: item.description || '-',
         nivel: item.level ?? null,
@@ -440,8 +560,8 @@ function normalizeAnalytics(project, data) {
           (Number(item.laborCost ?? item.labor_cost) || 0) +
             (Number(item.materialCost ?? item.material_cost) || 0),
         ignorado_erp: Boolean(item.ignoredOnErp ?? item.ignored_on_erp),
-        peso_base: sumPoints(row.basePoints || row.base_points),
-        peso_previsto: sumPoints(row.expectedPoints || row.expected_points),
+        peso_base: sumPoints(basePoints),
+        peso_previsto: sumPoints(expectedPoints),
         peso_realizado: sumPoints(realizedPoints),
         peso_vinculado: weights.reduce(
           (total, weight) => total + (Number(weight.percentage) || 0),
@@ -455,9 +575,10 @@ function normalizeAnalytics(project, data) {
         etapas: joinUnique(jobWeights.map((weight) => weight.job?.name)),
         ultima_competencia_realizada: lastRealizedPoint?.x || null,
         ultimo_realizado: lastRealizedPoint?.y ?? null,
+        pontos_mensais: pontosMensais,
       }
-    }),
-  )
+    })
+  })
   const cffSummaries = data.cffReports.map((report) =>
     buildCffMonthlySummary(report, projectReferenceData),
   )
@@ -474,6 +595,7 @@ function normalizeAnalytics(project, data) {
   }))
   const general = []
   const monthly = []
+  const weekly = []
   const serviceEvolution = []
   const floorEvolution = []
 
@@ -520,6 +642,9 @@ function normalizeAnalytics(project, data) {
         curva_realizada: accumulatedRealized,
       })
     }
+
+    const sCurveData = details.sCurve || dashboard.data.sCurve || {}
+    weekly.push(...aggregateSCurveToWeekly(sCurveData, projectReferenceData, perspective))
 
     serviceEvolution.push(
       ...(dashboard.data.workPackageEvolution || []).map((item) => ({
@@ -571,18 +696,21 @@ function normalizeAnalytics(project, data) {
     )
   }
 
-  return clean({
-    ...projectReferenceData,
-    orcamentos: budgets,
-    itens_orcamento: budgetItems,
-    cff_resumo: cffSummaries,
-    dashboard_estados: dashboardStates,
-    dashboard_geral: general,
-    dashboard_mensal: monthly,
-    dashboard_servicos: serviceEvolution,
-    dashboard_lotes: floorEvolution,
-    atualizado_em: new Date().toISOString(),
-  })
+  return {
+    analyticsDoc: clean({
+      ...projectReferenceData,
+      orcamentos: budgets,
+      cff_resumo: cffSummaries,
+      dashboard_estados: dashboardStates,
+      dashboard_geral: general,
+      dashboard_semanal: weekly,
+      dashboard_mensal: monthly,
+      dashboard_servicos: serviceEvolution,
+      dashboard_lotes: floorEvolution,
+      atualizado_em: new Date().toISOString(),
+    }),
+    budgetItems: budgetItems.map(clean),
+  }
 }
 
 async function syncCollectionForProject(db, collectionName, projectId, items) {
@@ -632,6 +760,7 @@ async function synchronizeAll(apiKey, restToken = '', requestedProjectId = '') {
   const totals = {
     projects: projects.length,
     activities: 0,
+    measurements: 0,
     floors: 0,
     services: 0,
     milestones: 0,
@@ -660,10 +789,16 @@ async function synchronizeAll(apiKey, restToken = '', requestedProjectId = '') {
       criticalActivityIds: new Set(projectData.details.criticalPath || []),
       referenceDate: projectData.details.summary?.lastMeasurement || null,
     }
+    const measurements = projectData.activities.flatMap((item) =>
+      (item.measuresPage?.nodes || []).map((m) =>
+        normalizeMeasurement(m, item, project, projectName),
+      ),
+    )
     const normalized = {
       activities: projectData.activities.map((item) =>
         normalizeActivity(item, project, projectName, activityContext),
       ),
+      measurements,
       floors: projectData.floors.map((item) => normalizeFloor(item, project, projectName)),
       services: projectData.services.map((item) => normalizeService(item, project, projectName)),
       milestones: projectData.milestones.map((item) => normalizeMilestone(item, project, projectName)),
@@ -681,8 +816,10 @@ async function synchronizeAll(apiKey, restToken = '', requestedProjectId = '') {
     )
 
     for (const [key, collectionName] of Object.entries(COLLECTIONS)) {
-      await syncCollectionForProject(db, collectionName, String(project.id), normalized[key])
-      totals[key] += normalized[key].length
+      if (normalized[key]) {
+        await syncCollectionForProject(db, collectionName, String(project.id), normalized[key])
+        totals[key] += normalized[key].length
+      }
     }
     totals.microservices += microservicesCount
 
@@ -693,6 +830,7 @@ async function synchronizeAll(apiKey, restToken = '', requestedProjectId = '') {
         {
           ...normalizeProject(project, projectData.details, {
             activities: normalized.activities.length,
+            measurements: normalized.measurements.length,
             microservices: microservicesCount,
             floors: normalized.floors.length,
             services: normalized.services.length,
@@ -765,6 +903,7 @@ async function synchronizeAnalytics(apiKey, requestedProjectId = '') {
     budgets: 0,
     budgetItems: 0,
     dashboards: 0,
+    weekly: 0,
     monthly: 0,
     services: 0,
     floors: 0,
@@ -772,8 +911,8 @@ async function synchronizeAnalytics(apiKey, requestedProjectId = '') {
 
   for (const project of projects) {
     const data = await fetchAnalyticsData(apiKey, project)
-    const normalized = normalizeAnalytics(project, data)
-    const documentSize = Buffer.byteLength(JSON.stringify(normalized))
+    const { analyticsDoc, budgetItems } = normalizeAnalytics(project, data)
+    const documentSize = Buffer.byteLength(JSON.stringify(analyticsDoc))
 
     if (documentSize > 900000) {
       throw new Error(
@@ -784,21 +923,26 @@ async function synchronizeAnalytics(apiKey, requestedProjectId = '') {
     await db
       .collection('prevision_analiticos')
       .doc(String(project.id))
-      .set(normalized)
+      .set(analyticsDoc)
+
+    await syncCollectionForProject(db, 'prevision_cff_itens', String(project.id), budgetItems)
+
     await db.collection('prevision_projetos').doc(String(project.id)).set(
       {
-        total_orcamentos: normalized.orcamentos.length,
-        total_dashboards: normalized.dashboard_estados.length,
+        total_orcamentos: analyticsDoc.orcamentos.length,
+        total_itens_cff: budgetItems.length,
+        total_dashboards: analyticsDoc.dashboard_estados.length,
       },
       { merge: true },
     )
 
-    totals.budgets += normalized.orcamentos.length
-    totals.budgetItems += normalized.itens_orcamento.length
-    totals.dashboards += normalized.dashboard_estados.length
-    totals.monthly += normalized.dashboard_mensal.length
-    totals.services += normalized.dashboard_servicos.length
-    totals.floors += normalized.dashboard_lotes.length
+    totals.budgets += analyticsDoc.orcamentos.length
+    totals.budgetItems += budgetItems.length
+    totals.dashboards += analyticsDoc.dashboard_estados.length
+    totals.weekly += analyticsDoc.dashboard_semanal.length
+    totals.monthly += analyticsDoc.dashboard_mensal.length
+    totals.services += analyticsDoc.dashboard_servicos.length
+    totals.floors += analyticsDoc.dashboard_lotes.length
   }
 
   return totals
