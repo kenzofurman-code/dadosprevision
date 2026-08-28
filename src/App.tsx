@@ -35,7 +35,7 @@ type DataView =
   | 'dashboard'
 
 type ActivityMode = 'planning' | 'jobs' | 'progress' | 'measurements' | 'resources'
-type BudgetMode = 'reports' | 'items'
+type BudgetMode = 'reports' | 'items' | 'weights'
 type DashboardMode = 'general' | 'weekly' | 'monthly' | 'cff' | 'services' | 'floors' | 'states'
 
 type DataRecord = Record<string, any>
@@ -518,6 +518,7 @@ const budgetColumns: Record<BudgetMode, Column[]> = {
   reports: columns.budgets,
   items: [
     { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    { label: 'Orçamento', render: (record) => String(record.orcamento_nome || '-') },
     { label: 'Código', render: (record) => String(record.codigo || '-') },
     { label: 'Descrição', render: (record) => String(record.descricao || '-') },
     { label: 'Nível', render: (record) => formatNumber(record.nivel), align: 'right' },
@@ -531,9 +532,40 @@ const budgetColumns: Record<BudgetMode, Column[]> = {
     { label: 'Previsto', render: (record) => formatPercent(record.peso_previsto), align: 'right' },
     { label: 'Realizado', render: (record) => formatPercent(record.peso_realizado), align: 'right' },
     {
-      label: 'Pesos atividades',
+      label: 'Vínculos cronograma',
       render: (record) => formatNumber(record.total_pesos_atividades),
       align: 'right',
+    },
+  ],
+  weights: [
+    { label: 'Projeto', render: (record) => <strong>{String(record.projeto_nome || '-')}</strong> },
+    { label: 'Orçamento', render: (record) => String(record.orcamento_nome || '-') },
+    { label: 'Código EAP', render: (record) => String(record.codigo || '-') },
+    {
+      label: 'Item do orçamento',
+      render: (record) => (
+        <div className="primary-cell">
+          <strong>{String(record.descricao || '-')}</strong>
+          <small>{record.nivel != null ? `Nível ${record.nivel}` : 'Orçamento'}</small>
+        </div>
+      ),
+    },
+    { label: 'Custo total', render: (record) => formatCurrency(record.custo_total), align: 'right' },
+    { label: 'Serviço (Cronograma)', render: (record) => String(record.servico_nome || '-') },
+    { label: 'Pavimento / Lote', render: (record) => String(record.pavimento_nome || '-') },
+    { label: 'ID Atividade', render: (record) => String(record.id_atividade || '-') },
+    {
+      label: 'Peso na atividade',
+      render: (record) => formatPercent(record.porcentagem),
+      align: 'right',
+    },
+    {
+      label: 'Microserviços vinculados',
+      render: (record) => (
+        <div title={String(record.microservicos_resumo || '-')}>
+          {String(record.microservicos_resumo || '-')}
+        </div>
+      ),
     },
   ],
 }
@@ -834,6 +866,8 @@ function App() {
         : activeView === 'budgets'
         ? budgetMode === 'items'
           ? 'budgetItems'
+          : budgetMode === 'weights'
+          ? 'budgetWeights'
           : 'budgets'
         : activeView === 'dashboard'
           ? {
@@ -902,7 +936,7 @@ function App() {
         )
       } else if (activeView === 'budgets' || activeView === 'dashboard') {
         setMessage(
-          `${integerFormatter.format(payload.totals?.budgets ?? 0)} orçamentos e ${integerFormatter.format(payload.totals?.dashboards ?? 0)} dashboards atualizados.`,
+          `${integerFormatter.format(payload.totals?.budgets ?? 0)} orçamentos, ${integerFormatter.format(payload.totals?.budgetWeights ?? 0)} vínculos com cronograma e ${integerFormatter.format(payload.totals?.dashboards ?? 0)} dashboards atualizados.`,
         )
       } else {
         const total = payload.totals?.activities ?? 0
@@ -1436,6 +1470,16 @@ function App() {
                 }}
               >
                 Itens / CFF
+              </button>
+              <button
+                type="button"
+                className={budgetMode === 'weights' ? 'active' : ''}
+                onClick={() => {
+                  setBudgetMode('weights')
+                  setPage(0)
+                }}
+              >
+                Vínculos com Cronograma (Pesos)
               </button>
             </div>
           )}

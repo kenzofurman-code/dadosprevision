@@ -9,6 +9,7 @@ const COLLECTIONS = {
   responsibles: 'prevision_responsaveis',
   cffItems: 'prevision_cff_itens',
   measurements: 'prevision_medicoes',
+  budgetWeights: 'prevision_pesos_orcamento',
 }
 
 const ANALYTICS_FIELDS = {

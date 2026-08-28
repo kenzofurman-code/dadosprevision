@@ -579,6 +579,60 @@ function normalizeAnalytics(project, data) {
       }
     })
   })
+  const budgetWeights = data.cffReports.flatMap((report) => {
+    return (report.data?.rows || []).flatMap((row) => {
+      const item = row.budgetItem || row.budget_item || {}
+      const weights = item.budgetWeights || row.activity_weights || []
+      const uniqueItemId = String(item.id || `${report.budgetId}_${row.code || item.code || Math.random()}`)
+
+      return weights.map((weight, weightIdx) => {
+        const jobWeights = weight.jobBudgetWeights || []
+        const uniqueWeightId = String(
+          weight.id || `${report.budgetId}_${uniqueItemId}_${weightIdx}_${weight.activity?.id || Math.random()}`,
+        )
+        return {
+          ...projectReferenceData,
+          orcamento_id: String(report.budgetId),
+          orcamento_nome: report.name || `Orçamento ${report.budgetId}`,
+          id_prevision: uniqueWeightId,
+          id_item_orcamento: uniqueItemId,
+          codigo: row.code || item.code || null,
+          descricao: item.description || '-',
+          nivel: item.level ?? null,
+          tipo_grupo: item.groupType || item.group_type || null,
+          custo_material: item.materialCost ?? item.material_cost ?? null,
+          custo_mao_obra: item.laborCost ?? item.labor_cost ?? null,
+          custo_total:
+            item.totalCost ??
+            item.total ??
+            item.total_cost ??
+            (Number(item.laborCost ?? item.labor_cost) || 0) +
+              (Number(item.materialCost ?? item.material_cost) || 0),
+          id_peso: uniqueWeightId,
+          porcentagem: Number(weight.percentage) || 0,
+          id_atividade: weight.activity?.id ? String(weight.activity.id) : null,
+          servico_nome: weight.activity?.service?.name || '-',
+          pavimento_nome: weight.activity?.floor?.name || '-',
+          total_microservicos: jobWeights.length,
+          microservicos: jobWeights.map((jw) => ({
+            id_microservico: jw.job?.id ? String(jw.job.id) : null,
+            nome: jw.job?.name || '-',
+            parte: jw.job?.part ? String(jw.job.part) : null,
+            porcentagem: Number(jw.percentage) || 0,
+          })),
+          microservicos_resumo:
+            jobWeights
+              .map(
+                (jw) =>
+                  `${jw.job?.name || '-'}${
+                    jw.percentage != null ? ` (${(Number(jw.percentage) * 100).toFixed(1)}%)` : ''
+                  }`,
+              )
+              .join('; ') || '-',
+        }
+      })
+    })
+  })
   const cffSummaries = data.cffReports.map((report) =>
     buildCffMonthlySummary(report, projectReferenceData),
   )
@@ -710,6 +764,7 @@ function normalizeAnalytics(project, data) {
       atualizado_em: new Date().toISOString(),
     }),
     budgetItems: budgetItems.map(clean),
+    budgetWeights: budgetWeights.map(clean),
   }
 }
 
@@ -902,6 +957,7 @@ async function synchronizeAnalytics(apiKey, requestedProjectId = '') {
     projects: projects.length,
     budgets: 0,
     budgetItems: 0,
+    budgetWeights: 0,
     dashboards: 0,
     weekly: 0,
     monthly: 0,
@@ -911,7 +967,7 @@ async function synchronizeAnalytics(apiKey, requestedProjectId = '') {
 
   for (const project of projects) {
     const data = await fetchAnalyticsData(apiKey, project)
-    const { analyticsDoc, budgetItems } = normalizeAnalytics(project, data)
+    const { analyticsDoc, budgetItems, budgetWeights } = normalizeAnalytics(project, data)
     const documentSize = Buffer.byteLength(JSON.stringify(analyticsDoc))
 
     if (documentSize > 900000) {
@@ -926,11 +982,13 @@ async function synchronizeAnalytics(apiKey, requestedProjectId = '') {
       .set(analyticsDoc)
 
     await syncCollectionForProject(db, 'prevision_cff_itens', String(project.id), budgetItems)
+    await syncCollectionForProject(db, 'prevision_pesos_orcamento', String(project.id), budgetWeights)
 
     await db.collection('prevision_projetos').doc(String(project.id)).set(
       {
         total_orcamentos: analyticsDoc.orcamentos.length,
         total_itens_cff: budgetItems.length,
+        total_pesos_orcamento: budgetWeights.length,
         total_dashboards: analyticsDoc.dashboard_estados.length,
       },
       { merge: true },
@@ -938,6 +996,7 @@ async function synchronizeAnalytics(apiKey, requestedProjectId = '') {
 
     totals.budgets += analyticsDoc.orcamentos.length
     totals.budgetItems += budgetItems.length
+    totals.budgetWeights += budgetWeights.length
     totals.dashboards += analyticsDoc.dashboard_estados.length
     totals.weekly += analyticsDoc.dashboard_semanal.length
     totals.monthly += analyticsDoc.dashboard_mensal.length
