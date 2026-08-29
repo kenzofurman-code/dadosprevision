@@ -57,7 +57,7 @@ export default async function handler(req, res) {
       const start = page * pageSize
       const records = allRecords.slice(start, start + pageSize)
 
-      res.setHeader('Cache-Control', 'no-store')
+      res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600')
       return res.status(200).json({
         ok: true,
         type,
@@ -86,7 +86,7 @@ export default async function handler(req, res) {
         })),
       )
 
-      res.setHeader('Cache-Control', 'no-store')
+      res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600')
       return res.status(200).json({
         ok: true,
         type,
@@ -102,7 +102,7 @@ export default async function handler(req, res) {
         pageSize: 3000,
         projectId,
       })
-      res.setHeader('Cache-Control', 'no-store')
+      res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600')
       return res.status(200).json({
         ok: true,
         type,
@@ -134,7 +134,7 @@ export default async function handler(req, res) {
         paginationHasMore = start + pageSize < legacyItems.length
       }
 
-      res.setHeader('Cache-Control', 'no-store')
+      res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600')
       return res.status(200).json({
         ok: true,
         type,
@@ -155,7 +155,7 @@ export default async function handler(req, res) {
       const start = page * pageSize
       const records = allRecords.slice(start, start + pageSize)
 
-      res.setHeader('Cache-Control', 'no-store')
+      res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600')
       return res.status(200).json({
         ok: true,
         type,
@@ -172,7 +172,7 @@ export default async function handler(req, res) {
       date,
     })
 
-    res.setHeader('Cache-Control', 'no-store')
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600')
     return res.status(200).json({ ok: true, type, records, page, hasMore })
   } catch (error) {
     console.error(error)

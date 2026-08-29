@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from 'node:util'
 import { getDb } from '../lib/firebase-admin.js'
+import { clearFirestoreCache } from '../lib/firestore-reader.js'
 import {
   fetchAllProjectIds,
   fetchAnalyticsData,
@@ -1032,6 +1033,7 @@ export default async function handler(req, res) {
         : req.body?.scope === 'analytics'
           ? await synchronizeAnalytics(apiKey, requestedProjectId)
         : await synchronizeAll(apiKey, restToken, requestedProjectId)
+    clearFirestoreCache()
     return res.status(200).json({ ok: true, imported: totals.projects, totals })
   } catch (error) {
     console.error(error)

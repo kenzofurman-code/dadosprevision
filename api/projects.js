@@ -13,7 +13,7 @@ export default async function handler(req, res) {
         String(first.nome_projeto || '').localeCompare(String(second.nome_projeto || ''), 'pt-BR'),
       )
 
-    res.setHeader('Cache-Control', 'no-store')
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600')
     return res.status(200).json({ ok: true, projects })
   } catch (error) {
     console.error(error)
