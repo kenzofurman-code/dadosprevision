@@ -37,6 +37,7 @@ export default async function handler(req, res) {
     type !== 'activityJobs' &&
     type !== 'dashboardCff' &&
     type !== 'budgetItems' &&
+    type !== 'gestaoVista' &&
     !ANALYTICS_FIELDS[type]
   ) {
     return res.status(400).json({ error: 'Tipo de dado invalido.' })
@@ -92,6 +93,21 @@ export default async function handler(req, res) {
         records,
         page,
         hasMore: activityPage.hasMore,
+      })
+    }
+
+    if (type === 'gestaoVista') {
+      const activityPage = await readCollectionPage('prevision_atividades', {
+        page: 0,
+        pageSize: 3000,
+        projectId,
+      })
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).json({
+        ok: true,
+        type,
+        records: activityPage.records,
+        hasMore: false,
       })
     }
 

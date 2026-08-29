@@ -11,6 +11,7 @@ import {
   Layers3,
   ListChecks,
   Percent,
+  Presentation,
   RefreshCw,
   Search,
   ShieldAlert,
@@ -33,6 +34,9 @@ type DataView =
   | 'restrictions'
   | 'budgets'
   | 'dashboard'
+  | 'gestao_a_vista'
+
+type GestaoViewMode = 'all' | 'summary' | 'matrix'
 
 type ActivityMode = 'planning' | 'jobs' | 'progress' | 'measurements' | 'resources'
 type BudgetMode = 'reports' | 'items' | 'weights'
@@ -114,6 +118,7 @@ const tabs: TabDefinition[] = [
   { key: 'restrictions', label: 'Restrições', icon: ShieldAlert, totalField: 'total_restricoes' },
   { key: 'budgets', label: 'Orçamento', icon: WalletCards, totalField: 'total_orcamentos' },
   { key: 'dashboard', label: 'Dashboard', icon: ChartNoAxesCombined, totalField: 'total_dashboards' },
+  { key: 'gestao_a_vista', label: 'Gestão à Vista', icon: Presentation, totalField: 'total_atividades' },
 ]
 
 const dataViews = new Set<DataView>([
@@ -126,6 +131,7 @@ const dataViews = new Set<DataView>([
   'restrictions',
   'budgets',
   'dashboard',
+  'gestao_a_vista',
 ])
 
 const numberFormatter = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 })
@@ -140,6 +146,13 @@ function formatDate(value?: string | number | boolean | null) {
   if (!value || typeof value !== 'string') return '-'
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
   return match ? `${match[3]}/${match[2]}/${match[1]}` : value
+}
+
+function formatDateCompact(value?: string | number | boolean | null) {
+  if (!value || typeof value !== 'string') return '-'
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (!match) return String(value)
+  return `${match[3]}/${match[2]}/${match[1].slice(2)}`
 }
 
 function formatNumber(value?: string | number | boolean | null, suffix = '') {
@@ -414,6 +427,7 @@ const columns: Record<DataView, Column[]> = {
       align: 'right',
     },
   ],
+  gestao_a_vista: [],
 }
 
 const activityColumns: Record<ActivityMode, Column[]> = {
@@ -839,6 +853,9 @@ function App() {
   const [cffWeekFilter, setCffWeekFilter] = useState<'all' | string>('all')
   const [cffDisplayMode, setCffDisplayMode] = useState<'percentual' | 'acumulada'>('percentual')
   const [cffDenseMode, setCffDenseMode] = useState(false)
+  const [gestaoMonth, setGestaoMonth] = useState<string>('')
+  const [gestaoGroup, setGestaoGroup] = useState<string>('all')
+  const [gestaoViewMode, setGestaoViewMode] = useState<GestaoViewMode>('all')
   const [selectedProject, setSelectedProject] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
@@ -869,6 +886,8 @@ function App() {
           : budgetMode === 'weights'
           ? 'budgetWeights'
           : 'budgets'
+        : activeView === 'gestao_a_vista'
+        ? 'gestaoVista'
         : activeView === 'dashboard'
           ? {
               general: 'dashboard',
@@ -1294,6 +1313,236 @@ function App() {
     }
   }, [cffRows])
 
+  // Gestão à Vista Calculations
+  const gestaoActivities = useMemo(() => {
+    if (activeView !== 'gestao_a_vista') return []
+    return records
+  }, [activeView, records])
+
+  const gestaoGroupOptions = useMemo(() => {
+    const groups = new Set<string>()
+    for (const act of gestaoActivities) {
+      if (act.grupo_repeticao) groups.add(String(act.grupo_repeticao))
+    }
+    return Array.from(groups).sort(compareNatural)
+  }, [gestaoActivities])
+
+  const gestaoMonthOptions = useMemo(() => {
+    const months = new Set<string>()
+    for (const act of gestaoActivities) {
+      if (act.data_inicio) {
+        const d = new Date(act.data_inicio)
+        if (!isNaN(d.getTime())) {
+          months.add(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`)
+        }
+      }
+      if (act.data_fim) {
+        const d = new Date(act.data_fim)
+        if (!isNaN(d.getTime())) {
+          months.add(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`)
+        }
+      }
+    }
+    return Array.from(months).sort()
+  }, [gestaoActivities])
+
+  useEffect(() => {
+    if (activeView !== 'gestao_a_vista') return
+    if (gestaoMonthOptions.length > 0 && (!gestaoMonth || !gestaoMonthOptions.includes(gestaoMonth))) {
+      const todayMonth = new Date().toISOString().slice(0, 7)
+      if (gestaoMonthOptions.includes(todayMonth)) {
+        setGestaoMonth(todayMonth)
+      } else {
+        const middleIndex = Math.floor(gestaoMonthOptions.length / 3)
+        setGestaoMonth(gestaoMonthOptions[middleIndex] || gestaoMonthOptions[0])
+      }
+    }
+  }, [activeView, gestaoMonth, gestaoMonthOptions])
+
+  const gestaoFilteredActivities = useMemo(() => {
+    return gestaoActivities.filter((act) => {
+      if (gestaoGroup !== 'all' && String(act.grupo_repeticao || '') !== gestaoGroup) {
+        return false
+      }
+      if (search.trim()) {
+        const q = search.toLowerCase()
+        const matchService = String(act.servico_nome || '').toLowerCase().includes(q)
+        const matchFloor = String(act.pavimento_nome || '').toLowerCase().includes(q)
+        const matchCode = String(act.codigo_eap || '').toLowerCase().includes(q)
+        if (!matchService && !matchFloor && !matchCode) return false
+      }
+      return true
+    })
+  }, [gestaoActivities, gestaoGroup, search])
+
+  const gestaoData = useMemo(() => {
+    if (!gestaoMonth) {
+      return {
+        services: [],
+        floors: [],
+        mMinus3: null,
+        mMinus2: null,
+        mMinus1: null,
+        m0: null,
+        mPlus1: null,
+        mPlus2: null,
+        mPlus3: null,
+        panel1Rows: [],
+        panel2Rows: [],
+        panel3Rows: [],
+        matrixMap: new Map<string, DataRecord>(),
+      }
+    }
+
+    const [year, month] = gestaoMonth.split('-').map(Number)
+    const monthIdx = month - 1
+
+    function getMonthRange(y: number, mIdx: number) {
+      const start = new Date(Date.UTC(y, mIdx, 1, 0, 0, 0))
+      const end = new Date(Date.UTC(y, mIdx + 1, 0, 23, 59, 59, 999))
+      const label = `${String(start.getUTCMonth() + 1).padStart(2, '0')}/${start.getUTCFullYear()}`
+      const startFormatted = `${String(start.getUTCDate()).padStart(2, '0')}/${String(start.getUTCMonth() + 1).padStart(2, '0')}/${start.getUTCFullYear()}`
+      const endFormatted = `${String(end.getUTCDate()).padStart(2, '0')}/${String(end.getUTCMonth() + 1).padStart(2, '0')}/${end.getUTCFullYear()}`
+      return { start, end, label, startFormatted, endFormatted }
+    }
+
+    const mMinus3 = getMonthRange(year, monthIdx - 3)
+    const mMinus2 = getMonthRange(year, monthIdx - 2)
+    const mMinus1 = getMonthRange(year, monthIdx - 1)
+    const m0 = getMonthRange(year, monthIdx)
+    const mPlus1 = getMonthRange(year, monthIdx + 1)
+    const mPlus2 = getMonthRange(year, monthIdx + 2)
+    const mPlus3 = getMonthRange(year, monthIdx + 3)
+
+    const serviceMap = new Map<string, { name: string; position: number; activities: DataRecord[] }>()
+    const floorMap = new Map<string, { id: string; name: string }>()
+    const matrixMap = new Map<string, DataRecord>()
+
+    for (const act of gestaoFilteredActivities) {
+      const sName = act.servico_nome || '-'
+      const fName = act.pavimento_nome || '-'
+      const sPos = act.posicao_servico ?? 999
+
+      if (!serviceMap.has(sName)) {
+        serviceMap.set(sName, { name: sName, position: sPos, activities: [] })
+      }
+      serviceMap.get(sName)!.activities.push(act)
+
+      if (act.pavimento_nome && !floorMap.has(fName)) {
+        floorMap.set(fName, { id: String(act.pavimento_id || ''), name: fName })
+      }
+
+      matrixMap.set(`${sName}__${fName}`, act)
+    }
+
+    const services = Array.from(serviceMap.values()).sort((a, b) => a.position - b.position || compareNatural(a.name, b.name))
+    const floors = Array.from(floorMap.values()).sort((a, b) => compareNatural(a.name, b.name))
+
+    function calcProgressAt(activities: DataRecord[], range: { start: Date; end: Date }) {
+      let prevTotal = 0
+      let realTotal = 0
+      for (const act of activities) {
+        const start = act.data_inicio ? new Date(act.data_inicio) : null
+        const end = act.data_fim ? new Date(act.data_fim) : null
+        const real = Number(act.progresso_realizado) || 0
+
+        if (start && end) {
+          if (end <= range.end) {
+            prevTotal += 1.0
+          } else if (start <= range.end) {
+            const totalMs = end.getTime() - start.getTime()
+            const elapsedMs = range.end.getTime() - start.getTime()
+            if (totalMs > 0) {
+              prevTotal += Math.min(1.0, Math.max(0.0, elapsedMs / totalMs))
+            }
+          }
+        }
+
+        if (real > 0) {
+          if (end && end <= range.end) {
+            realTotal += real
+          } else if (start && start <= range.end) {
+            realTotal += real
+          }
+        }
+      }
+      return { prev: prevTotal, real: realTotal }
+    }
+
+    function countActive(activities: DataRecord[], range: { start: Date; end: Date }) {
+      let count = 0
+      for (const act of activities) {
+        const start = act.data_inicio ? new Date(act.data_inicio) : null
+        const end = act.data_fim ? new Date(act.data_fim) : null
+        if (start && end && start <= range.end && end >= range.start) {
+          count += 1
+        }
+      }
+      return count
+    }
+
+    const panel1Rows = services.map((s) => {
+      const pM3 = calcProgressAt(s.activities, mMinus3)
+      const pM2 = calcProgressAt(s.activities, mMinus2)
+      const pM1 = calcProgressAt(s.activities, mMinus1)
+      return {
+        service: s.name,
+        m3: pM3,
+        m2: pM2,
+        m1: pM1,
+      }
+    })
+
+    const panel2Rows = services.map((s) => {
+      const activePavs: string[] = []
+      let qtdePrevista = 0
+      for (const act of s.activities) {
+        const start = act.data_inicio ? new Date(act.data_inicio) : null
+        const end = act.data_fim ? new Date(act.data_fim) : null
+        const prog = Number(act.progresso_realizado) || 0
+        if (start && end && start <= m0.end && end >= m0.start) {
+          qtdePrevista += 1
+          if (prog < 1.0 && act.pavimento_nome) {
+            activePavs.push(act.pavimento_nome)
+          }
+        }
+      }
+      return {
+        service: s.name,
+        qtdePrevista,
+        pavimentos: activePavs,
+      }
+    })
+
+    const panel3Rows = services.map((s) => {
+      const c1 = countActive(s.activities, mPlus1)
+      const c2 = countActive(s.activities, mPlus2)
+      const c3 = countActive(s.activities, mPlus3)
+      return {
+        service: s.name,
+        mPlus1: c1,
+        mPlus2: c2,
+        mPlus3: c3,
+      }
+    })
+
+    return {
+      services,
+      floors,
+      mMinus3,
+      mMinus2,
+      mMinus1,
+      m0,
+      mPlus1,
+      mPlus2,
+      mPlus3,
+      panel1Rows,
+      panel2Rows,
+      panel3Rows,
+      matrixMap,
+    }
+  }, [gestaoFilteredActivities, gestaoMonth])
+
   const activeTab = tabs.find((tab) => tab.key === activeView) || tabs[0]
   const currentColumns =
     activeView === 'activities'
@@ -1657,11 +1906,375 @@ function App() {
           <div className={`feedback ${error ? 'error' : 'success'}`}>{error || message}</div>
         )}
 
-        <div className={`table-panel ${activeView === 'dashboard' && dashboardMode === 'cff' ? 'cff-panel' : ''}`} aria-live="polite">
+        <div className={`table-panel ${activeView === 'dashboard' && dashboardMode === 'cff' ? 'cff-panel' : activeView === 'gestao_a_vista' ? 'gestao-panel' : ''}`} aria-live="polite">
           {loading ? (
             <div className="state-message">
               <RefreshCw size={20} className="spin" />
               Carregando dados
+            </div>
+          ) : activeView === 'gestao_a_vista' ? (
+            <div className="gestao-vista-wrapper">
+              <div className="gestao-controls-bar">
+                <div className="gestao-controls-group">
+                  <label className="gestao-field">
+                    <span>Projeto</span>
+                    <select value={selectedProject} onChange={(event) => changeProject(event.target.value)}>
+                      <option value="">Todos os projetos</option>
+                      {projects.map((project) => (
+                        <option key={project.id_prevision} value={project.id_prevision}>
+                          {project.nome_projeto}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {gestaoGroupOptions.length > 0 && (
+                    <label className="gestao-field">
+                      <span>Torre / Grupo</span>
+                      <select value={gestaoGroup} onChange={(event) => setGestaoGroup(event.target.value)}>
+                        <option value="all">Todos os grupos ({gestaoGroupOptions.length})</option>
+                        {gestaoGroupOptions.map((group) => (
+                          <option key={group} value={group}>
+                            {group}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+
+                  <label className="gestao-field">
+                    <span>Mês de Referência (M0)</span>
+                    <select value={gestaoMonth} onChange={(event) => setGestaoMonth(event.target.value)}>
+                      {gestaoMonthOptions.map((m) => (
+                        <option key={m} value={m}>
+                          {formatMonthLabel(m)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="gestao-field search-field">
+                    <span>Buscar</span>
+                    <Search size={14} />
+                    <input
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Filtrar serviço ou pavimento"
+                    />
+                  </label>
+                </div>
+
+                <div className="cff-toggle-group" role="group" aria-label="Modo de Visualização">
+                  <button
+                    type="button"
+                    className={gestaoViewMode === 'all' ? 'active' : ''}
+                    onClick={() => setGestaoViewMode('all')}
+                  >
+                    Completo (4 Painéis)
+                  </button>
+                  <button
+                    type="button"
+                    className={gestaoViewMode === 'summary' ? 'active' : ''}
+                    onClick={() => setGestaoViewMode('summary')}
+                  >
+                    Apenas Resumos
+                  </button>
+                  <button
+                    type="button"
+                    className={gestaoViewMode === 'matrix' ? 'active' : ''}
+                    onClick={() => setGestaoViewMode('matrix')}
+                  >
+                    Apenas Matriz
+                  </button>
+                </div>
+              </div>
+
+              {/* TOP 3 SUMMARY PANELS */}
+              {(gestaoViewMode === 'all' || gestaoViewMode === 'summary') && (
+                <div className="gestao-summary-grid">
+                  {/* Painel 1: Andamento Meses Anteriores */}
+                  <div className="gestao-card">
+                    <div className="gestao-card-header">
+                      <div className="gestao-card-title">
+                        <span>Andamento Meses Anteriores</span>
+                      </div>
+                      <span className="gestao-card-badge">
+                        {gestaoData.mMinus3?.label} - {gestaoData.mMinus1?.label}
+                      </span>
+                    </div>
+                    <div className="gestao-card-body">
+                      <table className="gestao-table">
+                        <thead>
+                          <tr>
+                            <th className="service-col" rowSpan={2}>
+                              Serviço
+                            </th>
+                            <th colSpan={2}>
+                              <div>{gestaoData.mMinus3?.label} (M-3)</div>
+                              <div className="gestao-subhead">
+                                {gestaoData.mMinus3?.startFormatted} - {gestaoData.mMinus3?.endFormatted}
+                              </div>
+                            </th>
+                            <th colSpan={2}>
+                              <div>{gestaoData.mMinus2?.label} (M-2)</div>
+                              <div className="gestao-subhead">
+                                {gestaoData.mMinus2?.startFormatted} - {gestaoData.mMinus2?.endFormatted}
+                              </div>
+                            </th>
+                            <th colSpan={2}>
+                              <div>{gestaoData.mMinus1?.label} (M-1)</div>
+                              <div className="gestao-subhead">
+                                {gestaoData.mMinus1?.startFormatted} - {gestaoData.mMinus1?.endFormatted}
+                              </div>
+                            </th>
+                          </tr>
+                          <tr>
+                            <th>Previsto</th>
+                            <th>Realizado</th>
+                            <th>Previsto</th>
+                            <th>Realizado</th>
+                            <th>Previsto</th>
+                            <th>Realizado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {gestaoData.panel1Rows.length === 0 ? (
+                            <tr>
+                              <td colSpan={7} style={{ textAlign: 'center', padding: '20px' }}>
+                                Nenhum serviço encontrado.
+                              </td>
+                            </tr>
+                          ) : (
+                            gestaoData.panel1Rows.map((row) => (
+                              <tr key={row.service}>
+                                <td className="service-col">{row.service}</td>
+                                <td>{row.m3.prev.toFixed(2)}</td>
+                                <td
+                                  className={
+                                    row.m3.real === 0 && row.m3.prev === 0
+                                      ? 'gestao-cell-neutral'
+                                      : row.m3.real >= row.m3.prev
+                                      ? 'gestao-cell-ontrack'
+                                      : 'gestao-cell-delayed'
+                                  }
+                                >
+                                  {row.m3.real.toFixed(2)}
+                                </td>
+                                <td>{row.m2.prev.toFixed(2)}</td>
+                                <td
+                                  className={
+                                    row.m2.real === 0 && row.m2.prev === 0
+                                      ? 'gestao-cell-neutral'
+                                      : row.m2.real >= row.m2.prev
+                                      ? 'gestao-cell-ontrack'
+                                      : 'gestao-cell-delayed'
+                                  }
+                                >
+                                  {row.m2.real.toFixed(2)}
+                                </td>
+                                <td>{row.m1.prev.toFixed(2)}</td>
+                                <td
+                                  className={
+                                    row.m1.real === 0 && row.m1.prev === 0
+                                      ? 'gestao-cell-neutral'
+                                      : row.m1.real >= row.m1.prev
+                                      ? 'gestao-cell-ontrack'
+                                      : 'gestao-cell-delayed'
+                                  }
+                                >
+                                  {row.m1.real.toFixed(2)}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Painel 2: Atividades Previstas para o Mês Vigente */}
+                  <div className="gestao-card">
+                    <div className="gestao-card-header">
+                      <div className="gestao-card-title">
+                        <span>Atividades Previstas - Mês Vigente</span>
+                      </div>
+                      <span className="gestao-card-badge">
+                        {gestaoData.m0?.label} ({gestaoData.m0?.startFormatted} - {gestaoData.m0?.endFormatted})
+                      </span>
+                    </div>
+                    <div className="gestao-card-body">
+                      <table className="gestao-table">
+                        <thead>
+                          <tr>
+                            <th className="service-col">Atividade / Serviço</th>
+                            <th style={{ width: '90px' }}>Qtde Prevista</th>
+                            <th>Pavimentos a Realizar no Mês</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {gestaoData.panel2Rows.length === 0 ? (
+                            <tr>
+                              <td colSpan={3} style={{ textAlign: 'center', padding: '20px' }}>
+                                Nenhum serviço encontrado.
+                              </td>
+                            </tr>
+                          ) : (
+                            gestaoData.panel2Rows.map((row) => (
+                              <tr key={row.service}>
+                                <td className="service-col">{row.service}</td>
+                                <td>
+                                  <strong>{row.qtdePrevista.toFixed(2)}</strong>
+                                </td>
+                                <td style={{ textAlign: 'left' }}>
+                                  {row.pavimentos.length === 0 ? (
+                                    <span style={{ color: '#94a3b8' }}>-</span>
+                                  ) : (
+                                    row.pavimentos.map((pav) => (
+                                      <span key={pav} className="gestao-pav-tag">
+                                        {pav}
+                                      </span>
+                                    ))
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Painel 3: Projeção Futura */}
+                  <div className="gestao-card">
+                    <div className="gestao-card-header">
+                      <div className="gestao-card-title">
+                        <span>Projeção Próximos Meses</span>
+                      </div>
+                      <span className="gestao-card-badge">
+                        {gestaoData.mPlus1?.label} - {gestaoData.mPlus3?.label}
+                      </span>
+                    </div>
+                    <div className="gestao-card-body">
+                      <table className="gestao-table">
+                        <thead>
+                          <tr>
+                            <th className="service-col">Serviço</th>
+                            <th>
+                              <div>{gestaoData.mPlus1?.label} (M+1)</div>
+                              <div className="gestao-subhead">Qtde Prev.</div>
+                            </th>
+                            <th>
+                              <div>{gestaoData.mPlus2?.label} (M+2)</div>
+                              <div className="gestao-subhead">Qtde Prev.</div>
+                            </th>
+                            <th>
+                              <div>{gestaoData.mPlus3?.label} (M+3)</div>
+                              <div className="gestao-subhead">Qtde Prev.</div>
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {gestaoData.panel3Rows.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} style={{ textAlign: 'center', padding: '20px' }}>
+                                Nenhum serviço encontrado.
+                              </td>
+                            </tr>
+                          ) : (
+                            gestaoData.panel3Rows.map((row) => (
+                              <tr key={row.service}>
+                                <td className="service-col">{row.service}</td>
+                                <td>{row.mPlus1.toFixed(2)}</td>
+                                <td>{row.mPlus2.toFixed(2)}</td>
+                                <td>{row.mPlus3.toFixed(2)}</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* BOTTOM PANEL: Matriz de Serviços x Pavimentos (Linha de Balanço) */}
+              {(gestaoViewMode === 'all' || gestaoViewMode === 'matrix') && (
+                <div className="gestao-matrix-card">
+                  <div className="gestao-card-header">
+                    <div className="gestao-card-title">
+                      <span>Matriz de Serviços x Pavimentos (Linha de Balanço)</span>
+                    </div>
+                    <span className="gestao-card-badge">
+                      {gestaoData.services.length} Serviços · {gestaoData.floors.length} Pavimentos
+                    </span>
+                  </div>
+                  <div className="gestao-matrix-container">
+                    <table className="gestao-matrix-table">
+                      <thead>
+                        <tr>
+                          <th className="matrix-service-th">Serviço \ Pavimento</th>
+                          {gestaoData.floors.map((floor) => (
+                            <th key={floor.name}>{floor.name}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {gestaoData.services.length === 0 ? (
+                          <tr>
+                            <td colSpan={gestaoData.floors.length + 1} style={{ textAlign: 'center', padding: '30px' }}>
+                              Nenhum dado encontrado para o filtro atual.
+                            </td>
+                          </tr>
+                        ) : (
+                          gestaoData.services.map((service) => (
+                            <tr key={service.name}>
+                              <td className="matrix-service-td">{service.name}</td>
+                              {gestaoData.floors.map((floor) => {
+                                const act = gestaoData.matrixMap.get(`${service.name}__${floor.name}`)
+                                if (!act) {
+                                  return (
+                                    <td key={floor.name} className="matrix-cell">
+                                      -
+                                    </td>
+                                  )
+                                }
+                                const prog = Number(act.progresso_realizado) || 0
+                                const start = act.data_inicio ? new Date(act.data_inicio) : null
+                                const end = act.data_fim ? new Date(act.data_fim) : null
+                                const isM0Active =
+                                  start &&
+                                  end &&
+                                  gestaoData.m0 &&
+                                  start <= gestaoData.m0.end &&
+                                  end >= gestaoData.m0.start
+                                const isDone = prog >= 1.0
+                                const isProgress = prog > 0 && prog < 1.0
+
+                                return (
+                                  <td key={floor.name} className="matrix-cell">
+                                    <div
+                                      className={`matrix-cell-content ${
+                                        isDone ? 'cell-done' : isProgress ? 'cell-progress' : ''
+                                      } ${isM0Active ? 'cell-active-month' : ''}`}
+                                    >
+                                      <span className="matrix-dates">
+                                        {formatDateCompact(act.data_inicio)} - {formatDateCompact(act.data_fim)}
+                                      </span>
+                                      <span className="matrix-percent">
+                                        {formatPercent(prog)}
+                                      </span>
+                                    </div>
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           ) : activeView === 'dashboard' && dashboardMode === 'cff' ? (
             cffRows.length === 0 ? (
@@ -1828,7 +2441,7 @@ function App() {
           )}
         </div>
 
-        {activeView !== 'projects' && (
+        {activeView !== 'projects' && activeView !== 'gestao_a_vista' && (
           <footer className="pagination">
             <span>
               Página {page + 1} · {visibleRecords.length} registros exibidos
