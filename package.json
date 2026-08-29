@@ -8,15 +8,22 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "server": "node server/index.js",
+    "start": "node server/index.js",
     "seed:firestore": "node scripts/seed-firestore.mjs",
     "sync:local": "node scripts/sync-prevision-local.mjs",
     "sync:restrictions": "node scripts/sync-prevision-local.mjs restrictions",
     "sync:analytics": "node scripts/sync-prevision-local.mjs analytics"
   },
   "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
     "firebase": "^12.15.0",
     "firebase-admin": "^14.1.0",
     "lucide-react": "^1.21.0",
+    "node-cron": "^4.6.0",
+    "pg": "^8.23.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
