@@ -1,158 +1,78 @@
 # Dados Prevision
 
-Painel web em React + Vite para listar projetos sincronizados do Prevision a partir do Firestore.
+Painel React/Vite com backend Node.js/Express, sincronização da API Prevision e persistência em PostgreSQL. A arquitetura principal é autônoma e executada com Docker Compose em uma VPS.
 
-## Rodar localmente
+## Arquitetura principal
+
+- `app`: compila o frontend, serve a SPA e expõe `GET /api/projects`, `GET /api/data` e `POST /api/sync-prevision`.
+- `postgres`: mantém projetos, cronograma, medições, restrições e dados analíticos.
+- `node-cron`: sincroniza automaticamente conforme `CRON_SYNC_SCHEDULE`.
+- volume `pgdata`: preserva o banco entre recriações dos containers.
+
+O schema é aplicado na inicialização e pode ser executado novamente. As entidades filhas usam a chave composta `(projeto_id, id_prevision)`, pois IDs da Prevision podem se repetir entre projetos.
+O PostgreSQL fica acessível somente pela rede interna do Compose; nenhuma porta do banco é publicada na VPS.
+
+## Execução com Docker
+
+1. Copie as variáveis de ambiente e substitua senhas e credenciais:
 
 ```bash
-npm install
-npm run dev
+cp .env.example .env
 ```
 
-O arquivo `.env.local` ja esta configurado para desenvolvimento local com o projeto Firebase `dadosprevision`.
-
-## Variaveis para o Vercel
-
-No Vercel, crie o projeto apontando para este repositorio/pasta e configure estas variaveis em **Project Settings > Environment Variables**:
+Variáveis obrigatórias:
 
 ```env
-VITE_FIREBASE_API_KEY=AIzaSyDkwakhAtKql_OQj66nZJZJypiiBBb1uVU
-VITE_FIREBASE_AUTH_DOMAIN=dadosprevision.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=dadosprevision
-VITE_FIREBASE_STORAGE_BUCKET=dadosprevision.firebasestorage.app
-VITE_FIREBASE_MESSAGING_SENDER_ID=15180779110
-VITE_FIREBASE_APP_ID=1:15180779110:web:ebe0e6f7712b8046c027a7
-VITE_FIREBASE_MEASUREMENT_ID=G-HS2BYYP62H
+POSTGRES_DB=dadosprevision
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=uma_senha_forte
+PREVISION_API_KEY=sua_chave_graphql
+PREVISION_REST_TOKEN=seu_jwt_rest_opcional
+CRON_SYNC_SCHEDULE=0 6,18 * * *
 ```
 
-Config do build na Vercel:
+`POSTGRES_PASSWORD` é obrigatória: o Compose recusa a configuração quando ela está vazia ou ausente.
 
-- Framework Preset: `Vite`
-- Build Command: `npm run build`
-- Output Directory: `dist`
-- Install Command: `npm install`
-
-## O que configurar no Firebase
-
-1. Abra o projeto Firebase `dadosprevision`.
-2. Ative o **Cloud Firestore** em modo nativo.
-3. Crie a colecao `prevision_projetos`.
-4. Cada documento deve ter estes campos, no minimo:
-
-```json
-{
-  "id_prevision": "123",
-  "nome_projeto": "Nome do projeto",
-  "empresa_nome": "Empresa",
-  "data_inicio": "2026-01-01",
-  "data_fim": "2026-12-31",
-  "status": "Ativo",
-  "desativado": false
-}
-```
-
-5. Publique regras de leitura. Para painel publico, use:
-
-```js
-rules_version = '2';
-
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /prevision_projetos/{document} {
-      allow read: if true;
-      allow write: if false;
-    }
-  }
-}
-```
-
-6. Em **Firestore > Indexes**, normalmente nao precisa criar indice manual para esta tela, porque a consulta usa apenas `orderBy("nome_projeto")`.
-7. Em **Project Settings > General > Your apps**, confirme que o app Web existe e que as credenciais batem com as variaveis acima.
-8. Em **Authentication > Settings > Authorized domains**, adicione o dominio gerado pela Vercel e qualquer dominio proprio que voce usar.
-
-## Criar a colecao por script
-
-Se o login da Firebase CLI falhar, use uma chave de Service Account:
-
-1. No Firebase, abra **Project settings > Service accounts**.
-2. Clique em **Generate new private key**.
-3. Salve o arquivo JSON na raiz deste projeto com um nome como `service-account-dadosprevision.json`.
-4. Rode:
+2. Construa e inicie a aplicação:
 
 ```bash
-npm run seed:firestore -- service-account-dadosprevision.json
+docker compose up -d --build
+docker compose ps
+docker compose logs -f app
 ```
 
-Esse comando cria/atualiza o documento `prevision_projetos/exemplo-001`. Depois, voce pode apagar esse documento exemplo no console do Firestore quando a sincronizacao real estiver funcionando.
+O painel fica disponível em `http://localhost:3000`. O endpoint `GET /api/health` permite verificar o servidor.
 
-Para consultar a Prevision e salvar os projetos diretamente no Firestore usando as
-credenciais locais:
+## Sincronização
+
+O botão **Sincronizar Prevision** chama `POST /api/sync-prevision`. Sem `projectId`, todos os projetos são atualizados; com um ID, apenas o projeto solicitado é atualizado.
 
 ```bash
-npm run sync:local
+curl -X POST http://localhost:3000/api/sync-prevision \
+  -H "Content-Type: application/json" \
+  -d '{"projectId":"123"}'
 ```
 
-O comando usa os arquivos ignorados pelo Git `vercel-env-backend.txt` e
-`service-account-dadosprevision.json`.
+`PREVISION_API_KEY` consulta GraphQL. `PREVISION_REST_TOKEN` é opcional e complementa atividades com o relatório REST de cronograma. Falhas por projeto são registradas nos logs e retornadas em `totals.failures` quando outras obras conseguem concluir.
 
-A sincronizacao detalhada popula as colecoes:
-
-- `prevision_projetos`
-- `prevision_atividades`
-- `prevision_pavimentos`
-- `prevision_servicos`
-- `prevision_marcos`
-- `prevision_linhas_base`
-- `prevision_responsaveis`
-
-O painel apresenta cada conjunto em uma tabela paginada, com filtro por projeto.
-
-As restricoes Kanban ficam agrupadas no campo `restricoes` de cada documento em
-`prevision_projetos`, reduzindo centenas de gravacoes a uma atualizacao por
-projeto. Para sincronizar somente as restricoes:
+## Desenvolvimento e validação
 
 ```bash
-npm run sync:restrictions
+npm ci
+npm run lint
+npm run build
+node --check server/index.js
+node --check server/sync.js
+node --check server/normalizers.js
+docker compose config
 ```
 
-Os modulos de Orcamento e Dashboard ficam consolidados em
-`prevision_analiticos`, com relatorios, itens CFF, curva mensal, informacoes
-gerais, estados e evolucao por servico/lote. O modo Dashboard > CFF tambem
-relaciona os pesos a atividades, etapas, servicos e lotes. Para atualizar somente
-esses dados:
+Para executar o servidor Node fora do Docker, disponibilize um PostgreSQL, configure `DATABASE_URL`, rode `npm run build` e depois `npm start`.
 
-```bash
-npm run sync:analytics
-```
+## Deploy na VPS
 
-## Sincronizacao com Prevision
+Consulte [deploy.md](deploy.md) para instalação, atualização, proxy Nginx, HTTPS e backup do volume PostgreSQL.
 
-Para atualizar diariamente, crie uma Cloud Function agendada no Firebase que:
+## Firebase e Vercel (legado)
 
-1. Leia o token/segredo da API Prevision via **Secret Manager** ou variaveis seguras.
-2. Consulte os projetos na API do Prevision.
-3. Grave/atualize os documentos em `prevision_projetos`.
-4. Use `id_prevision` como ID do documento ou como campo unico para evitar duplicidade.
-
-O front-end ja esta pronto para ler a colecao. A parte que depende de informacao externa e a Cloud Function, porque precisa do endpoint e da chave da API Prevision.
-
-## Botao de sincronizacao
-
-O projeto tambem possui a rota Vercel `POST /api/sync-prevision`, chamada pelo botao **Sincronizar Prevision**.
-
-Variaveis privadas necessarias na Vercel:
-
-```env
-PREVISION_API_MODE=graphql
-PREVISION_API_KEY=sua_chave_prevision
-PREVISION_REST_TOKEN=jwt_rest_opcional
-FIREBASE_SERVICE_ACCOUNT_BASE64=service_account_json_em_base64
-```
-
-Para GraphQL, a Prevision exige o header `UserAuthorization` no formato `token SUA_CHAVE`. A rota ja monta esse header automaticamente.
-
-`PREVISION_REST_TOKEN` e uma credencial JWT separada, fornecida pela Prevision
-para a API REST. Quando configurada, a sincronizacao usa o relatorio analitico
-`/construction/api/v1/projects/{project_id}/schedule` para preencher materiais,
-responsaveis, progresso unitario, datas reais e motivos de atraso. Sem ela, o
-painel preenche os campos disponiveis pelo GraphQL.
+Os arquivos em `api/`, os utilitários Firebase e os scripts `sync:*` permanecem para compatibilidade com a implantação anterior. Eles usam Firestore, `FIREBASE_SERVICE_ACCOUNT_BASE64` e funções da Vercel, mas não fazem parte do caminho principal Docker/PostgreSQL. Novas implantações devem usar a stack da VPS descrita acima.

@@ -1,6 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import cron from 'node-cron'
+import fs from 'fs'
 import path from 'path'
 import dotenv from 'dotenv'
 import { fileURLToPath } from 'url'
@@ -138,7 +139,7 @@ app.post('/api/sync-prevision', async (req, res) => {
 const distPath = path.join(__dirname, '../dist')
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath))
-  app.get('*', (_req, res) => {
+  app.get('/{*splat}', (_req, res) => {
     res.sendFile(path.join(distPath, 'index.html'))
   })
 }

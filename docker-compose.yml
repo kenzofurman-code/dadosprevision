@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -8,11 +6,9 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-dadosprevision}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_seguro_123}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no arquivo .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-dadosprevision}"]
       interval: 5s
@@ -28,7 +24,11 @@ services:
         condition: service_healthy
     environment:
       PORT: 3000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres_seguro_123}@postgres:5432/${POSTGRES_DB:-dadosprevision}
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB:-dadosprevision}
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no arquivo .env}
       PREVISION_API_KEY: ${PREVISION_API_KEY}
       PREVISION_REST_TOKEN: ${PREVISION_REST_TOKEN:-}
       CRON_SYNC_SCHEDULE: ${CRON_SYNC_SCHEDULE:-0 6,18 * * *}

@@ -16,6 +16,10 @@ service-account*.json
 firebase-adminsdk*.json
 vercel-env-backend.txt
 vercel-env-all.txt
+vpsssh.txt
+.env
+.env.*
+!.env.example
 
 # Editor directories and files
 .vscode/*

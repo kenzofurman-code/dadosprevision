@@ -1,0 +1,15 @@
+.git
+.gitignore
+.maestri
+.codex*
+*.code-workspace
+node_modules
+dist
+.env
+.env.*
+vpsssh.txt
+service-account*.json
+*-service-account.json
+firebase-adminsdk*.json
+vercel-env-*.txt
+src/styles

@@ -7,10 +7,22 @@ const { Pool } = pg
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
+function projectScopedId(record) {
+  return `${record.projeto_id}_${record.id_prevision}`
+}
+
+const connection = process.env.DATABASE_URL
+  ? { connectionString: process.env.DATABASE_URL }
+  : {
+      host: process.env.PGHOST || 'localhost',
+      port: Number(process.env.PGPORT) || 5432,
+      database: process.env.PGDATABASE || 'dadosprevision',
+      user: process.env.PGUSER || 'postgres',
+      password: process.env.PGPASSWORD || 'postgres',
+    }
+
 const pool = new Pool({
-  connectionString:
-    process.env.DATABASE_URL ||
-    `postgresql://${process.env.PGUSER || 'postgres'}:${process.env.PGPASSWORD || 'postgres'}@${process.env.PGHOST || 'localhost'}:${process.env.PGPORT || 5432}/${process.env.PGDATABASE || 'dadosprevision'}`,
+  ...connection,
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
@@ -28,6 +40,21 @@ export async function query(text, params) {
     console.warn(`Query lenta (${duration}ms): ${text.slice(0, 100)}...`)
   }
   return res
+}
+
+export async function withTransaction(callback) {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const result = await callback((text, params) => client.query(text, params))
+    await client.query('COMMIT')
+    return result
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
 }
 
 export async function initDb() {
@@ -71,7 +98,7 @@ export async function getActivities({ projectId = '', page = 0, pageSize = 100, 
       params,
     )
     return {
-      records: rows.map((r) => ({ ...r, firestore_id: r.id_prevision })),
+      records: rows.map((r) => ({ ...r.raw_data, ...r, firestore_id: projectScopedId(r) })),
       hasMore: false,
     }
   }
@@ -87,7 +114,9 @@ export async function getActivities({ projectId = '', page = 0, pageSize = 100, 
   const { rows } = await query(sql, params)
 
   const hasMore = rows.length > pageSize
-  const records = rows.slice(0, pageSize).map((r) => ({ ...r, firestore_id: r.id_prevision }))
+  const records = rows
+    .slice(0, pageSize)
+    .map((r) => ({ ...r.raw_data, ...r, firestore_id: projectScopedId(r) }))
 
   return { records, hasMore }
 }
@@ -97,7 +126,7 @@ export async function getActivityJobs({ projectId = '', page = 0, pageSize = 100
   const records = activities.flatMap((activity) =>
     (activity.microservicos || []).map((job) => ({
       ...job,
-      firestore_id: `${activity.id_prevision}_${job.id_prevision}`,
+      firestore_id: `${activity.projeto_id}_${activity.id_prevision}_${job.id_prevision}`,
       projeto_id: activity.projeto_id,
       projeto_nome: activity.projeto_nome,
       atividade_id: activity.id_prevision,
@@ -132,7 +161,9 @@ export async function getGenericTable(tableName, { projectId = '', page = 0, pag
   const { rows } = await query(sql, params)
 
   const hasMore = rows.length > pageSize
-  const records = rows.slice(0, pageSize).map((r) => ({ ...r, firestore_id: r.id_prevision }))
+  const records = rows
+    .slice(0, pageSize)
+    .map((r) => ({ ...r.raw_data, ...r, firestore_id: projectScopedId(r) }))
 
   return { records, hasMore }
 }
@@ -180,7 +211,9 @@ export async function getAnalyticsData(type, { projectId = '', page = 0, pageSiz
   const start = page * pageSize
   const records = allRecords.slice(start, start + pageSize).map((item, idx) => ({
     ...item,
-    firestore_id: item.id_prevision || `${type}_${start + idx}`,
+    firestore_id: item.id_prevision
+      ? `${item.projeto_id || projectId}_${item.id_prevision}`
+      : `${item.projeto_id || projectId}_${type}_${start + idx}`,
   }))
 
   return {
@@ -201,7 +234,9 @@ export async function getRestrictions({ projectId = '', page = 0, pageSize = 100
   const start = page * pageSize
   const records = allRecords.slice(start, start + pageSize).map((item, idx) => ({
     ...item,
-    firestore_id: item.id_prevision || `restricao_${start + idx}`,
+    firestore_id: item.id_prevision
+      ? `${item.projeto_id || projectId}_${item.id_prevision}`
+      : `${item.projeto_id || projectId}_restricao_${start + idx}`,
   }))
 
   return {

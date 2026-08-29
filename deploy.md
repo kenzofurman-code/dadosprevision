@@ -1,97 +1,83 @@
-# 🚀 Guia de Deploy na VPS — Dados Prevision
+# Deploy na VPS — Dados Prevision
 
-Este guia ensina como subir a aplicação completa (Backend Node.js + Frontend + Banco de Dados PostgreSQL) na sua VPS com **Docker Compose** e **Nginx com SSL grátis**.
+Este é o procedimento principal de produção: frontend e API no container Node.js, PostgreSQL em container próprio e sincronização periódica no servidor.
 
----
+## Pré-requisitos
 
-## 📋 Pré-requisitos na VPS
-- Servidor Ubuntu 22.04 / 24.04 ou Debian 12 com acesso root via SSH.
-- Docker e Docker Compose instalados.
-- Domínio ou subdomínio apontando para o IP da VPS (ex: `prevision.suaempresa.com.br`).
+- Ubuntu 22.04/24.04 ou Debian 12 com acesso SSH.
+- Docker Engine e plugin Docker Compose.
+- Domínio apontado para a VPS, se houver acesso público.
 
----
-
-## 🛠️ Passo 1: Instalar o Docker na VPS (se ainda não tiver)
-
-Execute no terminal da VPS:
 ```bash
-# Atualizar pacotes
-sudo apt update && sudo apt upgrade -y
-
-# Instalar Docker
 curl -fsSL https://get.docker.com -o get-docker.sh
 sudo sh get-docker.sh
-
-# Instalar plugin do Docker Compose
 sudo apt install -y docker-compose-plugin
-
-# Testar instalacao
 docker --version
 docker compose version
 ```
 
----
-
-## 📥 Passo 2: Clonar o Repositório e Configurar o `.env`
+## Instalação
 
 ```bash
-# 1. Clonar o projeto
-git clone https://github.com/kenzofurman-code/dadosprevision.git /var/www/dadosprevision
+sudo mkdir -p /var/www
+sudo git clone https://github.com/kenzofurman-code/dadosprevision.git /var/www/dadosprevision
 cd /var/www/dadosprevision
-
-# 2. Criar o arquivo .env a partir do modelo
-cp .env.example .env
-
-# 3. Editar o .env com as suas chaves reais
-nano .env
+sudo cp .env.example .env
+sudo nano .env
 ```
 
-> Preencha a `PREVISION_API_KEY` e defina uma senha forte para o `POSTGRES_PASSWORD`. Salve com `Ctrl + O`, `Enter` e saia com `Ctrl + X`.
+Defina pelo menos uma senha PostgreSQL forte e a chave GraphQL da Prevision:
 
----
-
-## 🚀 Passo 3: Iniciar a Aplicação com Docker Compose
-
-Com 1 único comando, o Docker vai criar o banco PostgreSQL, compilar o frontend e ligar o servidor com agendador automático:
-
-```bash
-docker compose up -d --build
+```env
+POSTGRES_DB=dadosprevision
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=troque_por_uma_senha_forte
+PREVISION_API_KEY=sua_chave_graphql
+PREVISION_REST_TOKEN=seu_jwt_rest_opcional
+CRON_SYNC_SCHEDULE=0 6,18 * * *
 ```
 
-Para conferir se os containers estão rodando e os logs:
+Não publique `.env` nem credenciais no Git. O container `app` recebe a conexão por `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER` e `PGPASSWORD`, evitando problemas com caracteres especiais da senha em URLs.
+`POSTGRES_PASSWORD` é obrigatória, e a porta 5432 não é publicada no host; o banco aceita conexões apenas da rede interna do Compose.
+
+## Subir e verificar
+
 ```bash
-docker compose ps
-docker compose logs -f app
+sudo docker compose config
+sudo docker compose up -d --build
+sudo docker compose ps
+sudo docker compose logs --tail=100 app
+curl http://127.0.0.1:3000/api/health
 ```
 
-A aplicação já estará respondendo em: `http://IP_DA_SUA_VPS:3000`.
+Na primeira inicialização, o backend aplica `server/schema.sql`. O script também migra o schema inicial da stack VPS e pode ser reexecutado sem apagar dados. O volume `pgdata` mantém o PostgreSQL após rebuilds.
 
----
-
-## 🔒 Passo 4: Configurar Domínio e HTTPS Grátis (Nginx + Let's Encrypt)
-
-Para rodar com SSL/HTTPS profissional no seu domínio:
+Para iniciar a primeira sincronização manualmente:
 
 ```bash
-# 1. Instalar Nginx e Certbot
+curl -X POST http://127.0.0.1:3000/api/sync-prevision \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+## Nginx e HTTPS
+
+```bash
 sudo apt install -y nginx certbot python3-certbot-nginx
-
-# 2. Criar configuracao do Nginx
 sudo nano /etc/nginx/sites-available/dadosprevision
 ```
 
-Cole o seguinte conteúdo (substituindo pelo seu domínio):
+Exemplo, substituindo o domínio:
+
 ```nginx
 server {
+    listen 80;
     server_name prevision.suaempresa.com.br;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -100,22 +86,38 @@ server {
 ```
 
 ```bash
-# 3. Ativar o site e recarregar o Nginx
-sudo ln -s /etc/nginx/sites-available/dadosprevision /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/dadosprevision /etc/nginx/sites-enabled/dadosprevision
 sudo nginx -t
 sudo systemctl reload nginx
-
-# 4. Gerar certificado SSL Let's Encrypt automatico
 sudo certbot --nginx -d prevision.suaempresa.com.br
 ```
 
----
+## Atualização
 
-## 🔄 Como Atualizar a Aplicação no Futuro
-
-Sempre que fizermos novas alterações no GitHub:
 ```bash
 cd /var/www/dadosprevision
-git pull origin main
-docker compose up -d --build
+sudo git pull --ff-only origin main
+sudo docker compose up -d --build
+sudo docker compose ps
+sudo docker compose logs --tail=100 app
 ```
+
+Não use `docker compose down -v` durante uma atualização: `-v` remove o volume do banco.
+
+## Backup e restauração do PostgreSQL
+
+```bash
+sudo docker compose exec -T postgres sh -c \
+  'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > dadosprevision.dump
+```
+
+Restaure em uma instância vazia e compatível:
+
+```bash
+sudo docker compose exec -T postgres sh -c \
+  'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' < dadosprevision.dump
+```
+
+## Implantação legada
+
+Vercel, Firebase/Firestore e as rotas em `api/` são mantidos somente para compatibilidade com a implantação anterior. Eles exigem credenciais e operação próprias e não são necessários para a stack Docker/PostgreSQL. Para uma instalação nova, use exclusivamente o fluxo VPS acima.
