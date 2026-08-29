@@ -94,7 +94,28 @@ export async function getActivities({ projectId = '', page = 0, pageSize = 100, 
 
   if (isGestaoVista) {
     const { rows } = await query(
-      `SELECT * FROM atividades ${where} ORDER BY posicao_servico ASC, posicao_pavimento ASC, servico_nome ASC, pavimento_nome ASC LIMIT 5000`,
+      `SELECT
+         a.*,
+         COALESCE(
+           (
+             SELECT jsonb_agg(
+               jsonb_build_object(
+                 'data_medicao', m.data_medicao,
+                 'progresso_realizado', m.progresso_realizado
+               )
+               ORDER BY m.data_medicao ASC, m.id_prevision ASC
+             )
+             FROM medicoes m
+             WHERE m.projeto_id = a.projeto_id
+               AND m.atividade_id = a.id_prevision
+               AND m.data_medicao IS NOT NULL
+           ),
+           '[]'::jsonb
+         ) AS medicoes
+       FROM atividades a
+       ${projectId ? 'WHERE a.projeto_id = $1' : ''}
+       ORDER BY a.posicao_servico ASC, a.posicao_pavimento ASC, a.servico_nome ASC, a.pavimento_nome ASC
+       LIMIT 5000`,
       params,
     )
     return {

@@ -13,6 +13,7 @@ import {
   Edit2,
   FileSpreadsheet,
   Flag,
+  GripVertical,
   History,
   Layers,
   Layers3,
@@ -51,6 +52,17 @@ type DataView =
   | 'gestao_a_vista'
 
 type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix'
+type ReorderableGestaoPanel = 'panel1' | 'panel2' | 'panel3'
+
+interface GestaoPanelPreference {
+  onlyWithData: boolean
+  serviceOrder: string[]
+}
+
+type GestaoPanelPreferences = Record<
+  string,
+  Record<ReorderableGestaoPanel, GestaoPanelPreference>
+>
 
 interface GestaoServiceItem {
   name: string
@@ -893,6 +905,18 @@ function App() {
   const [gestaoGroup, setGestaoGroup] = useState<string>('all')
   const [gestaoPanelTab, setGestaoPanelTab] = useState<GestaoPanelTab>('overview')
   const [a4LayoutMode, setA4LayoutMode] = useState<boolean>(true)
+  const [gestaoPanelPreferences, setGestaoPanelPreferences] = useState<GestaoPanelPreferences>(() => {
+    try {
+      const saved = localStorage.getItem('dadosprevision_gestao_panel_preferences_v1')
+      return saved ? JSON.parse(saved) : {}
+    } catch {
+      return {}
+    }
+  })
+  const [draggedGestaoRow, setDraggedGestaoRow] = useState<{
+    panel: ReorderableGestaoPanel
+    service: string
+  } | null>(null)
   const [customMatrices, setCustomMatrices] = useState<CustomMatrixConfig[]>(() => {
     try {
       const saved = localStorage.getItem('dadosprevision_custom_matrices')
@@ -1498,7 +1522,6 @@ function App() {
       for (const act of activities) {
         const start = act.data_inicio ? new Date(act.data_inicio) : null
         const end = act.data_fim ? new Date(act.data_fim) : null
-        const real = Number(act.progresso_realizado) || 0
 
         if (start && end) {
           if (end <= range.end) {
@@ -1512,12 +1535,37 @@ function App() {
           }
         }
 
-        if (real > 0) {
-          if (end && end <= range.end) {
-            realTotal += real
-          } else if (start && start <= range.end) {
-            realTotal += real
+        const measurements = Array.isArray(act.medicoes) ? act.medicoes : []
+        let latestHistoricalMeasurement: DataRecord | null = null
+        for (const measurement of measurements) {
+          const measuredAt = measurement?.data_medicao ? new Date(measurement.data_medicao) : null
+          if (
+            measuredAt &&
+            !Number.isNaN(measuredAt.getTime()) &&
+            measuredAt <= range.end &&
+            (!latestHistoricalMeasurement ||
+              measuredAt > new Date(latestHistoricalMeasurement.data_medicao))
+          ) {
+            latestHistoricalMeasurement = measurement
           }
+        }
+
+        if (latestHistoricalMeasurement) {
+          realTotal += Number(latestHistoricalMeasurement.progresso_realizado) || 0
+          continue
+        }
+
+        // Fallback para bases antigas sem histórico detalhado: só usa o avanço
+        // atual quando sabemos que a última medição já existia no fechamento.
+        const lastMeasurementAt = act.ultima_medicao_data
+          ? new Date(act.ultima_medicao_data)
+          : null
+        if (
+          lastMeasurementAt &&
+          !Number.isNaN(lastMeasurementAt.getTime()) &&
+          lastMeasurementAt <= range.end
+        ) {
+          realTotal += Number(act.progresso_realizado) || 0
         }
       }
       return { prev: prevTotal, real: realTotal }
@@ -1596,6 +1644,120 @@ function App() {
       matrixMap,
     }
   }, [gestaoFilteredActivities, gestaoMonth])
+
+  const gestaoPanelPreferenceKey = selectedProject || '__all_projects__'
+  const currentGestaoPanelPreferences = useMemo(() => {
+    const saved = gestaoPanelPreferences[gestaoPanelPreferenceKey]
+    const emptyPreference = (): GestaoPanelPreference => ({
+      onlyWithData: false,
+      serviceOrder: [],
+    })
+    return {
+      panel1: saved?.panel1 || emptyPreference(),
+      panel2: saved?.panel2 || emptyPreference(),
+      panel3: saved?.panel3 || emptyPreference(),
+    }
+  }, [gestaoPanelPreferenceKey, gestaoPanelPreferences])
+
+  const gestaoPanelRows = useMemo(() => {
+    function orderRows<T extends { service: string }>(
+      rows: T[],
+      preference: GestaoPanelPreference,
+      hasData: (row: T) => boolean,
+    ) {
+      const naturalOrder = rows.map((row) => row.service)
+      const completeOrder = [
+        ...preference.serviceOrder.filter((service) => naturalOrder.includes(service)),
+        ...naturalOrder.filter((service) => !preference.serviceOrder.includes(service)),
+      ]
+      const orderIndex = new Map(completeOrder.map((service, index) => [service, index]))
+      return rows
+        .filter((row) => !preference.onlyWithData || hasData(row))
+        .slice()
+        .sort(
+          (a, b) =>
+            (orderIndex.get(a.service) ?? Number.MAX_SAFE_INTEGER) -
+            (orderIndex.get(b.service) ?? Number.MAX_SAFE_INTEGER),
+        )
+    }
+
+    return {
+      panel1: orderRows(
+        gestaoData.panel1Rows,
+        currentGestaoPanelPreferences.panel1,
+        (row) =>
+          row.m3.prev > 0 || row.m3.real > 0 ||
+          row.m2.prev > 0 || row.m2.real > 0 ||
+          row.m1.prev > 0 || row.m1.real > 0,
+      ),
+      panel2: orderRows(
+        gestaoData.panel2Rows,
+        currentGestaoPanelPreferences.panel2,
+        (row) => row.qtdePrevista > 0 || row.pavimentos.length > 0,
+      ),
+      panel3: orderRows(
+        gestaoData.panel3Rows,
+        currentGestaoPanelPreferences.panel3,
+        (row) => row.mPlus1 > 0 || row.mPlus2 > 0 || row.mPlus3 > 0,
+      ),
+    }
+  }, [currentGestaoPanelPreferences, gestaoData])
+
+  const updateGestaoPanelPreference = useCallback(
+    (
+      panel: ReorderableGestaoPanel,
+      update: (preference: GestaoPanelPreference) => GestaoPanelPreference,
+    ) => {
+      setGestaoPanelPreferences((previous) => {
+        const projectPreferences = previous[gestaoPanelPreferenceKey]
+        const current = projectPreferences?.[panel] || { onlyWithData: false, serviceOrder: [] }
+        return {
+          ...previous,
+          [gestaoPanelPreferenceKey]: {
+            panel1: projectPreferences?.panel1 || { onlyWithData: false, serviceOrder: [] },
+            panel2: projectPreferences?.panel2 || { onlyWithData: false, serviceOrder: [] },
+            panel3: projectPreferences?.panel3 || { onlyWithData: false, serviceOrder: [] },
+            [panel]: update(current),
+          },
+        }
+      })
+    },
+    [gestaoPanelPreferenceKey],
+  )
+
+  const handleGestaoRowDrop = useCallback(
+    (panel: ReorderableGestaoPanel, targetService: string, availableServices: string[]) => {
+      if (!draggedGestaoRow || draggedGestaoRow.panel !== panel) return
+      const sourceService = draggedGestaoRow.service
+      setDraggedGestaoRow(null)
+      if (sourceService === targetService) return
+
+      updateGestaoPanelPreference(panel, (preference) => {
+        const completeOrder = [
+          ...preference.serviceOrder.filter((service) => availableServices.includes(service)),
+          ...availableServices.filter((service) => !preference.serviceOrder.includes(service)),
+        ]
+        const sourceIndex = completeOrder.indexOf(sourceService)
+        const targetIndex = completeOrder.indexOf(targetService)
+        if (sourceIndex < 0 || targetIndex < 0) return preference
+        completeOrder.splice(sourceIndex, 1)
+        completeOrder.splice(targetIndex, 0, sourceService)
+        return { ...preference, serviceOrder: completeOrder }
+      })
+    },
+    [draggedGestaoRow, updateGestaoPanelPreference],
+  )
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        'dadosprevision_gestao_panel_preferences_v1',
+        JSON.stringify(gestaoPanelPreferences),
+      )
+    } catch (e) {
+      console.error('Erro ao salvar preferências dos painéis no localStorage:', e)
+    }
+  }, [gestaoPanelPreferences])
 
   // Save custom matrices to localStorage
   useEffect(() => {
@@ -2285,6 +2447,20 @@ function App() {
                         <span className="a4-sheet-subtitle">
                           Histórico Previsto vs. Realizado dos últimos 3 meses fechados ({gestaoData.mMinus3?.label} a {gestaoData.mMinus1?.label})
                         </span>
+                        <label className="gestao-panel-data-filter">
+                          <input
+                            type="checkbox"
+                            checked={currentGestaoPanelPreferences.panel1.onlyWithData}
+                            onChange={(event) =>
+                              updateGestaoPanelPreference('panel1', (preference) => ({
+                                ...preference,
+                                onlyWithData: event.target.checked,
+                              }))
+                            }
+                          />
+                          <Flag size={12} />
+                          Somente serviços com quantidade
+                        </label>
                       </div>
                       <div className="a4-sheet-meta">
                         <div className="a4-sheet-meta-item">
@@ -2334,16 +2510,24 @@ function App() {
                           </tr>
                         </thead>
                         <tbody>
-                          {gestaoData.panel1Rows.length === 0 ? (
+                          {gestaoPanelRows.panel1.length === 0 ? (
                             <tr>
                               <td colSpan={7} style={{ textAlign: 'center', padding: '30px' }}>
                                 Nenhum serviço encontrado.
                               </td>
                             </tr>
                           ) : (
-                            gestaoData.panel1Rows.map((row) => (
-                              <tr key={row.service}>
-                                <td className="service-col">{row.service}</td>
+                            gestaoPanelRows.panel1.map((row) => (
+                              <tr
+                                key={row.service}
+                                draggable
+                                className={draggedGestaoRow?.panel === 'panel1' && draggedGestaoRow.service === row.service ? 'gestao-row-dragging' : ''}
+                                onDragStart={() => setDraggedGestaoRow({ panel: 'panel1', service: row.service })}
+                                onDragEnd={() => setDraggedGestaoRow(null)}
+                                onDragOver={(event) => event.preventDefault()}
+                                onDrop={() => handleGestaoRowDrop('panel1', row.service, gestaoData.panel1Rows.map((item) => item.service))}
+                              >
+                                <td className="service-col"><span className="gestao-service-drag"><GripVertical size={14} />{row.service}</span></td>
                                 <td>{row.m3.prev.toFixed(2)}</td>
                                 <td
                                   className={
@@ -2414,6 +2598,20 @@ function App() {
                         <span className="a4-sheet-subtitle">
                           Planejamento e pavimentos a realizar no mês {gestaoData.m0?.label} ({gestaoData.m0?.startFormatted} a {gestaoData.m0?.endFormatted})
                         </span>
+                        <label className="gestao-panel-data-filter">
+                          <input
+                            type="checkbox"
+                            checked={currentGestaoPanelPreferences.panel2.onlyWithData}
+                            onChange={(event) =>
+                              updateGestaoPanelPreference('panel2', (preference) => ({
+                                ...preference,
+                                onlyWithData: event.target.checked,
+                              }))
+                            }
+                          />
+                          <Flag size={12} />
+                          Somente serviços com quantidade
+                        </label>
                       </div>
                       <div className="a4-sheet-meta">
                         <div className="a4-sheet-meta-item">
@@ -2437,16 +2635,24 @@ function App() {
                           </tr>
                         </thead>
                         <tbody>
-                          {gestaoData.panel2Rows.length === 0 ? (
+                          {gestaoPanelRows.panel2.length === 0 ? (
                             <tr>
                               <td colSpan={3} style={{ textAlign: 'center', padding: '30px' }}>
                                 Nenhum serviço previsto para este mês.
                               </td>
                             </tr>
                           ) : (
-                            gestaoData.panel2Rows.map((row) => (
-                              <tr key={row.service}>
-                                <td className="service-col">{row.service}</td>
+                            gestaoPanelRows.panel2.map((row) => (
+                              <tr
+                                key={row.service}
+                                draggable
+                                className={draggedGestaoRow?.panel === 'panel2' && draggedGestaoRow.service === row.service ? 'gestao-row-dragging' : ''}
+                                onDragStart={() => setDraggedGestaoRow({ panel: 'panel2', service: row.service })}
+                                onDragEnd={() => setDraggedGestaoRow(null)}
+                                onDragOver={(event) => event.preventDefault()}
+                                onDrop={() => handleGestaoRowDrop('panel2', row.service, gestaoData.panel2Rows.map((item) => item.service))}
+                              >
+                                <td className="service-col"><span className="gestao-service-drag"><GripVertical size={14} />{row.service}</span></td>
                                 <td>
                                   <strong>{row.qtdePrevista.toFixed(2)}</strong>
                                 </td>
@@ -2488,6 +2694,20 @@ function App() {
                         <span className="a4-sheet-subtitle">
                           Projeção quantitativa de pavimentos para {gestaoData.mPlus1?.label}, {gestaoData.mPlus2?.label} e {gestaoData.mPlus3?.label}
                         </span>
+                        <label className="gestao-panel-data-filter">
+                          <input
+                            type="checkbox"
+                            checked={currentGestaoPanelPreferences.panel3.onlyWithData}
+                            onChange={(event) =>
+                              updateGestaoPanelPreference('panel3', (preference) => ({
+                                ...preference,
+                                onlyWithData: event.target.checked,
+                              }))
+                            }
+                          />
+                          <Flag size={12} />
+                          Somente serviços com quantidade
+                        </label>
                       </div>
                       <div className="a4-sheet-meta">
                         <div className="a4-sheet-meta-item">
@@ -2521,16 +2741,24 @@ function App() {
                           </tr>
                         </thead>
                         <tbody>
-                          {gestaoData.panel3Rows.length === 0 ? (
+                          {gestaoPanelRows.panel3.length === 0 ? (
                             <tr>
                               <td colSpan={4} style={{ textAlign: 'center', padding: '30px' }}>
                                 Nenhum serviço projetado.
                               </td>
                             </tr>
                           ) : (
-                            gestaoData.panel3Rows.map((row) => (
-                              <tr key={row.service}>
-                                <td className="service-col">{row.service}</td>
+                            gestaoPanelRows.panel3.map((row) => (
+                              <tr
+                                key={row.service}
+                                draggable
+                                className={draggedGestaoRow?.panel === 'panel3' && draggedGestaoRow.service === row.service ? 'gestao-row-dragging' : ''}
+                                onDragStart={() => setDraggedGestaoRow({ panel: 'panel3', service: row.service })}
+                                onDragEnd={() => setDraggedGestaoRow(null)}
+                                onDragOver={(event) => event.preventDefault()}
+                                onDrop={() => handleGestaoRowDrop('panel3', row.service, gestaoData.panel3Rows.map((item) => item.service))}
+                              >
+                                <td className="service-col"><span className="gestao-service-drag"><GripVertical size={14} />{row.service}</span></td>
                                 <td>{row.mPlus1.toFixed(2)}</td>
                                 <td>{row.mPlus2.toFixed(2)}</td>
                                 <td>{row.mPlus3.toFixed(2)}</td>
@@ -2772,14 +3000,14 @@ function App() {
                             </tr>
                           </thead>
                           <tbody>
-                            {gestaoData.panel1Rows.length === 0 ? (
+                            {gestaoPanelRows.panel1.length === 0 ? (
                               <tr>
                                 <td colSpan={7} style={{ textAlign: 'center', padding: '20px' }}>
                                   Nenhum serviço encontrado.
                                 </td>
                               </tr>
                             ) : (
-                              gestaoData.panel1Rows.map((row) => (
+                              gestaoPanelRows.panel1.map((row) => (
                                 <tr key={row.service}>
                                   <td className="service-col">{row.service}</td>
                                   <td>{row.m3.prev.toFixed(2)}</td>
@@ -2846,14 +3074,14 @@ function App() {
                           </tr>
                         </thead>
                         <tbody>
-                          {gestaoData.panel2Rows.length === 0 ? (
+                          {gestaoPanelRows.panel2.length === 0 ? (
                             <tr>
                               <td colSpan={3} style={{ textAlign: 'center', padding: '20px' }}>
                                 Nenhum serviço encontrado.
                               </td>
                             </tr>
                           ) : (
-                            gestaoData.panel2Rows.map((row) => (
+                            gestaoPanelRows.panel2.map((row) => (
                               <tr key={row.service}>
                                 <td className="service-col">{row.service}</td>
                                 <td>
@@ -2908,14 +3136,14 @@ function App() {
                           </tr>
                         </thead>
                         <tbody>
-                          {gestaoData.panel3Rows.length === 0 ? (
+                          {gestaoPanelRows.panel3.length === 0 ? (
                             <tr>
                               <td colSpan={4} style={{ textAlign: 'center', padding: '20px' }}>
                                 Nenhum serviço encontrado.
                               </td>
                             </tr>
                           ) : (
-                            gestaoData.panel3Rows.map((row) => (
+                            gestaoPanelRows.panel3.map((row) => (
                               <tr key={row.service}>
                                 <td className="service-col">{row.service}</td>
                                 <td>{row.mPlus1.toFixed(2)}</td>

@@ -431,6 +431,7 @@ CREATE INDEX IF NOT EXISTS idx_atividades_projeto ON atividades(projeto_id);
 CREATE INDEX IF NOT EXISTS idx_atividades_ordem_v2
   ON atividades(projeto_id, posicao_servico, posicao_pavimento, servico_nome, pavimento_nome);
 CREATE INDEX IF NOT EXISTS idx_medicoes_projeto_data ON medicoes(projeto_id, data_medicao);
+CREATE INDEX IF NOT EXISTS idx_medicoes_atividade_data ON medicoes(projeto_id, atividade_id, data_medicao);
 CREATE INDEX IF NOT EXISTS idx_pavimentos_projeto ON pavimentos(projeto_id);
 CREATE INDEX IF NOT EXISTS idx_servicos_projeto ON servicos(projeto_id);
 CREATE INDEX IF NOT EXISTS idx_marcos_projeto ON marcos(projeto_id);
