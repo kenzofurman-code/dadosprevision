@@ -1596,8 +1596,9 @@ function App() {
     })
 
     const panel2Rows = services.map((s) => {
-      const activePavs: string[] = []
+      const activePavs = new Map<string, boolean>()
       let qtdePrevista = 0
+      let qtdeAtrasada = 0
       for (const act of s.activities) {
         const start = act.data_inicio ? new Date(act.data_inicio) : null
         const end = act.data_fim ? new Date(act.data_fim) : null
@@ -1605,14 +1606,22 @@ function App() {
         if (start && end && start <= m0.end && end >= m0.start) {
           qtdePrevista += 1
           if (prog < 1.0 && act.pavimento_nome) {
-            activePavs.push(act.pavimento_nome)
+            if (!activePavs.has(act.pavimento_nome)) {
+              activePavs.set(act.pavimento_nome, false)
+            }
+          }
+        } else if (end && end < m0.start && prog < 1.0) {
+          qtdeAtrasada += 1
+          if (act.pavimento_nome) {
+            activePavs.set(act.pavimento_nome, true)
           }
         }
       }
       return {
         service: s.name,
         qtdePrevista,
-        pavimentos: activePavs,
+        qtdeAtrasada,
+        pavimentos: Array.from(activePavs, ([name, isOverdue]) => ({ name, isOverdue })),
       }
     })
 
@@ -1693,7 +1702,7 @@ function App() {
       panel2: orderRows(
         gestaoData.panel2Rows,
         currentGestaoPanelPreferences.panel2,
-        (row) => row.qtdePrevista > 0 || row.pavimentos.length > 0,
+        (row) => row.qtdePrevista > 0 || row.qtdeAtrasada > 0 || row.pavimentos.length > 0,
       ),
       panel3: orderRows(
         gestaoData.panel3Rows,
@@ -2631,7 +2640,7 @@ function App() {
                           <tr>
                             <th className="service-col" style={{ width: '280px' }}>Atividade / Serviço</th>
                             <th style={{ width: '110px' }}>Qtde Prevista</th>
-                            <th>Pavimentos a Realizar no Mês (Considerando Concluídos)</th>
+                            <th>Pavimentos do Mês e Atividades Atrasadas</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2655,14 +2664,22 @@ function App() {
                                 <td className="service-col"><span className="gestao-service-drag"><GripVertical size={14} />{row.service}</span></td>
                                 <td>
                                   <strong>{row.qtdePrevista.toFixed(2)}</strong>
+                                  {row.qtdeAtrasada > 0 && (
+                                    <span className="gestao-overdue-count">
+                                      {row.qtdeAtrasada} atrasada{row.qtdeAtrasada === 1 ? '' : 's'}
+                                    </span>
+                                  )}
                                 </td>
                                 <td style={{ textAlign: 'left' }}>
                                   {row.pavimentos.length === 0 ? (
                                     <span style={{ color: '#94a3b8' }}>Nenhum pavimento pendente</span>
                                   ) : (
                                     row.pavimentos.map((pav) => (
-                                      <span key={pav} className="gestao-pav-tag">
-                                        {pav}
+                                      <span
+                                        key={pav.name}
+                                        className={`gestao-pav-tag ${pav.isOverdue ? 'gestao-pav-tag-overdue' : ''}`}
+                                      >
+                                        {pav.name}{pav.isOverdue ? ' — ATRASADA' : ''}
                                       </span>
                                     ))
                                   )}
@@ -2675,7 +2692,7 @@ function App() {
                     </div>
 
                     <div className="a4-sheet-footer">
-                      <span>Pavimentos listados: Janela de execução intercepta o mês vigente e avanço realizado &lt; 100%</span>
+                      <span>Em vermelho: atividades não concluídas cujo término planejado ocorreu antes do mês vigente</span>
                       <span>Gestão à Vista · Dados Prevision</span>
                     </div>
                   </div>
@@ -3070,7 +3087,7 @@ function App() {
                           <tr>
                             <th className="service-col">Atividade / Serviço</th>
                             <th style={{ width: '90px' }}>Qtde Prevista</th>
-                            <th>Pavimentos a Realizar no Mês</th>
+                            <th>Pavimentos do Mês e Atrasados</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3086,14 +3103,22 @@ function App() {
                                 <td className="service-col">{row.service}</td>
                                 <td>
                                   <strong>{row.qtdePrevista.toFixed(2)}</strong>
+                                  {row.qtdeAtrasada > 0 && (
+                                    <span className="gestao-overdue-count">
+                                      {row.qtdeAtrasada} atrasada{row.qtdeAtrasada === 1 ? '' : 's'}
+                                    </span>
+                                  )}
                                 </td>
                                 <td style={{ textAlign: 'left' }}>
                                   {row.pavimentos.length === 0 ? (
                                     <span style={{ color: '#94a3b8' }}>-</span>
                                   ) : (
                                     row.pavimentos.map((pav) => (
-                                      <span key={pav} className="gestao-pav-tag">
-                                        {pav}
+                                      <span
+                                        key={pav.name}
+                                        className={`gestao-pav-tag ${pav.isOverdue ? 'gestao-pav-tag-overdue' : ''}`}
+                                      >
+                                        {pav.name}{pav.isOverdue ? ' — ATRASADA' : ''}
                                       </span>
                                     ))
                                   )}
