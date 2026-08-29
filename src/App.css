@@ -1183,3 +1183,533 @@ td strong {
   font-weight: 800;
 }
 
+/* ==========================================================================
+   Gestão à Vista - Sub-Abas de Painéis e Layout Folha A4 Paisagem
+   ========================================================================== */
+
+.gestao-panel-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f1f6f4;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid #d4dfdb;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.gestao-panel-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
+  color: #4b635e;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.gestao-panel-tab-btn:hover {
+  background: #e2ece8;
+  color: #173f38;
+}
+
+.gestao-panel-tab-btn.active {
+  background: #173f38;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(23, 63, 56, 0.25);
+}
+
+.gestao-panel-tab-btn .badge-pill {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+}
+
+.gestao-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.a4-landscape-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding: 8px 0;
+}
+
+.a4-landscape-sheet {
+  background: #ffffff;
+  border: 1px solid #c9d7d2;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
+  width: 100%;
+  max-width: 1200px;
+  min-height: 620px;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 20px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.a4-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background: linear-gradient(135deg, #173f38 0%, #0d2823 100%);
+  color: #ffffff;
+  border-bottom: 2px solid #0a201c;
+}
+
+.a4-sheet-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.a4-sheet-title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  color: #ffffff;
+  margin: 0;
+}
+
+.a4-sheet-subtitle {
+  font-size: 11px;
+  color: #a3c9c0;
+  font-weight: 500;
+}
+
+.a4-sheet-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: #e2f0ed;
+}
+
+.a4-sheet-meta-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.a4-sheet-meta-item strong {
+  color: #ffffff;
+  font-size: 11.5px;
+}
+
+.a4-sheet-meta-item small {
+  color: #8bb3a9;
+  font-size: 9.5px;
+  text-transform: uppercase;
+}
+
+.a4-sheet-body {
+  padding: 14px 18px;
+  flex: 1;
+  overflow-x: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.a4-sheet-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 18px;
+  background: #f7faf9;
+  border-top: 1px solid #e1ebe8;
+  font-size: 10px;
+  color: #697975;
+}
+
+.a4-sheet-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.a4-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.a4-legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+/* ==========================================================================
+   Gestão de Matrizes Customizadas (Painel 4)
+   ========================================================================== */
+
+.matrix-manager-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #eef5f3;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #d2deda;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.matrix-select-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.matrix-select-group label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #173f38;
+}
+
+.matrix-select-group select {
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid #b8ccc6;
+  border-radius: 6px;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  color: #173f38;
+}
+
+.matrix-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.matrix-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid #cbdcd7;
+  background: #ffffff;
+  color: #2e4d45;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.matrix-btn:hover {
+  background: #dceae6;
+  border-color: #a8c4bd;
+  color: #173f38;
+}
+
+.matrix-btn.btn-primary {
+  background: #173f38;
+  color: #ffffff;
+  border-color: #173f38;
+}
+
+.matrix-btn.btn-primary:hover {
+  background: #235a50;
+}
+
+.matrix-btn.btn-danger {
+  color: #dc2626;
+}
+
+.matrix-btn.btn-danger:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+/* Modal de Criação / Edição de Matriz */
+.matrix-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  backdrop-filter: blur(2px);
+}
+
+.matrix-modal {
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #cbd5d2;
+}
+
+.matrix-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: #f1f6f4;
+  border-bottom: 1px solid #d8e4e0;
+}
+
+.matrix-modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #173f38;
+}
+
+.matrix-modal-body {
+  padding: 18px 20px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.matrix-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 20px;
+  background: #f8faf9;
+  border-top: 1px solid #d8e4e0;
+}
+
+.matrix-config-columns {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 16px;
+}
+
+.matrix-config-section {
+  border: 1px solid #d8e4e0;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfdfc;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.matrix-config-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.matrix-config-section-header h4 {
+  margin: 0;
+  font-size: 13px;
+  color: #173f38;
+}
+
+.matrix-selection-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.matrix-mini-btn {
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid #cbd5d2;
+  background: #ffffff;
+  color: #3b504b;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.matrix-mini-btn:hover {
+  background: #e9f2ef;
+}
+
+.matrix-items-list {
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid #e1ebe8;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.matrix-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: #fafcfb;
+  border: 1px solid #f0f4f3;
+  font-size: 11px;
+}
+
+.matrix-item-row:hover {
+  background: #f0f7f5;
+}
+
+.matrix-item-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  flex: 1;
+  color: #223330;
+  font-weight: 600;
+}
+
+.matrix-item-order-btns {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.matrix-order-btn {
+  border: 0;
+  background: transparent;
+  color: #697975;
+  padding: 2px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.matrix-order-btn:hover:not(:disabled) {
+  background: #dceae6;
+  color: #173f38;
+}
+
+.matrix-order-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   Regras de Impressão / PDF A4 Landscape
+   ========================================================================== */
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 6mm;
+  }
+
+  body,
+  .app-shell {
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    color: #000000 !important;
+  }
+
+  .page-header,
+  .summary,
+  .data-tabs,
+  .toolbar,
+  .gestao-controls-bar,
+  .gestao-panel-tabs,
+  .matrix-manager-bar,
+  .pagination,
+  .matrix-modal-backdrop,
+  .header-actions {
+    display: none !important;
+  }
+
+  .workspace {
+    padding: 0 !important;
+  }
+
+  .table-panel {
+    border: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  .a4-landscape-container {
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  .a4-landscape-sheet {
+    box-shadow: none !important;
+    border: 1px solid #888888 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .a4-sheet-header {
+    background: #173f38 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .gestao-table th,
+  .gestao-matrix-table th {
+    background: #eef4f2 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .gestao-cell-ontrack {
+    background: #0284c7 !important;
+    color: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .gestao-cell-delayed {
+    background: #dc2626 !important;
+    color: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .matrix-cell-content.cell-done {
+    background: #dcfce7 !important;
+    border-color: #86efac !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .matrix-cell-content.cell-progress {
+    background: #fef3c7 !important;
+    border-color: #fde047 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+

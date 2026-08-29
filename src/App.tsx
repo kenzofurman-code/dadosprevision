@@ -1,24 +1,38 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
+  ArrowDown,
+  ArrowUp,
   Building2,
+  CalendarCheck,
   ChevronLeft,
   ChevronRight,
   ChartNoAxesCombined,
+  Copy,
   Database,
+  Edit2,
+  FileSpreadsheet,
   Flag,
   History,
+  Layers,
   Layers3,
   ListChecks,
+  Maximize2,
   Percent,
+  Plus,
   Presentation,
+  Printer,
   RefreshCw,
+  RotateCcw,
   Search,
   ShieldAlert,
   Settings2,
+  Trash2,
+  TrendingUp,
   Users,
   WalletCards,
   Wrench,
+  X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import './App.css'
@@ -36,7 +50,29 @@ type DataView =
   | 'dashboard'
   | 'gestao_a_vista'
 
-type GestaoViewMode = 'all' | 'summary' | 'matrix'
+type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix'
+
+interface GestaoServiceItem {
+  name: string
+  position: number
+  activities: DataRecord[]
+}
+
+interface GestaoFloorItem {
+  id: string
+  name: string
+}
+
+interface CustomMatrixConfig {
+  id: string
+  name: string
+  projectId: string
+  selectedServices: string[]
+  selectedFloors: string[]
+  floorSortOrder?: 'asc' | 'desc'
+  createdAt: string
+  updatedAt: string
+}
 
 type ActivityMode = 'planning' | 'jobs' | 'progress' | 'measurements' | 'resources'
 type BudgetMode = 'reports' | 'items' | 'weights'
@@ -855,7 +891,25 @@ function App() {
   const [cffDenseMode, setCffDenseMode] = useState(false)
   const [gestaoMonth, setGestaoMonth] = useState<string>('')
   const [gestaoGroup, setGestaoGroup] = useState<string>('all')
-  const [gestaoViewMode, setGestaoViewMode] = useState<GestaoViewMode>('all')
+  const [gestaoPanelTab, setGestaoPanelTab] = useState<GestaoPanelTab>('overview')
+  const [a4LayoutMode, setA4LayoutMode] = useState<boolean>(true)
+  const [customMatrices, setCustomMatrices] = useState<CustomMatrixConfig[]>(() => {
+    try {
+      const saved = localStorage.getItem('dadosprevision_custom_matrices')
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
+  const [activeMatrixId, setActiveMatrixId] = useState<string>('default')
+  const [isMatrixModalOpen, setIsMatrixModalOpen] = useState(false)
+  const [editingMatrixId, setEditingMatrixId] = useState<string | null>(null)
+  const [modalMatrixName, setModalMatrixName] = useState('')
+  const [modalSelectedServices, setModalSelectedServices] = useState<string[]>([])
+  const [modalSelectedFloors, setModalSelectedFloors] = useState<string[]>([])
+  const [modalFloorSortOrder, setModalFloorSortOrder] = useState<'asc' | 'desc'>('asc')
+  const [modalServiceSearch, setModalServiceSearch] = useState('')
+  const [modalFloorSearch, setModalFloorSearch] = useState('')
   const [selectedProject, setSelectedProject] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
@@ -1378,8 +1432,8 @@ function App() {
   const gestaoData = useMemo(() => {
     if (!gestaoMonth) {
       return {
-        services: [],
-        floors: [],
+        services: [] as GestaoServiceItem[],
+        floors: [] as GestaoFloorItem[],
         mMinus3: null,
         mMinus2: null,
         mMinus1: null,
@@ -1542,6 +1596,184 @@ function App() {
       matrixMap,
     }
   }, [gestaoFilteredActivities, gestaoMonth])
+
+  // Save custom matrices to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('dadosprevision_custom_matrices', JSON.stringify(customMatrices))
+    } catch (e) {
+      console.error('Erro ao salvar matrizes personalizadas no localStorage:', e)
+    }
+  }, [customMatrices])
+
+  // Custom matrices filtered for current project
+  const projectCustomMatrices = useMemo(() => {
+    return customMatrices.filter(
+      (m) => !m.projectId || !selectedProject || m.projectId === selectedProject,
+    )
+  }, [customMatrices, selectedProject])
+
+  const currentCustomMatrix = useMemo(() => {
+    if (activeMatrixId === 'default') return null
+    return customMatrices.find((m) => m.id === activeMatrixId) || null
+  }, [activeMatrixId, customMatrices])
+
+  const matrixServices = useMemo(() => {
+    if (!currentCustomMatrix || currentCustomMatrix.selectedServices.length === 0) {
+      return gestaoData.services
+    }
+    const serviceMap = new Map(gestaoData.services.map((s) => [s.name, s]))
+    const result: GestaoServiceItem[] = []
+    for (const sName of currentCustomMatrix.selectedServices) {
+      const found = serviceMap.get(sName)
+      if (found) result.push(found)
+    }
+    return result
+  }, [currentCustomMatrix, gestaoData.services])
+
+  const matrixFloors = useMemo(() => {
+    let result = gestaoData.floors
+    if (currentCustomMatrix && currentCustomMatrix.selectedFloors.length > 0) {
+      const selectedSet = new Set(currentCustomMatrix.selectedFloors)
+      result = result.filter((f) => selectedSet.has(f.name))
+    }
+    if (currentCustomMatrix?.floorSortOrder === 'desc') {
+      return [...result].reverse()
+    }
+    return result
+  }, [currentCustomMatrix, gestaoData.floors])
+
+  function handleOpenCreateMatrix() {
+    setEditingMatrixId(null)
+    setModalMatrixName(`Matriz Personalizada ${projectCustomMatrices.length + 1}`)
+    setModalSelectedServices(gestaoData.services.map((s) => s.name))
+    setModalSelectedFloors(gestaoData.floors.map((f) => f.name))
+    setModalFloorSortOrder('asc')
+    setModalServiceSearch('')
+    setModalFloorSearch('')
+    setIsMatrixModalOpen(true)
+  }
+
+  function handleOpenEditMatrix(matrixId: string) {
+    const target = customMatrices.find((m) => m.id === matrixId)
+    if (!target) return
+    setEditingMatrixId(matrixId)
+    setModalMatrixName(target.name)
+    setModalSelectedServices(target.selectedServices.length > 0 ? target.selectedServices : gestaoData.services.map((s) => s.name))
+    setModalSelectedFloors(target.selectedFloors.length > 0 ? target.selectedFloors : gestaoData.floors.map((f) => f.name))
+    setModalFloorSortOrder(target.floorSortOrder || 'asc')
+    setModalServiceSearch('')
+    setModalFloorSearch('')
+    setIsMatrixModalOpen(true)
+  }
+
+  function handleDuplicateMatrix(matrixId: string) {
+    const target = customMatrices.find((m) => m.id === matrixId)
+    if (!target) return
+    const newId = `matrix_${Date.now()}`
+    const duplicated: CustomMatrixConfig = {
+      ...target,
+      id: newId,
+      name: `Cópia de ${target.name}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    setCustomMatrices((prev) => [...prev, duplicated])
+    setActiveMatrixId(newId)
+  }
+
+  function handleDeleteMatrix(matrixId: string) {
+    if (confirm('Tem certeza que deseja excluir esta matriz personalizada?')) {
+      setCustomMatrices((prev) => prev.filter((m) => m.id !== matrixId))
+      if (activeMatrixId === matrixId) {
+        setActiveMatrixId('default')
+      }
+    }
+  }
+
+  function handleSaveMatrixModal() {
+    if (!modalMatrixName.trim()) {
+      alert('Informe um nome para a matriz.')
+      return
+    }
+    const now = new Date().toISOString()
+    if (editingMatrixId) {
+      setCustomMatrices((prev) =>
+        prev.map((m) =>
+          m.id === editingMatrixId
+            ? {
+                ...m,
+                name: modalMatrixName.trim(),
+                selectedServices: modalSelectedServices,
+                selectedFloors: modalSelectedFloors,
+                floorSortOrder: modalFloorSortOrder,
+                updatedAt: now,
+              }
+            : m,
+        ),
+      )
+    } else {
+      const newId = `matrix_${Date.now()}`
+      const newMatrix: CustomMatrixConfig = {
+        id: newId,
+        name: modalMatrixName.trim(),
+        projectId: selectedProject,
+        selectedServices: modalSelectedServices,
+        selectedFloors: modalSelectedFloors,
+        floorSortOrder: modalFloorSortOrder,
+        createdAt: now,
+        updatedAt: now,
+      }
+      setCustomMatrices((prev) => [...prev, newMatrix])
+      setActiveMatrixId(newId)
+    }
+    setIsMatrixModalOpen(false)
+  }
+
+  function handleMoveService(index: number, direction: 'up' | 'down') {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= modalSelectedServices.length) return
+    setModalSelectedServices((prev) => {
+      const next = [...prev]
+      const [removed] = next.splice(index, 1)
+      next.splice(targetIndex, 0, removed)
+      return next
+    })
+  }
+
+  function handleToggleService(serviceName: string) {
+    setModalSelectedServices((prev) =>
+      prev.includes(serviceName) ? prev.filter((s) => s !== serviceName) : [...prev, serviceName],
+    )
+  }
+
+  function handleToggleFloor(floorName: string) {
+    setModalSelectedFloors((prev) =>
+      prev.includes(floorName) ? prev.filter((f) => f !== floorName) : [...prev, floorName],
+    )
+  }
+
+  function handleToggleAllServices(select: boolean) {
+    if (select) {
+      const allNames = gestaoData.services.map((s) => s.name)
+      setModalSelectedServices(allNames)
+    } else {
+      setModalSelectedServices([])
+    }
+  }
+
+  function handleToggleAllFloors(select: boolean) {
+    if (select) {
+      const allNames = gestaoData.floors.map((f) => f.name)
+      setModalSelectedFloors(allNames)
+    } else {
+      setModalSelectedFloors([])
+    }
+  }
+
+  function handlePrint() {
+    window.print()
+  }
 
   const activeTab = tabs.find((tab) => tab.key === activeView) || tabs[0]
   const currentColumns =
@@ -1914,6 +2146,7 @@ function App() {
             </div>
           ) : activeView === 'gestao_a_vista' ? (
             <div className="gestao-vista-wrapper">
+              {/* TOP CONTROLS */}
               <div className="gestao-controls-bar">
                 <div className="gestao-controls-group">
                   <label className="gestao-field">
@@ -1963,46 +2196,109 @@ function App() {
                     />
                   </label>
                 </div>
+              </div>
 
-                <div className="cff-toggle-group" role="group" aria-label="Modo de Visualização">
+              {/* PANEL SUB-TABS NAVIGATION & A4 PRINT BAR */}
+              <div className="gestao-panel-tabs">
+                <button
+                  type="button"
+                  className={`gestao-panel-tab-btn ${gestaoPanelTab === 'overview' ? 'active' : ''}`}
+                  onClick={() => setGestaoPanelTab('overview')}
+                >
+                  <Layers size={14} />
+                  <span>Visão Geral</span>
+                  <span className="badge-pill">4 Painéis</span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`gestao-panel-tab-btn ${gestaoPanelTab === 'panel1' ? 'active' : ''}`}
+                  onClick={() => setGestaoPanelTab('panel1')}
+                >
+                  <History size={14} />
+                  <span>Painel 1: Meses Anteriores</span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`gestao-panel-tab-btn ${gestaoPanelTab === 'panel2' ? 'active' : ''}`}
+                  onClick={() => setGestaoPanelTab('panel2')}
+                >
+                  <CalendarCheck size={14} />
+                  <span>Painel 2: Mês Vigente</span>
+                  {gestaoData.m0 && <span className="badge-pill">{gestaoData.m0.label}</span>}
+                </button>
+
+                <button
+                  type="button"
+                  className={`gestao-panel-tab-btn ${gestaoPanelTab === 'panel3' ? 'active' : ''}`}
+                  onClick={() => setGestaoPanelTab('panel3')}
+                >
+                  <TrendingUp size={14} />
+                  <span>Painel 3: Próximos Meses</span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`gestao-panel-tab-btn ${gestaoPanelTab === 'matrix' ? 'active' : ''}`}
+                  onClick={() => setGestaoPanelTab('matrix')}
+                >
+                  <FileSpreadsheet size={14} />
+                  <span>Painel 4: Linha de Balanço</span>
+                  {projectCustomMatrices.length > 0 && (
+                    <span className="badge-pill">{projectCustomMatrices.length + 1} matrizes</span>
+                  )}
+                </button>
+
+                <div className="gestao-top-actions">
                   <button
                     type="button"
-                    className={gestaoViewMode === 'all' ? 'active' : ''}
-                    onClick={() => setGestaoViewMode('all')}
+                    className={`matrix-btn ${a4LayoutMode ? 'btn-primary' : ''}`}
+                    onClick={() => setA4LayoutMode((prev) => !prev)}
+                    title={a4LayoutMode ? 'Alternar para Modo Fluido' : 'Alternar para Proporção Folha A4 Paisagem'}
                   >
-                    Completo (4 Painéis)
+                    <Maximize2 size={13} />
+                    <span>{a4LayoutMode ? 'Folha A4 Paisagem' : 'Modo Fluido'}</span>
                   </button>
+
                   <button
                     type="button"
-                    className={gestaoViewMode === 'summary' ? 'active' : ''}
-                    onClick={() => setGestaoViewMode('summary')}
+                    className="matrix-btn btn-primary"
+                    onClick={handlePrint}
+                    title="Imprimir ou Salvar em PDF (A4 Paisagem)"
                   >
-                    Apenas Resumos
-                  </button>
-                  <button
-                    type="button"
-                    className={gestaoViewMode === 'matrix' ? 'active' : ''}
-                    onClick={() => setGestaoViewMode('matrix')}
-                  >
-                    Apenas Matriz
+                    <Printer size={13} />
+                    <span>Imprimir / PDF</span>
                   </button>
                 </div>
               </div>
 
-              {/* TOP 3 SUMMARY PANELS */}
-              {(gestaoViewMode === 'all' || gestaoViewMode === 'summary') && (
-                <div className="gestao-summary-grid">
-                  {/* Painel 1: Andamento Meses Anteriores */}
-                  <div className="gestao-card">
-                    <div className="gestao-card-header">
-                      <div className="gestao-card-title">
-                        <span>Andamento Meses Anteriores</span>
+              {/* ---------------------------------------------------- */}
+              {/* SUB-ABA: PAINEL 1 (MESES ANTERIORES)                 */}
+              {/* ---------------------------------------------------- */}
+              {gestaoPanelTab === 'panel1' && (
+                <div className={a4LayoutMode ? 'a4-landscape-container' : ''}>
+                  <div className={a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-card'}>
+                    <div className="a4-sheet-header">
+                      <div className="a4-sheet-brand">
+                        <h3 className="a4-sheet-title">PAINEL 1: ANDAMENTO MESES ANTERIORES</h3>
+                        <span className="a4-sheet-subtitle">
+                          Histórico Previsto vs. Realizado dos últimos 3 meses fechados ({gestaoData.mMinus3?.label} a {gestaoData.mMinus1?.label})
+                        </span>
                       </div>
-                      <span className="gestao-card-badge">
-                        {gestaoData.mMinus3?.label} - {gestaoData.mMinus1?.label}
-                      </span>
+                      <div className="a4-sheet-meta">
+                        <div className="a4-sheet-meta-item">
+                          <strong>{projects.find((p) => p.id_prevision === selectedProject)?.nome_projeto || 'Todas as Obras'}</strong>
+                          <small>{gestaoGroup !== 'all' ? gestaoGroup : 'Todas as Torres'}</small>
+                        </div>
+                        <div className="a4-sheet-meta-item">
+                          <strong>Mês Ref: {gestaoData.m0?.label}</strong>
+                          <small>{new Date().toLocaleDateString('pt-BR')}</small>
+                        </div>
+                      </div>
                     </div>
-                    <div className="gestao-card-body">
+
+                    <div className="a4-sheet-body">
                       <table className="gestao-table">
                         <thead>
                           <tr>
@@ -2040,7 +2336,7 @@ function App() {
                         <tbody>
                           {gestaoData.panel1Rows.length === 0 ? (
                             <tr>
-                              <td colSpan={7} style={{ textAlign: 'center', padding: '20px' }}>
+                              <td colSpan={7} style={{ textAlign: 'center', padding: '30px' }}>
                                 Nenhum serviço encontrado.
                               </td>
                             </tr>
@@ -2090,9 +2386,447 @@ function App() {
                         </tbody>
                       </table>
                     </div>
+
+                    <div className="a4-sheet-footer">
+                      <div className="a4-sheet-legend">
+                        <span className="a4-legend-item">
+                          <span className="a4-legend-color gestao-cell-ontrack" /> No Prazo / Adiantado (Realizado ≥ Previsto)
+                        </span>
+                        <span className="a4-legend-item">
+                          <span className="a4-legend-color gestao-cell-delayed" /> Com Atraso / Desvio (Realizado &lt; Previsto)
+                        </span>
+                      </div>
+                      <span>Gestão à Vista · Dados Prevision</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ---------------------------------------------------- */}
+              {/* SUB-ABA: PAINEL 2 (MÊS VIGENTE)                      */}
+              {/* ---------------------------------------------------- */}
+              {gestaoPanelTab === 'panel2' && (
+                <div className={a4LayoutMode ? 'a4-landscape-container' : ''}>
+                  <div className={a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-card'}>
+                    <div className="a4-sheet-header">
+                      <div className="a4-sheet-brand">
+                        <h3 className="a4-sheet-title">PAINEL 2: ATIVIDADES PREVISTAS PARA O MÊS VIGENTE</h3>
+                        <span className="a4-sheet-subtitle">
+                          Planejamento e pavimentos a realizar no mês {gestaoData.m0?.label} ({gestaoData.m0?.startFormatted} a {gestaoData.m0?.endFormatted})
+                        </span>
+                      </div>
+                      <div className="a4-sheet-meta">
+                        <div className="a4-sheet-meta-item">
+                          <strong>{projects.find((p) => p.id_prevision === selectedProject)?.nome_projeto || 'Todas as Obras'}</strong>
+                          <small>{gestaoGroup !== 'all' ? gestaoGroup : 'Todas as Torres'}</small>
+                        </div>
+                        <div className="a4-sheet-meta-item">
+                          <strong>Mês Ref: {gestaoData.m0?.label}</strong>
+                          <small>{new Date().toLocaleDateString('pt-BR')}</small>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="a4-sheet-body">
+                      <table className="gestao-table">
+                        <thead>
+                          <tr>
+                            <th className="service-col" style={{ width: '280px' }}>Atividade / Serviço</th>
+                            <th style={{ width: '110px' }}>Qtde Prevista</th>
+                            <th>Pavimentos a Realizar no Mês (Considerando Concluídos)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {gestaoData.panel2Rows.length === 0 ? (
+                            <tr>
+                              <td colSpan={3} style={{ textAlign: 'center', padding: '30px' }}>
+                                Nenhum serviço previsto para este mês.
+                              </td>
+                            </tr>
+                          ) : (
+                            gestaoData.panel2Rows.map((row) => (
+                              <tr key={row.service}>
+                                <td className="service-col">{row.service}</td>
+                                <td>
+                                  <strong>{row.qtdePrevista.toFixed(2)}</strong>
+                                </td>
+                                <td style={{ textAlign: 'left' }}>
+                                  {row.pavimentos.length === 0 ? (
+                                    <span style={{ color: '#94a3b8' }}>Nenhum pavimento pendente</span>
+                                  ) : (
+                                    row.pavimentos.map((pav) => (
+                                      <span key={pav} className="gestao-pav-tag">
+                                        {pav}
+                                      </span>
+                                    ))
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="a4-sheet-footer">
+                      <span>Pavimentos listados: Janela de execução intercepta o mês vigente e avanço realizado &lt; 100%</span>
+                      <span>Gestão à Vista · Dados Prevision</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ---------------------------------------------------- */}
+              {/* SUB-ABA: PAINEL 3 (PRÓXIMOS MESES)                   */}
+              {/* ---------------------------------------------------- */}
+              {gestaoPanelTab === 'panel3' && (
+                <div className={a4LayoutMode ? 'a4-landscape-container' : ''}>
+                  <div className={a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-card'}>
+                    <div className="a4-sheet-header">
+                      <div className="a4-sheet-brand">
+                        <h3 className="a4-sheet-title">PAINEL 3: PROJEÇÃO PRÓXIMOS MESES</h3>
+                        <span className="a4-sheet-subtitle">
+                          Projeção quantitativa de pavimentos para {gestaoData.mPlus1?.label}, {gestaoData.mPlus2?.label} e {gestaoData.mPlus3?.label}
+                        </span>
+                      </div>
+                      <div className="a4-sheet-meta">
+                        <div className="a4-sheet-meta-item">
+                          <strong>{projects.find((p) => p.id_prevision === selectedProject)?.nome_projeto || 'Todas as Obras'}</strong>
+                          <small>{gestaoGroup !== 'all' ? gestaoGroup : 'Todas as Torres'}</small>
+                        </div>
+                        <div className="a4-sheet-meta-item">
+                          <strong>Mês Ref: {gestaoData.m0?.label}</strong>
+                          <small>{new Date().toLocaleDateString('pt-BR')}</small>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="a4-sheet-body">
+                      <table className="gestao-table">
+                        <thead>
+                          <tr>
+                            <th className="service-col">Serviço</th>
+                            <th>
+                              <div>{gestaoData.mPlus1?.label} (M+1)</div>
+                              <div className="gestao-subhead">Qtde Prevista</div>
+                            </th>
+                            <th>
+                              <div>{gestaoData.mPlus2?.label} (M+2)</div>
+                              <div className="gestao-subhead">Qtde Prevista</div>
+                            </th>
+                            <th>
+                              <div>{gestaoData.mPlus3?.label} (M+3)</div>
+                              <div className="gestao-subhead">Qtde Prevista</div>
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {gestaoData.panel3Rows.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} style={{ textAlign: 'center', padding: '30px' }}>
+                                Nenhum serviço projetado.
+                              </td>
+                            </tr>
+                          ) : (
+                            gestaoData.panel3Rows.map((row) => (
+                              <tr key={row.service}>
+                                <td className="service-col">{row.service}</td>
+                                <td>{row.mPlus1.toFixed(2)}</td>
+                                <td>{row.mPlus2.toFixed(2)}</td>
+                                <td>{row.mPlus3.toFixed(2)}</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="a4-sheet-footer">
+                      <span>Projeção baseada na linha de balanceamento e cronograma aprovado</span>
+                      <span>Gestão à Vista · Dados Prevision</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ---------------------------------------------------- */}
+              {/* SUB-ABA: PAINEL 4 (MATRIZ / LINHA DE BALANÇO)        */}
+              {/* ---------------------------------------------------- */}
+              {gestaoPanelTab === 'matrix' && (
+                <div className={a4LayoutMode ? 'a4-landscape-container' : ''}>
+                  {/* MATRIX CUSTOMIZER TOOLBAR */}
+                  <div className="matrix-manager-bar" style={{ width: '100%', maxWidth: a4LayoutMode ? '1200px' : '100%' }}>
+                    <div className="matrix-select-group">
+                      <label>Matriz:</label>
+                      <select
+                        value={activeMatrixId}
+                        onChange={(e) => setActiveMatrixId(e.target.value)}
+                      >
+                        <option value="default">
+                          Matriz Padrão ({gestaoData.services.length} serviços / {gestaoData.floors.length} pavimentos)
+                        </option>
+                        {projectCustomMatrices.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name} ({m.selectedServices.length} serv. / {m.selectedFloors.length} pav.)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="matrix-actions-group">
+                      <button
+                        type="button"
+                        className="matrix-btn btn-primary"
+                        onClick={handleOpenCreateMatrix}
+                      >
+                        <Plus size={13} />
+                        Nova Matriz
+                      </button>
+
+                      {activeMatrixId !== 'default' && (
+                        <>
+                          <button
+                            type="button"
+                            className="matrix-btn"
+                            onClick={() => handleOpenEditMatrix(activeMatrixId)}
+                          >
+                            <Edit2 size={13} />
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            className="matrix-btn"
+                            onClick={() => handleDuplicateMatrix(activeMatrixId)}
+                          >
+                            <Copy size={13} />
+                            Duplicar
+                          </button>
+                          <button
+                            type="button"
+                            className="matrix-btn btn-danger"
+                            onClick={() => handleDeleteMatrix(activeMatrixId)}
+                          >
+                            <Trash2 size={13} />
+                            Excluir
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Painel 2: Atividades Previstas para o Mês Vigente */}
+                  <div className={a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-matrix-card'}>
+                    <div className="a4-sheet-header">
+                      <div className="a4-sheet-brand">
+                        <h3 className="a4-sheet-title">
+                          PAINEL 4: LINHA DE BALANÇO — {currentCustomMatrix?.name || 'MATRIZ PADRÃO'}
+                        </h3>
+                        <span className="a4-sheet-subtitle">
+                          {matrixServices.length} Serviços · {matrixFloors.length} Pavimentos
+                        </span>
+                      </div>
+                      <div className="a4-sheet-meta">
+                        <div className="a4-sheet-meta-item">
+                          <strong>{projects.find((p) => p.id_prevision === selectedProject)?.nome_projeto || 'Todas as Obras'}</strong>
+                          <small>{gestaoGroup !== 'all' ? gestaoGroup : 'Todas as Torres'}</small>
+                        </div>
+                        <div className="a4-sheet-meta-item">
+                          <strong>Mês Ref: {gestaoData.m0?.label}</strong>
+                          <small>{new Date().toLocaleDateString('pt-BR')}</small>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="gestao-matrix-container">
+                      <table className="gestao-matrix-table">
+                        <thead>
+                          <tr>
+                            <th className="matrix-service-th">Serviço \ Pavimento</th>
+                            {matrixFloors.map((floor) => (
+                              <th key={floor.name}>{floor.name}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {matrixServices.length === 0 ? (
+                            <tr>
+                              <td colSpan={matrixFloors.length + 1} style={{ textAlign: 'center', padding: '30px' }}>
+                                Nenhum serviço selecionado nesta matriz. Clique em "Editar" para adicionar serviços.
+                              </td>
+                            </tr>
+                          ) : (
+                            matrixServices.map((service) => (
+                              <tr key={service.name}>
+                                <td className="matrix-service-td">{service.name}</td>
+                                {matrixFloors.map((floor) => {
+                                  const act = gestaoData.matrixMap.get(`${service.name}__${floor.name}`)
+                                  if (!act) {
+                                    return (
+                                      <td key={floor.name} className="matrix-cell">
+                                        -
+                                      </td>
+                                    )
+                                  }
+                                  const prog = Number(act.progresso_realizado) || 0
+                                  const start = act.data_inicio ? new Date(act.data_inicio) : null
+                                  const end = act.data_fim ? new Date(act.data_fim) : null
+                                  const isM0Active =
+                                    start &&
+                                    end &&
+                                    gestaoData.m0 &&
+                                    start <= gestaoData.m0.end &&
+                                    end >= gestaoData.m0.start
+                                  const isDone = prog >= 1.0
+                                  const isProgress = prog > 0 && prog < 1.0
+
+                                  return (
+                                    <td key={floor.name} className="matrix-cell">
+                                      <div
+                                        className={`matrix-cell-content ${
+                                          isDone ? 'cell-done' : isProgress ? 'cell-progress' : ''
+                                        } ${isM0Active ? 'cell-active-month' : ''}`}
+                                      >
+                                        <span className="matrix-dates">
+                                          {formatDateCompact(act.data_inicio)} - {formatDateCompact(act.data_fim)}
+                                        </span>
+                                        <span className="matrix-percent">
+                                          {formatPercent(prog)}
+                                        </span>
+                                      </div>
+                                    </td>
+                                  )
+                                })}
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="a4-sheet-footer">
+                      <div className="a4-sheet-legend">
+                        <span className="a4-legend-item">
+                          <span className="a4-legend-color" style={{ background: '#dcfce7', border: '1px solid #86efac' }} /> 100% Concluído
+                        </span>
+                        <span className="a4-legend-item">
+                          <span className="a4-legend-color" style={{ background: '#fef3c7', border: '1px solid #fde047' }} /> Em Andamento
+                        </span>
+                        <span className="a4-legend-item">
+                          <span className="a4-legend-color" style={{ background: '#ffffff', border: '2px solid #10b981' }} /> Ativo no Mês {gestaoData.m0?.label}
+                        </span>
+                      </div>
+                      <span>Linha de Balanço · Dados Prevision</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ---------------------------------------------------- */}
+              {/* SUB-ABA: VISÃO GERAL (TODOS OS 4 PAINÉIS)             */}
+              {/* ---------------------------------------------------- */}
+              {gestaoPanelTab === 'overview' && (
+                <>
+                  <div className="gestao-summary-grid">
+                    {/* Painel 1 */}
+                    <div className="gestao-card">
+                      <div className="gestao-card-header">
+                        <div className="gestao-card-title">
+                          <span>Andamento Meses Anteriores</span>
+                        </div>
+                        <span className="gestao-card-badge">
+                          {gestaoData.mMinus3?.label} - {gestaoData.mMinus1?.label}
+                        </span>
+                      </div>
+                      <div className="gestao-card-body">
+                        <table className="gestao-table">
+                          <thead>
+                            <tr>
+                              <th className="service-col" rowSpan={2}>
+                                Serviço
+                              </th>
+                              <th colSpan={2}>
+                                <div>{gestaoData.mMinus3?.label} (M-3)</div>
+                                <div className="gestao-subhead">
+                                  {gestaoData.mMinus3?.startFormatted} - {gestaoData.mMinus3?.endFormatted}
+                                </div>
+                              </th>
+                              <th colSpan={2}>
+                                <div>{gestaoData.mMinus2?.label} (M-2)</div>
+                                <div className="gestao-subhead">
+                                  {gestaoData.mMinus2?.startFormatted} - {gestaoData.mMinus2?.endFormatted}
+                                </div>
+                              </th>
+                              <th colSpan={2}>
+                                <div>{gestaoData.mMinus1?.label} (M-1)</div>
+                                <div className="gestao-subhead">
+                                  {gestaoData.mMinus1?.startFormatted} - {gestaoData.mMinus1?.endFormatted}
+                                </div>
+                              </th>
+                            </tr>
+                            <tr>
+                              <th>Previsto</th>
+                              <th>Realizado</th>
+                              <th>Previsto</th>
+                              <th>Realizado</th>
+                              <th>Previsto</th>
+                              <th>Realizado</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {gestaoData.panel1Rows.length === 0 ? (
+                              <tr>
+                                <td colSpan={7} style={{ textAlign: 'center', padding: '20px' }}>
+                                  Nenhum serviço encontrado.
+                                </td>
+                              </tr>
+                            ) : (
+                              gestaoData.panel1Rows.map((row) => (
+                                <tr key={row.service}>
+                                  <td className="service-col">{row.service}</td>
+                                  <td>{row.m3.prev.toFixed(2)}</td>
+                                  <td
+                                    className={
+                                      row.m3.real === 0 && row.m3.prev === 0
+                                        ? 'gestao-cell-neutral'
+                                        : row.m3.real >= row.m3.prev
+                                        ? 'gestao-cell-ontrack'
+                                        : 'gestao-cell-delayed'
+                                    }
+                                  >
+                                    {row.m3.real.toFixed(2)}
+                                  </td>
+                                  <td>{row.m2.prev.toFixed(2)}</td>
+                                  <td
+                                    className={
+                                      row.m2.real === 0 && row.m2.prev === 0
+                                        ? 'gestao-cell-neutral'
+                                        : row.m2.real >= row.m2.prev
+                                        ? 'gestao-cell-ontrack'
+                                        : 'gestao-cell-delayed'
+                                  }
+                                >
+                                  {row.m2.real.toFixed(2)}
+                                </td>
+                                <td>{row.m1.prev.toFixed(2)}</td>
+                                <td
+                                  className={
+                                    row.m1.real === 0 && row.m1.prev === 0
+                                      ? 'gestao-cell-neutral'
+                                      : row.m1.real >= row.m1.prev
+                                      ? 'gestao-cell-ontrack'
+                                      : 'gestao-cell-delayed'
+                                  }
+                                >
+                                  {row.m1.real.toFixed(2)}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Painel 2 */}
                   <div className="gestao-card">
                     <div className="gestao-card-header">
                       <div className="gestao-card-title">
@@ -2144,7 +2878,7 @@ function App() {
                     </div>
                   </div>
 
-                  {/* Painel 3: Projeção Futura */}
+                  {/* Painel 3 */}
                   <div className="gestao-card">
                     <div className="gestao-card-header">
                       <div className="gestao-card-title">
@@ -2195,17 +2929,15 @@ function App() {
                     </div>
                   </div>
                 </div>
-              )}
 
-              {/* BOTTOM PANEL: Matriz de Serviços x Pavimentos (Linha de Balanço) */}
-              {(gestaoViewMode === 'all' || gestaoViewMode === 'matrix') && (
+                {/* Painel 4 na Visão Geral */}
                 <div className="gestao-matrix-card">
                   <div className="gestao-card-header">
                     <div className="gestao-card-title">
                       <span>Matriz de Serviços x Pavimentos (Linha de Balanço)</span>
                     </div>
                     <span className="gestao-card-badge">
-                      {gestaoData.services.length} Serviços · {gestaoData.floors.length} Pavimentos
+                      {matrixServices.length} Serviços · {matrixFloors.length} Pavimentos
                     </span>
                   </div>
                   <div className="gestao-matrix-container">
@@ -2213,23 +2945,23 @@ function App() {
                       <thead>
                         <tr>
                           <th className="matrix-service-th">Serviço \ Pavimento</th>
-                          {gestaoData.floors.map((floor) => (
+                          {matrixFloors.map((floor) => (
                             <th key={floor.name}>{floor.name}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {gestaoData.services.length === 0 ? (
+                        {matrixServices.length === 0 ? (
                           <tr>
-                            <td colSpan={gestaoData.floors.length + 1} style={{ textAlign: 'center', padding: '30px' }}>
+                            <td colSpan={matrixFloors.length + 1} style={{ textAlign: 'center', padding: '30px' }}>
                               Nenhum dado encontrado para o filtro atual.
                             </td>
                           </tr>
                         ) : (
-                          gestaoData.services.map((service) => (
+                          matrixServices.map((service) => (
                             <tr key={service.name}>
                               <td className="matrix-service-td">{service.name}</td>
-                              {gestaoData.floors.map((floor) => {
+                              {matrixFloors.map((floor) => {
                                 const act = gestaoData.matrixMap.get(`${service.name}__${floor.name}`)
                                 if (!act) {
                                   return (
@@ -2274,9 +3006,234 @@ function App() {
                     </table>
                   </div>
                 </div>
-              )}
-            </div>
-          ) : activeView === 'dashboard' && dashboardMode === 'cff' ? (
+              </>
+            )}
+
+            {/* ---------------------------------------------------- */}
+            {/* MODAL DO CONSTRUTOR DE MATRIZES PERSONALIZADAS       */}
+            {/* ---------------------------------------------------- */}
+            {isMatrixModalOpen && (
+              <div className="matrix-modal-backdrop" onClick={() => setIsMatrixModalOpen(false)}>
+                <div className="matrix-modal" onClick={(e) => e.stopPropagation()}>
+                  <div className="matrix-modal-header">
+                    <h3>{editingMatrixId ? 'Editar Matriz Personalizada' : 'Criar Nova Matriz Personalizada'}</h3>
+                    <button
+                      type="button"
+                      className="matrix-order-btn"
+                      onClick={() => setIsMatrixModalOpen(false)}
+                      style={{ fontSize: '16px' }}
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <div className="matrix-modal-body">
+                    <label className="gestao-field" style={{ width: '100%' }}>
+                      <span>Nome da Matriz</span>
+                      <input
+                        value={modalMatrixName}
+                        onChange={(e) => setModalMatrixName(e.target.value)}
+                        placeholder="Ex: Matriz Estrutura e Alvenaria"
+                        style={{
+                          width: '100%',
+                          minHeight: '34px',
+                          border: '1px solid #b8ccc6',
+                          borderRadius: '6px',
+                          padding: '4px 10px',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                        }}
+                      />
+                    </label>
+
+                    <div className="matrix-config-columns">
+                      {/* COLUNA DE SERVIÇOS */}
+                      <div className="matrix-config-section">
+                        <div className="matrix-config-section-header">
+                          <h4>
+                            Serviços ({modalSelectedServices.length} de {gestaoData.services.length})
+                          </h4>
+                          <div className="matrix-selection-actions">
+                            <button
+                              type="button"
+                              className="matrix-mini-btn"
+                              onClick={() => handleToggleAllServices(true)}
+                            >
+                              Todos
+                            </button>
+                            <button
+                              type="button"
+                              className="matrix-mini-btn"
+                              onClick={() => handleToggleAllServices(false)}
+                            >
+                              Limpar
+                            </button>
+                          </div>
+                        </div>
+
+                        <label className="search-field" style={{ margin: '4px 0' }}>
+                          <Search size={13} />
+                          <input
+                            value={modalServiceSearch}
+                            onChange={(e) => setModalServiceSearch(e.target.value)}
+                            placeholder="Buscar serviço..."
+                            style={{ fontSize: '11px', padding: '4px 8px' }}
+                          />
+                        </label>
+
+                        <div className="matrix-items-list">
+                          {modalSelectedServices
+                            .filter((s) =>
+                              !modalServiceSearch.trim() ||
+                              s.toLowerCase().includes(modalServiceSearch.toLowerCase()),
+                            )
+                            .map((serviceName, idx) => (
+                              <div key={serviceName} className="matrix-item-row">
+                                <label className="matrix-item-label">
+                                  <input
+                                    type="checkbox"
+                                    checked={true}
+                                    onChange={() => handleToggleService(serviceName)}
+                                  />
+                                  <span>{serviceName}</span>
+                                </label>
+                                <div className="matrix-item-order-btns">
+                                  <button
+                                    type="button"
+                                    className="matrix-order-btn"
+                                    disabled={idx === 0}
+                                    onClick={() => handleMoveService(idx, 'up')}
+                                    title="Mover para cima"
+                                  >
+                                    <ArrowUp size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="matrix-order-btn"
+                                    disabled={idx === modalSelectedServices.length - 1}
+                                    onClick={() => handleMoveService(idx, 'down')}
+                                    title="Mover para baixo"
+                                  >
+                                    <ArrowDown size={13} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+
+                          {/* Serviços Desmarcados */}
+                          {gestaoData.services
+                            .filter((s) => !modalSelectedServices.includes(s.name))
+                            .filter((s) =>
+                              !modalServiceSearch.trim() ||
+                              s.name.toLowerCase().includes(modalServiceSearch.toLowerCase()),
+                            )
+                            .map((service) => (
+                              <div key={service.name} className="matrix-item-row" style={{ opacity: 0.65 }}>
+                                <label className="matrix-item-label">
+                                  <input
+                                    type="checkbox"
+                                    checked={false}
+                                    onChange={() => handleToggleService(service.name)}
+                                  />
+                                  <span>{service.name}</span>
+                                </label>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+
+                      {/* COLUNA DE PAVIMENTOS */}
+                      <div className="matrix-config-section">
+                        <div className="matrix-config-section-header">
+                          <h4>
+                            Pavimentos ({modalSelectedFloors.length} de {gestaoData.floors.length})
+                          </h4>
+                          <div className="matrix-selection-actions">
+                            <button
+                              type="button"
+                              className="matrix-mini-btn"
+                              onClick={() => handleToggleAllFloors(true)}
+                            >
+                              Todos
+                            </button>
+                            <button
+                              type="button"
+                              className="matrix-mini-btn"
+                              onClick={() => handleToggleAllFloors(false)}
+                            >
+                              Limpar
+                            </button>
+                            <button
+                              type="button"
+                              className="matrix-mini-btn"
+                              onClick={() =>
+                                setModalFloorSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+                              }
+                              title="Inverter ordem dos pavimentos"
+                            >
+                              <RotateCcw size={10} />
+                              {modalFloorSortOrder === 'asc' ? 'Cresc.' : 'Decresc.'}
+                            </button>
+                          </div>
+                        </div>
+
+                        <label className="search-field" style={{ margin: '4px 0' }}>
+                          <Search size={13} />
+                          <input
+                            value={modalFloorSearch}
+                            onChange={(e) => setModalFloorSearch(e.target.value)}
+                            placeholder="Buscar pavimento..."
+                            style={{ fontSize: '11px', padding: '4px 8px' }}
+                          />
+                        </label>
+
+                        <div className="matrix-items-list">
+                          {gestaoData.floors
+                            .filter((f) =>
+                              !modalFloorSearch.trim() ||
+                              f.name.toLowerCase().includes(modalFloorSearch.toLowerCase()),
+                            )
+                            .map((floor) => {
+                              const isChecked = modalSelectedFloors.includes(floor.name)
+                              return (
+                                <div key={floor.name} className="matrix-item-row">
+                                  <label className="matrix-item-label">
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => handleToggleFloor(floor.name)}
+                                    />
+                                    <span>{floor.name}</span>
+                                  </label>
+                                </div>
+                              )
+                            })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="matrix-modal-footer">
+                    <button
+                      type="button"
+                      className="matrix-btn"
+                      onClick={() => setIsMatrixModalOpen(false)}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      className="matrix-btn btn-primary"
+                      onClick={handleSaveMatrixModal}
+                    >
+                      Salvar Matriz
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : activeView === 'dashboard' && dashboardMode === 'cff' ? (
             cffRows.length === 0 ? (
               <div className="state-message">Nenhum registro encontrado.</div>
             ) : (
