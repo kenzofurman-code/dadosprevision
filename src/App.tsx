@@ -52,7 +52,8 @@ type DataView =
   | 'gestao_a_vista'
 
 type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix'
-type ReorderableGestaoPanel = 'panel1' | 'panel2' | 'panel3'
+type GestaoTablePanel = 'panel1' | 'panel2' | 'panel3'
+type ReorderableGestaoPanel = GestaoTablePanel | 'panel4'
 
 interface GestaoPanelPreference {
   onlyWithData: boolean
@@ -914,9 +915,10 @@ function App() {
     }
   })
   const [draggedGestaoRow, setDraggedGestaoRow] = useState<{
-    panel: ReorderableGestaoPanel
+    panel: GestaoTablePanel
     service: string
   } | null>(null)
+  const [draggedMatrixService, setDraggedMatrixService] = useState<string | null>(null)
   const [customMatrices, setCustomMatrices] = useState<CustomMatrixConfig[]>(() => {
     try {
       const saved = localStorage.getItem('dadosprevision_custom_matrices')
@@ -1665,6 +1667,7 @@ function App() {
       panel1: saved?.panel1 || emptyPreference(),
       panel2: saved?.panel2 || emptyPreference(),
       panel3: saved?.panel3 || emptyPreference(),
+      panel4: saved?.panel4 || emptyPreference(),
     }
   }, [gestaoPanelPreferenceKey, gestaoPanelPreferences])
 
@@ -1726,6 +1729,7 @@ function App() {
             panel1: projectPreferences?.panel1 || { onlyWithData: false, serviceOrder: [] },
             panel2: projectPreferences?.panel2 || { onlyWithData: false, serviceOrder: [] },
             panel3: projectPreferences?.panel3 || { onlyWithData: false, serviceOrder: [] },
+            panel4: projectPreferences?.panel4 || { onlyWithData: false, serviceOrder: [] },
             [panel]: update(current),
           },
         }
@@ -1735,7 +1739,7 @@ function App() {
   )
 
   const handleGestaoRowDrop = useCallback(
-    (panel: ReorderableGestaoPanel, targetService: string, availableServices: string[]) => {
+    (panel: GestaoTablePanel, targetService: string, availableServices: string[]) => {
       if (!draggedGestaoRow || draggedGestaoRow.panel !== panel) return
       const sourceService = draggedGestaoRow.service
       setDraggedGestaoRow(null)
@@ -1791,7 +1795,16 @@ function App() {
 
   const matrixServices = useMemo(() => {
     if (!currentCustomMatrix || currentCustomMatrix.selectedServices.length === 0) {
+      const order = currentGestaoPanelPreferences.panel4.serviceOrder
+      const orderIndex = new Map(order.map((service, index) => [service, index]))
       return gestaoData.services
+        .map((service, naturalIndex) => ({ service, naturalIndex }))
+        .sort(
+          (a, b) =>
+            (orderIndex.get(a.service.name) ?? order.length + a.naturalIndex) -
+            (orderIndex.get(b.service.name) ?? order.length + b.naturalIndex),
+        )
+        .map(({ service }) => service)
     }
     const serviceMap = new Map(gestaoData.services.map((s) => [s.name, s]))
     const result: GestaoServiceItem[] = []
@@ -1800,7 +1813,43 @@ function App() {
       if (found) result.push(found)
     }
     return result
-  }, [currentCustomMatrix, gestaoData.services])
+  }, [currentCustomMatrix, currentGestaoPanelPreferences.panel4.serviceOrder, gestaoData.services])
+
+  const handleMatrixServiceDrop = useCallback(
+    (targetService: string) => {
+      const sourceService = draggedMatrixService
+      setDraggedMatrixService(null)
+      if (!sourceService || sourceService === targetService) return
+
+      const visibleOrder = matrixServices.map((service) => service.name)
+      const sourceIndex = visibleOrder.indexOf(sourceService)
+      const targetIndex = visibleOrder.indexOf(targetService)
+      if (sourceIndex < 0 || targetIndex < 0) return
+      visibleOrder.splice(sourceIndex, 1)
+      visibleOrder.splice(targetIndex, 0, sourceService)
+
+      if (activeMatrixId === 'default') {
+        updateGestaoPanelPreference('panel4', (preference) => ({
+          ...preference,
+          serviceOrder: visibleOrder,
+        }))
+        return
+      }
+
+      setCustomMatrices((previous) =>
+        previous.map((matrix) =>
+          matrix.id === activeMatrixId
+            ? {
+                ...matrix,
+                selectedServices: visibleOrder,
+                updatedAt: new Date().toISOString(),
+              }
+            : matrix,
+        ),
+      )
+    },
+    [activeMatrixId, draggedMatrixService, matrixServices, updateGestaoPanelPreference],
+  )
 
   const matrixFloors = useMemo(() => {
     let result = gestaoData.floors
@@ -2900,8 +2949,21 @@ function App() {
                             </tr>
                           ) : (
                             matrixServices.map((service) => (
-                              <tr key={service.name}>
-                                <td className="matrix-service-td">{service.name}</td>
+                              <tr
+                                key={service.name}
+                                draggable
+                                className={draggedMatrixService === service.name ? 'gestao-row-dragging' : ''}
+                                onDragStart={() => setDraggedMatrixService(service.name)}
+                                onDragEnd={() => setDraggedMatrixService(null)}
+                                onDragOver={(event) => event.preventDefault()}
+                                onDrop={() => handleMatrixServiceDrop(service.name)}
+                              >
+                                <td className="matrix-service-td">
+                                  <span className="gestao-service-drag">
+                                    <GripVertical size={14} />
+                                    {service.name}
+                                  </span>
+                                </td>
                                 {matrixFloors.map((floor) => {
                                   const act = gestaoData.matrixMap.get(`${service.name}__${floor.name}`)
                                   if (!act) {
@@ -3212,8 +3274,21 @@ function App() {
                           </tr>
                         ) : (
                           matrixServices.map((service) => (
-                            <tr key={service.name}>
-                              <td className="matrix-service-td">{service.name}</td>
+                            <tr
+                              key={service.name}
+                              draggable
+                              className={draggedMatrixService === service.name ? 'gestao-row-dragging' : ''}
+                              onDragStart={() => setDraggedMatrixService(service.name)}
+                              onDragEnd={() => setDraggedMatrixService(null)}
+                              onDragOver={(event) => event.preventDefault()}
+                              onDrop={() => handleMatrixServiceDrop(service.name)}
+                            >
+                              <td className="matrix-service-td">
+                                <span className="gestao-service-drag">
+                                  <GripVertical size={14} />
+                                  {service.name}
+                                </span>
+                              </td>
                               {matrixFloors.map((floor) => {
                                 const act = gestaoData.matrixMap.get(`${service.name}__${floor.name}`)
                                 if (!act) {

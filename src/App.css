@@ -1349,11 +1349,13 @@ td strong {
   cursor: grab;
 }
 
-.gestao-table tr[draggable='true'] {
+.gestao-table tr[draggable='true'],
+.gestao-matrix-table tr[draggable='true'] {
   cursor: grab;
 }
 
 .gestao-table tr[draggable='true']:active,
+.gestao-matrix-table tr[draggable='true']:active,
 .gestao-service-drag svg:active {
   cursor: grabbing;
 }
