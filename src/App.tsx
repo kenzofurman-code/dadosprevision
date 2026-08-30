@@ -2757,16 +2757,39 @@ function App() {
             .print-preview-toolbar strong { font-size: 14px; }
             .print-preview-controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
             .print-preview-controls label { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
-            .print-preview-controls input[type="range"] { width: 110px; accent-color: #174f46; }
+            .print-preview-control-label { color: #173f38; }
+            .print-preview-controls input[type="range"] { width: 140px; accent-color: #174f46; cursor: pointer; }
             .print-preview-actions { display: flex; align-items: center; gap: 7px; }
             .print-preview-actions button { border: 1px solid #b8ccc6; border-radius: 6px; padding: 7px 11px; background: #ffffff; color: #173f38; font-size: 11px; font-weight: 700; cursor: pointer; }
             .print-preview-actions button.primary { border-color: #173f38; background: #173f38; color: #ffffff; }
             .print-preview-content { padding: 20px; overflow: auto; }
             .print-preview-content .matrix-print-source { width: max-content; min-width: 100%; max-width: none; margin: 0 auto; overflow: visible; }
             .matrix-print-source .gestao-matrix-container { max-height: none; overflow: visible; }
-            .matrix-print-source .gestao-matrix-table { width: max-content; min-width: 100%; }
+            .matrix-print-source .gestao-matrix-table { table-layout: fixed; width: max-content; min-width: 100%; }
             .matrix-print-source .gestao-matrix-table th:not(.matrix-service-th),
-            .matrix-print-source .gestao-matrix-table td.matrix-cell { width: var(--matrix-column-width, 110px); min-width: var(--matrix-column-width, 110px); }
+            .matrix-print-source .gestao-matrix-table td.matrix-cell {
+              width: var(--matrix-column-width, 110px);
+              min-width: var(--matrix-column-width, 110px);
+              max-width: var(--matrix-column-width, 110px);
+              box-sizing: border-box;
+            }
+            .matrix-print-source .gestao-matrix-table th.matrix-service-th,
+            .matrix-print-source .gestao-matrix-table td.matrix-service-td {
+              width: var(--matrix-service-column-width, 260px);
+              min-width: var(--matrix-service-column-width, 260px);
+              max-width: var(--matrix-service-column-width, 260px);
+              box-sizing: border-box;
+              white-space: normal;
+              overflow-wrap: anywhere;
+            }
+            .matrix-print-source .gestao-matrix-table td.matrix-service-td .gestao-service-drag {
+              display: flex;
+              min-width: 0;
+              max-width: 100%;
+              white-space: normal;
+              overflow-wrap: anywhere;
+            }
+            .matrix-print-source .matrix-dates { white-space: normal; overflow-wrap: anywhere; }
             @media print {
               @page { size: A4 landscape; margin: 6mm; }
               html, body { background: #ffffff !important; }
@@ -2781,8 +2804,9 @@ function App() {
           <div class="print-preview-toolbar">
             <strong>Escadinha · Visualização de impressão</strong>
             <div class="print-preview-controls">
-              <label>Zoom <output id="zoom-value">100%</output><input id="zoom-input" type="range" min="60" max="120" step="5" value="100" /></label>
-              <label>Largura das colunas <output id="column-value">110px</output><input id="column-input" type="range" min="70" max="220" step="5" value="110" /></label>
+              <label title="Ajustar zoom da impressão"><span class="print-preview-control-label">Zoom</span><input id="zoom-input" aria-label="Zoom da impressão" type="range" min="40" max="140" step="5" value="100" /></label>
+              <label title="Ajustar largura das colunas de pavimentos"><span class="print-preview-control-label">Colunas</span><input id="column-input" aria-label="Largura das colunas de pavimentos" type="range" min="60" max="220" step="5" value="110" /></label>
+              <label title="Ajustar largura da coluna Serviço/Pavimento"><span class="print-preview-control-label">Serviço/Pavimento</span><input id="service-input" aria-label="Largura da coluna Serviço/Pavimento" type="range" min="160" max="520" step="10" value="260" /></label>
             </div>
             <div class="print-preview-actions">
               <button id="close-preview" type="button">Fechar janela</button>
@@ -2797,18 +2821,18 @@ function App() {
     const printSource = printWindow.document.querySelector('.matrix-print-source') as HTMLElement | null
     const zoomInput = printWindow.document.getElementById('zoom-input') as HTMLInputElement | null
     const columnInput = printWindow.document.getElementById('column-input') as HTMLInputElement | null
-    const zoomValue = printWindow.document.getElementById('zoom-value')
-    const columnValue = printWindow.document.getElementById('column-value')
+    const serviceInput = printWindow.document.getElementById('service-input') as HTMLInputElement | null
     const syncPrintSettings = () => {
       const zoom = Number(zoomInput?.value || 100)
       const width = Number(columnInput?.value || 110)
+      const serviceWidth = Number(serviceInput?.value || 260)
       printSource?.style.setProperty('--matrix-column-width', `${width}px`)
+      printSource?.style.setProperty('--matrix-service-column-width', `${serviceWidth}px`)
       if (printSource) printSource.style.zoom = String(zoom / 100)
-      if (zoomValue) zoomValue.textContent = `${zoom}%`
-      if (columnValue) columnValue.textContent = `${width}px`
     }
     zoomInput?.addEventListener('input', syncPrintSettings)
     columnInput?.addEventListener('input', syncPrintSettings)
+    serviceInput?.addEventListener('input', syncPrintSettings)
     printWindow.document.getElementById('print-now')?.addEventListener('click', () => printWindow.print())
     printWindow.document.getElementById('close-preview')?.addEventListener('click', () => printWindow.close())
     syncPrintSettings()
