@@ -1717,6 +1717,267 @@ td strong {
   cursor: not-allowed;
 }
 
+/* Dashboard de marcos */
+.milestone-dashboard {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.milestone-chart-card,
+.milestone-table-card {
+  background: #ffffff;
+  border: 1px solid #d8e4e0;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(23, 63, 56, 0.06);
+  overflow: hidden;
+}
+
+.milestone-dashboard-header,
+.milestone-table-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e1ebe8;
+}
+
+.milestone-dashboard-header h3,
+.milestone-table-heading h3 {
+  margin: 0 0 4px;
+  color: #173f38;
+  font-size: 16px;
+}
+
+.milestone-dashboard-header p,
+.milestone-table-heading p {
+  margin: 0;
+  color: #64748b;
+  font-size: 11.5px;
+}
+
+.milestone-total-card {
+  min-width: 145px;
+  padding: 10px 14px;
+  border: 1px solid #cfe0db;
+  border-radius: 8px;
+  background: #f4f8f7;
+  text-align: center;
+}
+
+.milestone-total-card span {
+  display: block;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.milestone-total-card strong {
+  display: block;
+  margin-top: 2px;
+  color: #173f38;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.milestone-chart-scroll {
+  overflow-x: auto;
+  padding: 22px 18px 10px;
+}
+
+.milestone-chart-bars {
+  min-width: 1040px;
+  height: 270px;
+  display: grid;
+  grid-template-columns: repeat(17, minmax(48px, 1fr));
+  align-items: end;
+  gap: 8px;
+  border-bottom: 1px solid #cbd5d2;
+  background-image: repeating-linear-gradient(
+    to top,
+    transparent 0,
+    transparent 47px,
+    #eef3f1 48px
+  );
+}
+
+.milestone-month-column {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  position: relative;
+  padding: 0 2px;
+}
+
+.milestone-month-column.current {
+  background: rgba(23, 63, 56, 0.05);
+  box-shadow: inset 0 -3px 0 #173f38;
+}
+
+.milestone-month-total {
+  min-height: 18px;
+  color: #334b46;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.milestone-bar-stack {
+  height: 190px;
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-start;
+}
+
+.milestone-bar-segment {
+  min-height: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  font-size: 9px;
+  font-weight: 800;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.milestone-month-label {
+  min-height: 30px;
+  padding-top: 7px;
+  color: #526762;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.milestone-month-column small {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  color: #173f38;
+  font-size: 7.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.milestone-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 7px 14px;
+  padding: 10px 20px 18px;
+}
+
+.milestone-legend span,
+.milestone-column-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #526762;
+  font-size: 9.5px;
+  font-weight: 700;
+}
+
+.milestone-legend i,
+.milestone-column-title i {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+}
+
+.milestone-empty-state,
+.milestone-empty-cell {
+  padding: 36px 20px;
+  color: #64748b;
+  text-align: center;
+  font-size: 12px;
+}
+
+.milestone-table-heading {
+  align-items: center;
+}
+
+.milestone-table-heading > span {
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #e8f1ee;
+  color: #245248;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.milestone-table-scroll {
+  width: 100%;
+  overflow: auto;
+}
+
+.milestone-dashboard-table {
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 10.5px;
+}
+
+.milestone-dashboard-table th,
+.milestone-dashboard-table td {
+  min-width: 155px;
+  padding: 9px 10px;
+  border-right: 1px solid #e5ecea;
+  border-bottom: 1px solid #e5ecea;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.milestone-dashboard-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f4f8f7;
+  color: #173f38;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.milestone-dashboard-table .milestone-project-column {
+  min-width: 210px;
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: #f8fbfa;
+  border-right: 2px solid #cdded9;
+}
+
+.milestone-dashboard-table th.milestone-project-column {
+  z-index: 4;
+  background: #e8f1ee;
+}
+
+.milestone-date-value {
+  display: block;
+  color: #243d37;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.milestone-date-value + .milestone-date-value {
+  margin-top: 3px;
+}
+
+.milestone-no-date {
+  color: #a3b0ad;
+}
+
 @media (max-width: 760px) {
   .matrix-modal-backdrop {
     align-items: stretch;
@@ -1740,6 +2001,16 @@ td strong {
 
   .matrix-items-list {
     max-height: 220px;
+  }
+
+  .milestone-dashboard-header,
+  .milestone-table-heading {
+    padding: 14px;
+    flex-direction: column;
+  }
+
+  .milestone-total-card {
+    width: 100%;
   }
 }
 

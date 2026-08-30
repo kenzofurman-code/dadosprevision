@@ -51,7 +51,7 @@ type DataView =
   | 'dashboard'
   | 'gestao_a_vista'
 
-type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix'
+type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix' | 'milestones'
 type GestaoTablePanel = 'panel1' | 'panel2' | 'panel3'
 type ReorderableGestaoPanel = GestaoTablePanel | 'panel4'
 
@@ -155,6 +155,10 @@ type TabDefinition = {
 
 const PAGE_SIZE = 100
 const PAGE_SIZE_OPTIONS = [10, 50, 100, 150]
+const MILESTONE_COLORS = [
+  '#2563eb', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4',
+  '#f97316', '#ec4899', '#14b8a6', '#6366f1', '#84cc16', '#64748b',
+]
 
 const tabs: TabDefinition[] = [
   { key: 'projects', label: 'Projetos', icon: Building2 },
@@ -890,6 +894,7 @@ function calculateItemWeeklyProgress(item: CffRecord, weekStartStr: string, week
 function App() {
   const [projects, setProjects] = useState<Project[]>([])
   const [records, setRecords] = useState<DataRecord[]>([])
+  const [gestaoMilestones, setGestaoMilestones] = useState<DataRecord[]>([])
   const [activeView, setActiveView] = useState<DataView>('projects')
   const [activityMode, setActivityMode] = useState<ActivityMode>('planning')
   const [budgetMode, setBudgetMode] = useState<BudgetMode>('reports')
@@ -988,6 +993,11 @@ function App() {
 
     const payload = await fetchJson(`/api/data?${params}`)
     setRecords(Array.isArray(payload.records) ? payload.records : [])
+    setGestaoMilestones(
+      activeView === 'gestao_a_vista' && Array.isArray(payload.milestones)
+        ? payload.milestones
+        : [],
+    )
     setCffSummaries(Array.isArray((payload as any).summary) ? (payload as any).summary : [])
     setHasMore(Boolean(payload.hasMore))
   }, [activeView, activityMode, budgetMode, dashboardMode, page, pageSize, selectedProject])
@@ -1454,6 +1464,129 @@ function App() {
       return true
     })
   }, [gestaoActivities, gestaoGroup, search])
+
+  const milestoneDashboard = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    const milestones = gestaoMilestones
+      .filter((milestone) => {
+        if (!query) return true
+        return (
+          String(milestone.nome || '').toLowerCase().includes(query) ||
+          String(milestone.projeto_nome || '').toLowerCase().includes(query)
+        )
+      })
+      .map((milestone): DataRecord & { dateText: string; date: Date | null } => {
+        const dateText = String(milestone.data || '').slice(0, 10)
+        const date = /^\d{4}-\d{2}-\d{2}$/.test(dateText)
+          ? new Date(`${dateText}T00:00:00Z`)
+          : null
+        return { ...milestone, dateText, date }
+      })
+      .filter(
+        (milestone): milestone is DataRecord & { dateText: string; date: Date } =>
+          Boolean(milestone.date && !Number.isNaN(milestone.date.getTime())),
+      )
+
+    const today = new Date()
+    const currentMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1))
+    const windowStart = new Date(Date.UTC(
+      currentMonth.getUTCFullYear(),
+      currentMonth.getUTCMonth() - 6,
+      1,
+    ))
+    const windowEnd = new Date(Date.UTC(
+      currentMonth.getUTCFullYear(),
+      currentMonth.getUTCMonth() + 11,
+      1,
+    ))
+
+    const milestoneNames = Array.from(
+      new Set(milestones.map((milestone) => String(milestone.nome || 'Marco sem nome'))),
+    ).sort(compareNatural)
+    const colorByName = new Map<string, string>()
+    const usedColors = new Set<string>()
+    milestoneNames.forEach((name, index) => {
+      const configuredColor = String(
+        milestones.find((milestone) => String(milestone.nome || 'Marco sem nome') === name)?.cor || '',
+      )
+      const normalizedConfiguredColor = configuredColor.toLowerCase()
+      const color =
+        /^#[0-9a-f]{3,8}$/i.test(configuredColor) && !usedColors.has(normalizedConfiguredColor)
+          ? configuredColor
+          : MILESTONE_COLORS[index % MILESTONE_COLORS.length]
+      colorByName.set(name, color)
+      usedColors.add(color.toLowerCase())
+    })
+
+    const months = Array.from({ length: 17 }, (_, index) => {
+      const date = new Date(Date.UTC(
+        windowStart.getUTCFullYear(),
+        windowStart.getUTCMonth() + index,
+        1,
+      ))
+      const nextMonth = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1))
+      const monthMilestones = milestones.filter(
+        (milestone) => milestone.date! >= date && milestone.date! < nextMonth,
+      )
+      const counts = new Map<string, number>()
+      for (const milestone of monthMilestones) {
+        const name = String(milestone.nome || 'Marco sem nome')
+        counts.set(name, (counts.get(name) || 0) + 1)
+      }
+      return {
+        key: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`,
+        label: date
+          .toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' })
+          .replace('.', ''),
+        isCurrent: date.getTime() === currentMonth.getTime(),
+        total: monthMilestones.length,
+        segments: milestoneNames
+          .map((name) => ({ name, count: counts.get(name) || 0, color: colorByName.get(name)! }))
+          .filter((segment) => segment.count > 0),
+      }
+    })
+
+    const projectMap = new Map<
+      string,
+      { projectId: string; projectName: string; datesByMilestone: Map<string, string[]> }
+    >()
+    for (const milestone of milestones) {
+      const projectId = String(milestone.projeto_id || milestone.projeto_nome || '-')
+      if (!projectMap.has(projectId)) {
+        projectMap.set(projectId, {
+          projectId,
+          projectName: String(milestone.projeto_nome || '-'),
+          datesByMilestone: new Map(),
+        })
+      }
+      const name = String(milestone.nome || 'Marco sem nome')
+      const dates = projectMap.get(projectId)!.datesByMilestone.get(name) || []
+      dates.push(milestone.dateText)
+      projectMap.get(projectId)!.datesByMilestone.set(name, dates)
+    }
+
+    const projectRows = Array.from(projectMap.values())
+      .map((project) => ({
+        ...project,
+        datesByMilestone: new Map(
+          Array.from(project.datesByMilestone, ([name, dates]) => [name, dates.sort()]),
+        ),
+      }))
+      .sort((a, b) => compareNatural(a.projectName, b.projectName))
+
+    return {
+      months,
+      milestoneNames,
+      colorByName,
+      projectRows,
+      totalInWindow: milestones.filter(
+        (milestone) => milestone.date! >= windowStart && milestone.date! < windowEnd,
+      ).length,
+      maxMonthTotal: Math.max(1, ...months.map((month) => month.total)),
+      windowStart,
+      windowEnd: new Date(windowEnd.getTime() - 1),
+    }
+  }, [gestaoMilestones, search])
 
   const gestaoData = useMemo(() => {
     if (!gestaoMonth) {
@@ -2381,7 +2514,7 @@ function App() {
                     </select>
                   </label>
 
-                  {gestaoGroupOptions.length > 0 && (
+                  {gestaoPanelTab !== 'milestones' && gestaoGroupOptions.length > 0 && (
                     <label className="gestao-field">
                       <span>Torre / Grupo</span>
                       <select value={gestaoGroup} onChange={(event) => setGestaoGroup(event.target.value)}>
@@ -2395,16 +2528,18 @@ function App() {
                     </label>
                   )}
 
-                  <label className="gestao-field">
-                    <span>Mês de Referência (M0)</span>
-                    <select value={gestaoMonth} onChange={(event) => setGestaoMonth(event.target.value)}>
-                      {gestaoMonthOptions.map((m) => (
-                        <option key={m} value={m}>
-                          {formatMonthLabel(m)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  {gestaoPanelTab !== 'milestones' && (
+                    <label className="gestao-field">
+                      <span>Mês de Referência (M0)</span>
+                      <select value={gestaoMonth} onChange={(event) => setGestaoMonth(event.target.value)}>
+                        {gestaoMonthOptions.map((m) => (
+                          <option key={m} value={m}>
+                            {formatMonthLabel(m)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
 
                   <label className="gestao-field search-field">
                     <span>Buscar</span>
@@ -2412,7 +2547,11 @@ function App() {
                     <input
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
-                      placeholder="Filtrar serviço ou pavimento"
+                      placeholder={
+                        gestaoPanelTab === 'milestones'
+                          ? 'Filtrar projeto ou marco'
+                          : 'Filtrar serviço ou pavimento'
+                      }
                     />
                   </label>
                 </div>
@@ -2470,6 +2609,16 @@ function App() {
                   )}
                 </button>
 
+                <button
+                  type="button"
+                  className={`gestao-panel-tab-btn ${gestaoPanelTab === 'milestones' ? 'active' : ''}`}
+                  onClick={() => setGestaoPanelTab('milestones')}
+                >
+                  <Flag size={14} />
+                  <span>Dashboard: Marcos</span>
+                  <span className="badge-pill">{gestaoMilestones.length}</span>
+                </button>
+
                 <div className="gestao-top-actions">
                   <button
                     type="button"
@@ -2492,6 +2641,143 @@ function App() {
                   </button>
                 </div>
               </div>
+
+              {gestaoPanelTab === 'milestones' && (
+                <div className="milestone-dashboard">
+                  <section className="milestone-chart-card">
+                    <div className="milestone-dashboard-header">
+                      <div>
+                        <h3>Marcos distribuídos por mês</h3>
+                        <p>
+                          Quantidade de marcos entre{' '}
+                          {formatDate(milestoneDashboard.windowStart.toISOString())} e{' '}
+                          {formatDate(milestoneDashboard.windowEnd.toISOString())}.
+                        </p>
+                      </div>
+                      <div className="milestone-total-card">
+                        <span>Marcos no período</span>
+                        <strong>{milestoneDashboard.totalInWindow}</strong>
+                      </div>
+                    </div>
+
+                    {milestoneDashboard.totalInWindow === 0 ? (
+                      <div className="milestone-empty-state">
+                        Nenhum marco encontrado nesta janela de 17 meses.
+                      </div>
+                    ) : (
+                      <>
+                        <div className="milestone-chart-scroll">
+                          <div className="milestone-chart-bars" role="img" aria-label="Marcos distribuídos por mês">
+                            {milestoneDashboard.months.map((month) => (
+                              <div
+                                key={month.key}
+                                className={`milestone-month-column ${month.isCurrent ? 'current' : ''}`}
+                              >
+                                <div className="milestone-month-total">
+                                  {month.total > 0 ? month.total : ''}
+                                </div>
+                                <div className="milestone-bar-stack">
+                                  {month.segments.map((segment) => (
+                                    <div
+                                      key={segment.name}
+                                      className="milestone-bar-segment"
+                                      style={{
+                                        height: `${Math.max(
+                                          4,
+                                          (segment.count / milestoneDashboard.maxMonthTotal) * 190,
+                                        )}px`,
+                                        backgroundColor: segment.color,
+                                      }}
+                                      title={`${month.label} · ${segment.name}: ${segment.count}`}
+                                    >
+                                      {segment.count}
+                                    </div>
+                                  ))}
+                                </div>
+                                <span className="milestone-month-label">{month.label}</span>
+                                {month.isCurrent && <small>Hoje</small>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="milestone-legend">
+                          {milestoneDashboard.milestoneNames.map((name) => (
+                            <span key={name}>
+                              <i style={{ backgroundColor: milestoneDashboard.colorByName.get(name) }} />
+                              {name}
+                            </span>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </section>
+
+                  <section className="milestone-table-card">
+                    <div className="milestone-table-heading">
+                      <div>
+                        <h3>Datas dos marcos por projeto</h3>
+                        <p>Os marcos são apresentados em colunas e suas datas em cada projeto.</p>
+                      </div>
+                      <span>{milestoneDashboard.projectRows.length} projeto(s)</span>
+                    </div>
+
+                    <div className="milestone-table-scroll">
+                      <table className="milestone-dashboard-table">
+                        <thead>
+                          <tr>
+                            <th className="milestone-project-column">Projeto</th>
+                            {milestoneDashboard.milestoneNames.map((name) => (
+                              <th key={name}>
+                                <span className="milestone-column-title">
+                                  <i style={{ backgroundColor: milestoneDashboard.colorByName.get(name) }} />
+                                  {name}
+                                </span>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {milestoneDashboard.projectRows.length === 0 ? (
+                            <tr>
+                              <td
+                                colSpan={milestoneDashboard.milestoneNames.length + 1}
+                                className="milestone-empty-cell"
+                              >
+                                Nenhum marco encontrado para o filtro atual.
+                              </td>
+                            </tr>
+                          ) : (
+                            milestoneDashboard.projectRows.map((project) => (
+                              <tr key={project.projectId}>
+                                <td className="milestone-project-column">
+                                  <strong>{project.projectName}</strong>
+                                </td>
+                                {milestoneDashboard.milestoneNames.map((name) => {
+                                  const dates = project.datesByMilestone.get(name) || []
+                                  return (
+                                    <td key={name}>
+                                      {dates.length === 0 ? (
+                                        <span className="milestone-no-date">—</span>
+                                      ) : (
+                                        dates.map((date) => (
+                                          <span key={date} className="milestone-date-value">
+                                            {formatDate(date)}
+                                          </span>
+                                        ))
+                                      )}
+                                    </td>
+                                  )
+                                })}
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                </div>
+              )}
 
               {/* ---------------------------------------------------- */}
               {/* SUB-ABA: PAINEL 1 (MESES ANTERIORES)                 */}

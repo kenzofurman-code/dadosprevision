@@ -55,7 +55,18 @@ app.get('/api/data', async (req, res) => {
 
     if (type === 'gestaoVista') {
       const data = await getActivities({ projectId, isGestaoVista: true })
-      return res.json({ ok: true, type, records: data.records, hasMore: false })
+      const milestones = await getGenericTable('marcos', {
+        projectId,
+        page: 0,
+        pageSize: 5000,
+      })
+      return res.json({
+        ok: true,
+        type,
+        records: data.records,
+        milestones: milestones.records,
+        hasMore: false,
+      })
     }
 
     if (type === 'activities') {
