@@ -2781,6 +2781,9 @@ function App() {
             .print-preview-controls label { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
             .print-preview-control-label { color: #173f38; }
             .print-preview-controls input[type="range"] { width: 140px; accent-color: #174f46; cursor: pointer; }
+            .print-column-resizer { position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; z-index: 20; }
+            .print-column-resizer:hover { background: rgba(23, 79, 70, 0.18); }
+            body.print-column-resizing, body.print-column-resizing * { cursor: col-resize !important; user-select: none !important; }
             .print-preview-actions { display: flex; align-items: center; gap: 7px; }
             .print-preview-actions button { border: 1px solid #b8ccc6; border-radius: 6px; padding: 7px 11px; background: #ffffff; color: #173f38; font-size: 11px; font-weight: 700; cursor: pointer; }
             .print-preview-actions button.primary { border-color: #173f38; background: #173f38; color: #ffffff; }
@@ -2793,6 +2796,7 @@ function App() {
             .gestao-print-source .a4-sheet-body,
             .gestao-print-source .panel5-table-scroll { overflow: visible; }
             .gestao-print-source .panel5-export-grid { display: block; }
+            .gestao-print-source th { position: relative; }
             .gestao-print-source .gestao-table,
             .gestao-print-source .panel5-export-table { table-layout: fixed; width: max-content; min-width: 100%; }
             .gestao-print-source .gestao-table th:not(.service-col),
@@ -2852,6 +2856,7 @@ function App() {
               @page { size: A4 landscape; margin: 6mm; }
               html, body { background: #ffffff !important; }
               .print-preview-toolbar { display: none !important; }
+              .print-column-resizer { display: none !important; }
               .print-preview-content { padding: 0 !important; overflow: visible !important; }
               .print-preview-content .gestao-print-source { width: max-content !important; min-width: 100% !important; box-shadow: none !important; border: 1px solid #888888 !important; }
               .gestao-print-source .gestao-table,
@@ -2869,6 +2874,7 @@ function App() {
               <label title="Ajustar largura da primeira coluna"><span class="print-preview-control-label">Primeira coluna</span><input id="service-input" aria-label="Largura da primeira coluna" type="range" min="160" max="520" step="10" value="260" /></label>
             </div>
             <div class="print-preview-actions">
+              <button id="reset-widths" type="button">Restaurar larguras</button>
               <button id="close-preview" type="button">Fechar janela</button>
               <button id="print-now" class="primary" type="button">Imprimir / PDF</button>
             </div>
@@ -2882,6 +2888,127 @@ function App() {
     const zoomInput = printWindow.document.getElementById('zoom-input') as HTMLInputElement | null
     const columnInput = printWindow.document.getElementById('column-input') as HTMLInputElement | null
     const serviceInput = printWindow.document.getElementById('service-input') as HTMLInputElement | null
+    const printTableSettings = printSource
+      ? (Array.from(printSource.querySelectorAll('table')) as HTMLTableElement[]).map((table) => {
+          const columnCount = Math.max(
+            1,
+            ...Array.from(table.rows).map((row) =>
+              Array.from(row.cells).reduce((total, cell) => total + Math.max(1, cell.colSpan), 0),
+            ),
+          )
+          const colgroup = printWindow.document.createElement('colgroup')
+          const columns = Array.from({ length: columnCount }, () => printWindow.document.createElement('col'))
+          columns.forEach((column) => colgroup.appendChild(column))
+          table.insertBefore(colgroup, table.firstChild)
+          table.style.tableLayout = 'fixed'
+
+          const cellColumns = new Map<HTMLTableCellElement, number>()
+          const occupiedUntil = new Map<number, number>()
+          Array.from(table.rows).forEach((row, rowIndex) => {
+            let columnIndex = 0
+            Array.from(row.cells).forEach((cell) => {
+              while ((occupiedUntil.get(columnIndex) ?? -1) >= rowIndex) columnIndex += 1
+              const columnSpan = Math.max(1, cell.colSpan)
+              cellColumns.set(cell, columnIndex)
+              for (let offset = 0; offset < columnSpan; offset += 1) {
+                occupiedUntil.set(columnIndex + offset, rowIndex + Math.max(1, cell.rowSpan) - 1)
+              }
+              columnIndex += columnSpan
+            })
+          })
+
+          return {
+            table,
+            columns,
+            widths: Array<number | null>(columnCount).fill(null),
+            cellColumns,
+          }
+        })
+      : []
+
+    const getPrintColumnWidth = (columnIndex: number, widths: Array<number | null>) => {
+      const globalWidth = Number(columnInput?.value || 110)
+      const firstColumnWidth = Number(serviceInput?.value || 260)
+      return widths[columnIndex] ?? (columnIndex === 0 ? firstColumnWidth : globalWidth)
+    }
+
+    const applyPrintWidths = () => {
+      printTableSettings.forEach((settings) => {
+        settings.columns.forEach((column, columnIndex) => {
+          column.style.width = `${getPrintColumnWidth(columnIndex, settings.widths)}px`
+        })
+        Array.from(settings.table.rows).forEach((row) => {
+          Array.from(row.cells).forEach((cell) => {
+            const startColumn = settings.cellColumns.get(cell)
+            if (startColumn === undefined) return
+            const columnSpan = Math.max(1, cell.colSpan)
+            const cellWidth = Array.from({ length: columnSpan }, (_, offset) =>
+              getPrintColumnWidth(startColumn + offset, settings.widths),
+            ).reduce((total, width) => total + width, 0)
+            cell.style.width = `${cellWidth}px`
+            cell.style.minWidth = `${cellWidth}px`
+            cell.style.maxWidth = `${cellWidth}px`
+          })
+        })
+      })
+    }
+
+    const addColumnResizeHandle = (
+      settings: (typeof printTableSettings)[number],
+      cell: HTMLTableCellElement,
+      columnIndex: number,
+    ) => {
+      if (cell.querySelector('.print-column-resizer')) return
+      const handle = printWindow.document.createElement('span')
+      handle.className = 'print-column-resizer'
+      handle.setAttribute('role', 'separator')
+      handle.setAttribute('aria-label', 'Ajustar largura da coluna')
+      handle.tabIndex = 0
+      handle.title = 'Arraste para ajustar a largura da coluna'
+      const changeWidth = (delta: number) => {
+        const currentWidth = getPrintColumnWidth(columnIndex, settings.widths)
+        const minimum = columnIndex === 0 ? 140 : 50
+        settings.widths[columnIndex] = Math.max(minimum, Math.min(800, currentWidth + delta))
+        applyPrintWidths()
+      }
+      handle.addEventListener('pointerdown', (event) => {
+        event.preventDefault()
+        const startX = event.clientX
+        const startWidth = getPrintColumnWidth(columnIndex, settings.widths)
+        printWindow.document.body.classList.add('print-column-resizing')
+        const handleMove = (moveEvent: PointerEvent) => {
+          const minimum = columnIndex === 0 ? 140 : 50
+          settings.widths[columnIndex] = Math.max(minimum, Math.min(800, startWidth + moveEvent.clientX - startX))
+          applyPrintWidths()
+        }
+        const handleUp = () => {
+          printWindow.document.body.classList.remove('print-column-resizing')
+          printWindow.removeEventListener('pointermove', handleMove)
+          printWindow.removeEventListener('pointerup', handleUp)
+        }
+        printWindow.addEventListener('pointermove', handleMove)
+        printWindow.addEventListener('pointerup', handleUp)
+      })
+      handle.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+        event.preventDefault()
+        changeWidth(event.key === 'ArrowRight' ? 10 : -10)
+      })
+      cell.appendChild(handle)
+    }
+
+    printTableSettings.forEach((settings) => {
+      const headerRows = settings.table.tHead ? Array.from(settings.table.tHead.rows) : []
+      headerRows.forEach((row) => {
+        Array.from(row.cells).forEach((cell) => {
+          if (cell.colSpan !== 1) return
+          const columnIndex = settings.cellColumns.get(cell)
+          if (columnIndex === undefined) return
+          addColumnResizeHandle(settings, cell, columnIndex)
+        })
+      })
+    })
+
     const syncPrintSettings = () => {
       const zoom = Number(zoomInput?.value || 100)
       const width = Number(columnInput?.value || 110)
@@ -2891,10 +3018,15 @@ function App() {
       printSource?.style.setProperty('--matrix-column-width', `${width}px`)
       printSource?.style.setProperty('--matrix-service-column-width', `${serviceWidth}px`)
       if (printSource) printSource.style.zoom = String(zoom / 100)
+      applyPrintWidths()
     }
     zoomInput?.addEventListener('input', syncPrintSettings)
     columnInput?.addEventListener('input', syncPrintSettings)
     serviceInput?.addEventListener('input', syncPrintSettings)
+    printWindow.document.getElementById('reset-widths')?.addEventListener('click', () => {
+      printTableSettings.forEach((settings) => settings.widths.fill(null))
+      syncPrintSettings()
+    })
     printWindow.document.getElementById('print-now')?.addEventListener('click', () => printWindow.print())
     printWindow.document.getElementById('close-preview')?.addEventListener('click', () => printWindow.close())
     syncPrintSettings()
