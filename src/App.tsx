@@ -2410,10 +2410,23 @@ function App() {
       result = result.filter((f) => selectedSet.has(f.name))
     }
     const direction = currentCustomMatrix?.floorSortOrder === 'desc' ? -1 : 1
+    const configuredFloorOrder = new Map(currentFloorOrder.map((floor, index) => [floor, index]))
     return [...result].sort(
-      (a, b) => a.groupRank - b.groupRank || direction * compareNatural(a.name, b.name),
+      (a, b) => {
+        const aRank = configuredFloorOrder.get(a.name) ?? currentFloorOrder.length
+        const bRank = configuredFloorOrder.get(b.name) ?? currentFloorOrder.length
+        return direction * (aRank - bRank) || direction * compareNatural(a.name, b.name)
+      },
     )
-  }, [activeMatrixId, currentCustomMatrix, gestaoActivities, gestaoData.floors, matrixGroupSet, matrixServices])
+  }, [
+    activeMatrixId,
+    currentCustomMatrix,
+    currentFloorOrder,
+    gestaoActivities,
+    gestaoData.floors,
+    matrixGroupSet,
+    matrixServices,
+  ])
 
   const modalAvailableServices = useMemo(() => {
     const selectedGroups = new Set(modalSelectedGroups)
@@ -2435,8 +2448,22 @@ function App() {
         floorNames.add(String(activity.pavimento_nome))
       }
     }
-    return gestaoCatalog.floors.filter((floor) => floorNames.has(floor.name))
-  }, [gestaoActivities, gestaoCatalog.floors, modalSelectedGroups, modalSelectedServices])
+    const configuredFloorOrder = new Map(currentFloorOrder.map((floor, index) => [floor, index]))
+    return gestaoCatalog.floors
+      .filter((floor) => floorNames.has(floor.name))
+      .sort(
+        (a, b) =>
+          (configuredFloorOrder.get(a.name) ?? currentFloorOrder.length) -
+            (configuredFloorOrder.get(b.name) ?? currentFloorOrder.length) ||
+          compareNatural(a.name, b.name),
+      )
+  }, [
+    currentFloorOrder,
+    gestaoActivities,
+    gestaoCatalog.floors,
+    modalSelectedGroups,
+    modalSelectedServices,
+  ])
 
   function handleOpenCreateMatrix() {
     const groups = currentGroupOrder
@@ -2446,7 +2473,7 @@ function App() {
     setModalMatrixName(`Matriz Personalizada ${projectCustomMatrices.length + 1}`)
     setModalSelectedGroups(groups)
     setModalSelectedServices(services)
-    setModalSelectedFloors(gestaoCatalog.floors.filter((floor) => floors.has(floor.name)).map((floor) => floor.name))
+    setModalSelectedFloors(currentFloorOrder.filter((floor) => floors.has(floor)))
     setModalFloorSortOrder('asc')
     setModalServiceSearch('')
     setModalFloorSearch('')
@@ -2479,7 +2506,7 @@ function App() {
     const floors = (
       target.selectedFloors.length > 0
         ? target.selectedFloors
-        : Array.from(availableFloors)
+        : currentFloorOrder.filter((floor) => availableFloors.has(floor))
     ).filter((floor) => availableFloors.has(floor))
     setEditingMatrixId(matrixId)
     setModalMatrixName(target.name)
