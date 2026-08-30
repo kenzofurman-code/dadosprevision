@@ -1467,6 +1467,8 @@ function App() {
 
   const milestoneDashboard = useMemo(() => {
     const query = search.trim().toLowerCase()
+    const milestoneName = (milestone: DataRecord) =>
+      String(milestone.nome || '').trim() || 'Marco sem nome'
     const milestones = gestaoMilestones
       .filter((milestone) => {
         if (!query) return true
@@ -1501,13 +1503,13 @@ function App() {
     ))
 
     const milestoneNames = Array.from(
-      new Set(milestones.map((milestone) => String(milestone.nome || 'Marco sem nome'))),
+      new Set(milestones.map(milestoneName)),
     ).sort(compareNatural)
     const colorByName = new Map<string, string>()
     const usedColors = new Set<string>()
     milestoneNames.forEach((name, index) => {
       const configuredColor = String(
-        milestones.find((milestone) => String(milestone.nome || 'Marco sem nome') === name)?.cor || '',
+        milestones.find((milestone) => milestoneName(milestone) === name)?.cor || '',
       )
       const normalizedConfiguredColor = configuredColor.toLowerCase()
       const color =
@@ -1530,7 +1532,7 @@ function App() {
       )
       const counts = new Map<string, number>()
       for (const milestone of monthMilestones) {
-        const name = String(milestone.nome || 'Marco sem nome')
+        const name = milestoneName(milestone)
         counts.set(name, (counts.get(name) || 0) + 1)
       }
       return {
@@ -1559,7 +1561,7 @@ function App() {
           datesByMilestone: new Map(),
         })
       }
-      const name = String(milestone.nome || 'Marco sem nome')
+      const name = milestoneName(milestone)
       const dates = projectMap.get(projectId)!.datesByMilestone.get(name) || []
       dates.push(milestone.dateText)
       projectMap.get(projectId)!.datesByMilestone.set(name, dates)
