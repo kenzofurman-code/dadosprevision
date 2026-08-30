@@ -904,25 +904,6 @@ td strong {
   width: 100%;
 }
 
-.gestao-controls-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  background: #ffffff;
-  padding: 14px 18px;
-  border: 1px solid #d8e0de;
-  border-radius: 8px;
-}
-
-.gestao-controls-group {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-}
-
 .gestao-field {
   display: flex;
   align-items: center;
@@ -2066,7 +2047,6 @@ td strong {
   .summary,
   .data-tabs,
   .toolbar,
-  .gestao-controls-bar,
   .gestao-panel-tabs,
   .matrix-manager-bar,
   .pagination,

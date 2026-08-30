@@ -2513,13 +2513,44 @@ function App() {
                   ))}
                 </select>
               </label>
+              {activeView === 'gestao_a_vista' && gestaoPanelTab !== 'milestones' && gestaoGroupOptions.length > 0 && (
+                <label>
+                  <span>Torre / Grupo</span>
+                  <select value={gestaoGroup} onChange={(event) => setGestaoGroup(event.target.value)}>
+                    <option value="all">Todos os grupos ({gestaoGroupOptions.length})</option>
+                    {gestaoGroupOptions.map((group) => (
+                      <option key={group} value={group}>
+                        {group}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {activeView === 'gestao_a_vista' && gestaoPanelTab !== 'milestones' && (
+                <label>
+                  <span>Mês de Referência (M0)</span>
+                  <select value={gestaoMonth} onChange={(event) => setGestaoMonth(event.target.value)}>
+                    {gestaoMonthOptions.map((month) => (
+                      <option key={month} value={month}>
+                        {formatMonthLabel(month)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label className="search-field">
                 <span>Buscar</span>
                 <Search size={16} />
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar nesta página"
+                  placeholder={
+                    activeView === 'gestao_a_vista'
+                      ? gestaoPanelTab === 'milestones'
+                        ? 'Filtrar projeto ou marco'
+                        : 'Filtrar serviço ou pavimento'
+                      : 'Buscar nesta página'
+                  }
                 />
               </label>
             </div>
@@ -2538,64 +2569,6 @@ function App() {
             </div>
           ) : activeView === 'gestao_a_vista' ? (
             <div className="gestao-vista-wrapper">
-              {/* TOP CONTROLS */}
-              <div className="gestao-controls-bar">
-                <div className="gestao-controls-group">
-                  <label className="gestao-field">
-                    <span>Projeto</span>
-                    <select value={selectedProject} onChange={(event) => changeProject(event.target.value)}>
-                      <option value="">Todos os projetos</option>
-                      {projects.map((project) => (
-                        <option key={project.id_prevision} value={project.id_prevision}>
-                          {project.nome_projeto}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  {gestaoPanelTab !== 'milestones' && gestaoGroupOptions.length > 0 && (
-                    <label className="gestao-field">
-                      <span>Torre / Grupo</span>
-                      <select value={gestaoGroup} onChange={(event) => setGestaoGroup(event.target.value)}>
-                        <option value="all">Todos os grupos ({gestaoGroupOptions.length})</option>
-                        {gestaoGroupOptions.map((group) => (
-                          <option key={group} value={group}>
-                            {group}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-
-                  {gestaoPanelTab !== 'milestones' && (
-                    <label className="gestao-field">
-                      <span>Mês de Referência (M0)</span>
-                      <select value={gestaoMonth} onChange={(event) => setGestaoMonth(event.target.value)}>
-                        {gestaoMonthOptions.map((m) => (
-                          <option key={m} value={m}>
-                            {formatMonthLabel(m)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-
-                  <label className="gestao-field search-field">
-                    <span>Buscar</span>
-                    <Search size={14} />
-                    <input
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                      placeholder={
-                        gestaoPanelTab === 'milestones'
-                          ? 'Filtrar projeto ou marco'
-                          : 'Filtrar serviço ou pavimento'
-                      }
-                    />
-                  </label>
-                </div>
-              </div>
-
               {/* PANEL SUB-TABS NAVIGATION & A4 PRINT BAR */}
               <div className="gestao-panel-tabs">
                 <button
