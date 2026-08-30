@@ -2735,12 +2735,7 @@ function App() {
   }
 
   function handlePrint() {
-    if (gestaoPanelTab !== 'matrix') {
-      window.print()
-      return
-    }
-
-    const source = document.querySelector('.matrix-print-source') as HTMLElement | null
+    const source = document.querySelector('.gestao-print-source') as HTMLElement | null
     if (!source) {
       window.print()
       return
@@ -2748,7 +2743,7 @@ function App() {
 
     const printWindow = window.open('', '_blank', 'width=1440,height=900')
     if (!printWindow) {
-      alert('O navegador bloqueou a nova janela. Permita pop-ups para abrir a visualização da Escadinha.')
+      alert('O navegador bloqueou a nova janela. Permita pop-ups para abrir a visualização de impressão.')
       return
     }
 
@@ -2761,7 +2756,7 @@ function App() {
         <head>
           <meta charset="UTF-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>Escadinha — Visualização de impressão</title>
+          <title>Gestão à Vista — Visualização de impressão</title>
           ${styles}
           <style>
             :root { color-scheme: light; }
@@ -2790,7 +2785,43 @@ function App() {
             .print-preview-actions button { border: 1px solid #b8ccc6; border-radius: 6px; padding: 7px 11px; background: #ffffff; color: #173f38; font-size: 11px; font-weight: 700; cursor: pointer; }
             .print-preview-actions button.primary { border-color: #173f38; background: #173f38; color: #ffffff; }
             .print-preview-content { padding: 20px; overflow: auto; }
-            .print-preview-content .matrix-print-source { width: max-content; min-width: 100%; max-width: none; margin: 0 auto; overflow: visible; }
+            .print-preview-content .gestao-print-source { width: max-content; min-width: 100%; max-width: none; margin: 0 auto; overflow: visible; }
+            .gestao-print-source .gestao-panel-data-filter,
+            .gestao-print-source .gestao-service-drag svg,
+            .gestao-print-source .panel5-service-column,
+            .gestao-print-source .panel5-table-actions button { display: none !important; }
+            .gestao-print-source .a4-sheet-body,
+            .gestao-print-source .panel5-table-scroll { overflow: visible; }
+            .gestao-print-source .panel5-export-grid { display: block; }
+            .gestao-print-source .gestao-table,
+            .gestao-print-source .panel5-export-table { table-layout: fixed; width: max-content; min-width: 100%; }
+            .gestao-print-source .gestao-table th:not(.service-col),
+            .gestao-print-source .gestao-table td:not(.service-col),
+            .gestao-print-source .panel5-export-table th:not(:first-child),
+            .gestao-print-source .panel5-export-table td:not(:first-child) {
+              width: var(--print-column-width, 110px);
+              min-width: var(--print-column-width, 110px);
+              max-width: var(--print-column-width, 110px);
+              box-sizing: border-box;
+            }
+            .gestao-print-source .gestao-table th.service-col,
+            .gestao-print-source .gestao-table td.service-col,
+            .gestao-print-source .panel5-export-table th:first-child,
+            .gestao-print-source .panel5-export-table td:first-child {
+              width: var(--print-first-column-width, 260px);
+              min-width: var(--print-first-column-width, 260px);
+              max-width: var(--print-first-column-width, 260px);
+              box-sizing: border-box;
+              white-space: normal;
+              overflow-wrap: anywhere;
+            }
+            .gestao-print-source .gestao-table td.service-col .gestao-service-drag {
+              display: flex;
+              min-width: 0;
+              max-width: 100%;
+              white-space: normal;
+              overflow-wrap: anywhere;
+            }
             .matrix-print-source .gestao-matrix-container { max-height: none; overflow: visible; }
             .matrix-print-source .gestao-matrix-table { table-layout: fixed; width: max-content; min-width: 100%; }
             .matrix-print-source .gestao-matrix-table th:not(.matrix-service-th),
@@ -2822,18 +2853,20 @@ function App() {
               html, body { background: #ffffff !important; }
               .print-preview-toolbar { display: none !important; }
               .print-preview-content { padding: 0 !important; overflow: visible !important; }
-              .print-preview-content .matrix-print-source { width: max-content !important; min-width: 100% !important; box-shadow: none !important; border: 1px solid #888888 !important; }
+              .print-preview-content .gestao-print-source { width: max-content !important; min-width: 100% !important; box-shadow: none !important; border: 1px solid #888888 !important; }
+              .gestao-print-source .gestao-table,
+              .gestao-print-source .panel5-export-table { width: max-content !important; min-width: 100% !important; }
               .matrix-print-source .gestao-matrix-container { overflow: visible !important; max-height: none !important; }
             }
           </style>
         </head>
         <body>
           <div class="print-preview-toolbar">
-            <strong>Escadinha · Visualização de impressão</strong>
+            <strong>Gestão à Vista · Visualização de impressão</strong>
             <div class="print-preview-controls">
               <label title="Ajustar zoom da impressão"><span class="print-preview-control-label">Zoom</span><input id="zoom-input" aria-label="Zoom da impressão" type="range" min="40" max="140" step="5" value="100" /></label>
-              <label title="Ajustar largura das colunas de pavimentos"><span class="print-preview-control-label">Colunas</span><input id="column-input" aria-label="Largura das colunas de pavimentos" type="range" min="60" max="220" step="5" value="110" /></label>
-              <label title="Ajustar largura da coluna Serviço/Pavimento"><span class="print-preview-control-label">Serviço/Pavimento</span><input id="service-input" aria-label="Largura da coluna Serviço/Pavimento" type="range" min="160" max="520" step="10" value="260" /></label>
+              <label title="Ajustar largura das colunas"><span class="print-preview-control-label">Colunas</span><input id="column-input" aria-label="Largura das colunas" type="range" min="60" max="220" step="5" value="110" /></label>
+              <label title="Ajustar largura da primeira coluna"><span class="print-preview-control-label">Primeira coluna</span><input id="service-input" aria-label="Largura da primeira coluna" type="range" min="160" max="520" step="10" value="260" /></label>
             </div>
             <div class="print-preview-actions">
               <button id="close-preview" type="button">Fechar janela</button>
@@ -2845,7 +2878,7 @@ function App() {
       </html>`)
     printWindow.document.close()
 
-    const printSource = printWindow.document.querySelector('.matrix-print-source') as HTMLElement | null
+    const printSource = printWindow.document.querySelector('.gestao-print-source') as HTMLElement | null
     const zoomInput = printWindow.document.getElementById('zoom-input') as HTMLInputElement | null
     const columnInput = printWindow.document.getElementById('column-input') as HTMLInputElement | null
     const serviceInput = printWindow.document.getElementById('service-input') as HTMLInputElement | null
@@ -2853,6 +2886,8 @@ function App() {
       const zoom = Number(zoomInput?.value || 100)
       const width = Number(columnInput?.value || 110)
       const serviceWidth = Number(serviceInput?.value || 260)
+      printSource?.style.setProperty('--print-column-width', `${width}px`)
+      printSource?.style.setProperty('--print-first-column-width', `${serviceWidth}px`)
       printSource?.style.setProperty('--matrix-column-width', `${width}px`)
       printSource?.style.setProperty('--matrix-service-column-width', `${serviceWidth}px`)
       if (printSource) printSource.style.zoom = String(zoom / 100)
@@ -3369,7 +3404,7 @@ function App() {
                     type="button"
                     className="matrix-btn btn-primary"
                     onClick={handlePrint}
-                    title={gestaoPanelTab === 'matrix' ? 'Abrir a Escadinha em uma nova janela para impressão' : 'Imprimir ou Salvar em PDF'}
+                    title="Abrir o painel ativo em uma nova janela para impressão"
                   >
                     <Printer size={13} />
                     <span>Imprimir / PDF</span>
@@ -3529,7 +3564,7 @@ function App() {
               {/* ---------------------------------------------------- */}
               {gestaoPanelTab === 'panel1' && (
                 <div className={a4LayoutMode ? 'a4-landscape-container' : ''}>
-                  <div className={a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-card'}>
+                  <div className={`${a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-card'} gestao-print-source`}>
                     <div className="a4-sheet-header">
                       <div className="a4-sheet-brand">
                         <h3 className="a4-sheet-title">PAINEL 1: ANDAMENTO MESES ANTERIORES</h3>
@@ -3680,7 +3715,7 @@ function App() {
               {/* ---------------------------------------------------- */}
               {gestaoPanelTab === 'panel2' && (
                 <div className={a4LayoutMode ? 'a4-landscape-container' : ''}>
-                  <div className={a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-card'}>
+                  <div className={`${a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-card'} gestao-print-source`}>
                     <div className="a4-sheet-header">
                       <div className="a4-sheet-brand">
                         <h3 className="a4-sheet-title">PAINEL 2: ATIVIDADES PREVISTAS PARA O MÊS VIGENTE</h3>
@@ -3786,7 +3821,7 @@ function App() {
               {/* ---------------------------------------------------- */}
               {gestaoPanelTab === 'panel3' && (
                 <div className={a4LayoutMode ? 'a4-landscape-container' : ''}>
-                  <div className={a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-card'}>
+                  <div className={`${a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-card'} gestao-print-source`}>
                     <div className="a4-sheet-header">
                       <div className="a4-sheet-brand">
                         <h3 className="a4-sheet-title">PAINEL 3: PROJEÇÃO PRÓXIMOS MESES</h3>
@@ -3948,7 +3983,7 @@ function App() {
                     </div>
                   </div>
 
-                  <div className={`${a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-matrix-card'} matrix-print-source`}>
+                  <div className={`${a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-matrix-card'} gestao-print-source matrix-print-source`}>
                     <div className="a4-sheet-header">
                       <div className="a4-sheet-brand">
                         <h3 className="a4-sheet-title">
@@ -4073,7 +4108,7 @@ function App() {
               {/* ---------------------------------------------------- */}
               {gestaoPanelTab === 'panel5' && (
                 <div className={a4LayoutMode ? 'a4-landscape-container' : ''}>
-                  <div className={a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-card'}>
+                  <div className={`${a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-card'} gestao-print-source`}>
                     <div className="a4-sheet-header">
                       <div className="a4-sheet-brand">
                         <h3 className="a4-sheet-title">PAINEL 5: TABELA DE SERVIÇOS E PAVIMENTOS</h3>
