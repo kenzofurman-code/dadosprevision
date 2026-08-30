@@ -15,7 +15,6 @@ import {
   Flag,
   GripVertical,
   History,
-  Layers,
   Layers3,
   ListChecks,
   Maximize2,
@@ -909,7 +908,7 @@ function App() {
   const [cffDenseMode, setCffDenseMode] = useState(false)
   const [gestaoMonth, setGestaoMonth] = useState<string>('')
   const [gestaoGroup, setGestaoGroup] = useState<string>('all')
-  const [gestaoPanelTab, setGestaoPanelTab] = useState<GestaoPanelTab>('overview')
+  const [gestaoPanelTab, setGestaoPanelTab] = useState<GestaoPanelTab>('panel1')
   const [a4LayoutMode, setA4LayoutMode] = useState<boolean>(true)
   const [gestaoPanelPreferences, setGestaoPanelPreferences] = useState<GestaoPanelPreferences>(() => {
     try {
@@ -2571,16 +2570,6 @@ function App() {
             <div className="gestao-vista-wrapper">
               {/* PANEL SUB-TABS NAVIGATION & A4 PRINT BAR */}
               <div className="gestao-panel-tabs">
-                <button
-                  type="button"
-                  className={`gestao-panel-tab-btn ${gestaoPanelTab === 'overview' ? 'active' : ''}`}
-                  onClick={() => setGestaoPanelTab('overview')}
-                >
-                  <Layers size={14} />
-                  <span>Visão Geral</span>
-                  <span className="badge-pill">4 Painéis</span>
-                </button>
-
                 <button
                   type="button"
                   className={`gestao-panel-tab-btn ${gestaoPanelTab === 'panel1' ? 'active' : ''}`}
