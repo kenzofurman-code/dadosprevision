@@ -3009,12 +3009,12 @@ function App() {
                     </div>
 
                     <div className="a4-sheet-body">
-                      <table className="gestao-table">
+                      <table className="gestao-table gestao-panel2-table">
                         <thead>
                           <tr>
                             <th className="service-col" style={{ width: '280px' }}>Atividade / Serviço</th>
                             <th style={{ width: '110px' }}>Qtde Prevista</th>
-                            <th>Pavimentos do Mês e Atividades Atrasadas</th>
+                            <th>PAVIMENTOS PREVISTOS NO MÊS</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3044,18 +3044,20 @@ function App() {
                                     </span>
                                   )}
                                 </td>
-                                <td style={{ textAlign: 'left' }}>
+                                <td className="gestao-panel2-pavements">
                                   {row.pavimentos.length === 0 ? (
                                     <span style={{ color: '#94a3b8' }}>Nenhum pavimento pendente</span>
                                   ) : (
-                                    row.pavimentos.map((pav) => (
-                                      <span
-                                        key={pav.name}
-                                        className={`gestao-pav-tag ${pav.isOverdue ? 'gestao-pav-tag-overdue' : ''}`}
-                                      >
-                                        {pav.name}{pav.isOverdue ? ' — ATRASADA' : ''}
-                                      </span>
-                                    ))
+                                    <div className="gestao-pav-list">
+                                      {row.pavimentos.map((pav) => (
+                                        <span
+                                          key={pav.name}
+                                          className={`gestao-pav-tag ${pav.isOverdue ? 'gestao-pav-tag-overdue' : ''}`}
+                                        >
+                                          {pav.name}{pav.isOverdue ? ' — ATRASADA' : ''}
+                                        </span>
+                                      ))}
+                                    </div>
                                   )}
                                 </td>
                               </tr>
@@ -3469,12 +3471,12 @@ function App() {
                       </span>
                     </div>
                     <div className="gestao-card-body">
-                      <table className="gestao-table">
+                      <table className="gestao-table gestao-panel2-table">
                         <thead>
                           <tr>
                             <th className="service-col">Atividade / Serviço</th>
                             <th style={{ width: '90px' }}>Qtde Prevista</th>
-                            <th>Pavimentos do Mês e Atrasados</th>
+                            <th>PAVIMENTOS PREVISTOS NO MÊS</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3496,18 +3498,20 @@ function App() {
                                     </span>
                                   )}
                                 </td>
-                                <td style={{ textAlign: 'left' }}>
+                                <td className="gestao-panel2-pavements">
                                   {row.pavimentos.length === 0 ? (
                                     <span style={{ color: '#94a3b8' }}>-</span>
                                   ) : (
-                                    row.pavimentos.map((pav) => (
-                                      <span
-                                        key={pav.name}
-                                        className={`gestao-pav-tag ${pav.isOverdue ? 'gestao-pav-tag-overdue' : ''}`}
-                                      >
-                                        {pav.name}{pav.isOverdue ? ' — ATRASADA' : ''}
-                                      </span>
-                                    ))
+                                    <div className="gestao-pav-list">
+                                      {row.pavimentos.map((pav) => (
+                                        <span
+                                          key={pav.name}
+                                          className={`gestao-pav-tag ${pav.isOverdue ? 'gestao-pav-tag-overdue' : ''}`}
+                                        >
+                                          {pav.name}{pav.isOverdue ? ' — ATRASADA' : ''}
+                                        </span>
+                                      ))}
+                                    </div>
                                   )}
                                 </td>
                               </tr>

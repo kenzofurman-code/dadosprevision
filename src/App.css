@@ -1083,6 +1083,36 @@ td strong {
   border-color: #fecaca;
 }
 
+.gestao-panel2-table {
+  table-layout: fixed;
+}
+
+.gestao-panel2-table th {
+  white-space: normal;
+}
+
+.gestao-panel2-pavements {
+  min-width: 0;
+  text-align: left !important;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.gestao-pav-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 3px 4px;
+  min-width: 0;
+}
+
+.gestao-panel2-pavements .gestao-pav-tag {
+  max-width: 100%;
+  margin: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .gestao-overdue-count {
   display: block;
   margin-top: 2px;
