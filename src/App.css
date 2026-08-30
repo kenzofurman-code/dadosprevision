@@ -1766,6 +1766,45 @@ td strong {
   line-height: 1.5;
 }
 
+.settings-classification-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 4px;
+  border: 1px solid #d8e4e0;
+  border-radius: 8px;
+  background: #f1f6f4;
+}
+
+.settings-classification-tabs button {
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #52635f;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.settings-classification-tabs button.active {
+  background: #174f46;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(23, 79, 70, 0.2);
+}
+
+.floor-order-list {
+  max-height: 54vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.settings-floor-search {
+  margin-bottom: 10px;
+}
+
 .group-order-list {
   display: flex;
   flex-direction: column;
@@ -1784,6 +1823,11 @@ td strong {
   background: #f9fbfa;
   color: #263b37;
   font-size: 12px;
+  cursor: grab;
+}
+
+.group-order-row:active {
+  cursor: grabbing;
 }
 
 .group-order-row > svg {

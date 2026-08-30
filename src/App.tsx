@@ -958,8 +958,23 @@ function App() {
       return {}
     }
   })
+  const [floorOrders, setFloorOrders] = useState<Record<string, string[]>>(() => {
+    try {
+      const saved = localStorage.getItem('dadosprevision_gestao_floor_orders_v1')
+      return saved ? JSON.parse(saved) : {}
+    } catch {
+      return {}
+    }
+  })
   const [isGroupOrderModalOpen, setIsGroupOrderModalOpen] = useState(false)
+  const [settingsClassificationTab, setSettingsClassificationTab] = useState<'groups' | 'floors'>('groups')
   const [groupOrderDraft, setGroupOrderDraft] = useState<string[]>([])
+  const [floorOrderDraft, setFloorOrderDraft] = useState<string[]>([])
+  const [floorOrderSearch, setFloorOrderSearch] = useState('')
+  const [draggedClassificationItem, setDraggedClassificationItem] = useState<{
+    type: 'groups' | 'floors'
+    index: number
+  } | null>(null)
   const [gestaoPanelPreferences, setGestaoPanelPreferences] = useState<GestaoPanelPreferences>(() => {
     try {
       const saved = localStorage.getItem('dadosprevision_gestao_panel_preferences_v1')
@@ -1511,6 +1526,14 @@ function App() {
   }, [groupOrders])
 
   useEffect(() => {
+    try {
+      localStorage.setItem('dadosprevision_gestao_floor_orders_v1', JSON.stringify(floorOrders))
+    } catch (e) {
+      console.error('Erro ao salvar a classificação dos pavimentos no localStorage:', e)
+    }
+  }, [floorOrders])
+
+  useEffect(() => {
     if (gestaoGroup !== 'all' && !currentGroupOrder.includes(gestaoGroup)) {
       setGestaoGroup('all')
     }
@@ -1553,6 +1576,15 @@ function App() {
       ),
     }
   }, [currentGroupOrder, gestaoActivities])
+
+  const currentFloorOrder = useMemo(() => {
+    const availableFloors = gestaoCatalog.floors.map((floor) => floor.name)
+    const savedOrder = floorOrders[groupOrderKey] || []
+    return [
+      ...savedOrder.filter((floor) => availableFloors.includes(floor)),
+      ...availableFloors.filter((floor) => !savedOrder.includes(floor)),
+    ]
+  }, [floorOrders, gestaoCatalog.floors, groupOrderKey])
 
   const panel5ServiceOptions = useMemo(
     () => gestaoCatalog.services.filter((service) =>
@@ -1987,6 +2019,7 @@ function App() {
 
     const panel2Rows = services.map((s) => {
       const activePavs = new Map<string, boolean>()
+      const floorOrderIndex = new Map(currentFloorOrder.map((floor, index) => [floor, index]))
       let qtdePrevista = 0
       let qtdeAtrasada = 0
       for (const act of s.activities) {
@@ -2012,7 +2045,12 @@ function App() {
         groupRank: s.groupRank,
         qtdePrevista,
         qtdeAtrasada,
-        pavimentos: Array.from(activePavs, ([name, isOverdue]) => ({ name, isOverdue })),
+        pavimentos: Array.from(activePavs, ([name, isOverdue]) => ({ name, isOverdue })).sort(
+          (a, b) =>
+            (floorOrderIndex.get(a.name) ?? Number.MAX_SAFE_INTEGER) -
+              (floorOrderIndex.get(b.name) ?? Number.MAX_SAFE_INTEGER) ||
+            compareNatural(a.name, b.name),
+        ),
       }
     })
 
@@ -2044,7 +2082,7 @@ function App() {
       panel3Rows,
       matrixMap,
     }
-  }, [currentGroupOrder, gestaoFilteredActivities, gestaoMonth])
+  }, [currentFloorOrder, currentGroupOrder, gestaoFilteredActivities, gestaoMonth])
 
   const gestaoPanelPreferenceKey = selectedProject || '__all_projects__'
   const currentGestaoPanelPreferences = useMemo(() => {
@@ -2185,6 +2223,9 @@ function App() {
 
   function handleOpenGroupOrderModal() {
     setGroupOrderDraft(currentGroupOrder)
+    setFloorOrderDraft(currentFloorOrder)
+    setFloorOrderSearch('')
+    setSettingsClassificationTab('groups')
     setIsGroupOrderModalOpen(true)
   }
 
@@ -2199,8 +2240,35 @@ function App() {
     })
   }
 
+  function handleMoveFloor(index: number, direction: 'up' | 'down') {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= floorOrderDraft.length) return
+    setFloorOrderDraft((previous) => {
+      const next = [...previous]
+      const [floor] = next.splice(index, 1)
+      next.splice(targetIndex, 0, floor)
+      return next
+    })
+  }
+
+  function handleClassificationDrop(type: 'groups' | 'floors', targetIndex: number) {
+    if (!draggedClassificationItem || draggedClassificationItem.type !== type) return
+    const sourceIndex = draggedClassificationItem.index
+    setDraggedClassificationItem(null)
+    if (sourceIndex === targetIndex) return
+    const reorder = (previous: string[]) => {
+      const next = [...previous]
+      const [item] = next.splice(sourceIndex, 1)
+      next.splice(targetIndex, 0, item)
+      return next
+    }
+    if (type === 'groups') setGroupOrderDraft(reorder)
+    else setFloorOrderDraft(reorder)
+  }
+
   function handleSaveGroupOrder() {
     setGroupOrders((previous) => ({ ...previous, [groupOrderKey]: groupOrderDraft }))
+    setFloorOrders((previous) => ({ ...previous, [groupOrderKey]: floorOrderDraft }))
     setIsGroupOrderModalOpen(false)
   }
 
@@ -4265,7 +4333,7 @@ function App() {
                   <div className="matrix-modal-header">
                     <div>
                       <h3>Configurações da Gestão à Vista</h3>
-                      <p>Classificação por Grupo</p>
+                      <p>Classificação de grupos e pavimentos</p>
                     </div>
                     <button
                       type="button"
@@ -4277,47 +4345,114 @@ function App() {
                     </button>
                   </div>
                   <div className="group-order-body">
-                    <p>
-                      Defina a prioridade dos grupos de{' '}
-                      <strong>{projects.find((project) => project.id_prevision === selectedProject)?.nome_projeto || 'Todas as Obras'}</strong>.
-                      Esta ordem será aplicada a todos os painéis.
-                    </p>
-                    <div className="group-order-list">
-                      {groupOrderDraft.map((group, index) => (
-                        <div key={group} className="group-order-row">
-                          <span className="group-order-position">{index + 1}</span>
-                          <GripVertical size={15} />
-                          <strong>{group}</strong>
-                          <div className="matrix-item-order-btns">
-                            <button
-                              type="button"
-                              className="matrix-order-btn"
-                              disabled={index === 0}
-                              onClick={() => handleMoveGroup(index, 'up')}
-                              title="Mover grupo para cima"
-                            >
-                              <ArrowUp size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              className="matrix-order-btn"
-                              disabled={index === groupOrderDraft.length - 1}
-                              onClick={() => handleMoveGroup(index, 'down')}
-                              title="Mover grupo para baixo"
-                            >
-                              <ArrowDown size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                    <div className="settings-classification-tabs">
+                      <button
+                        type="button"
+                        className={settingsClassificationTab === 'groups' ? 'active' : ''}
+                        onClick={() => setSettingsClassificationTab('groups')}
+                      >
+                        Classificação por Grupo
+                      </button>
+                      <button
+                        type="button"
+                        className={settingsClassificationTab === 'floors' ? 'active' : ''}
+                        onClick={() => setSettingsClassificationTab('floors')}
+                      >
+                        Classificação de Pavimentos
+                      </button>
                     </div>
+
+                    {settingsClassificationTab === 'groups' ? (
+                      <>
+                        <p>
+                          Defina a prioridade dos grupos de{' '}
+                          <strong>{projects.find((project) => project.id_prevision === selectedProject)?.nome_projeto || 'Todas as Obras'}</strong>.
+                          Esta ordem será aplicada a todos os painéis.
+                        </p>
+                        <div className="group-order-list">
+                          {groupOrderDraft.map((group, index) => (
+                            <div
+                              key={group}
+                              className="group-order-row"
+                              draggable
+                              onDragStart={() => setDraggedClassificationItem({ type: 'groups', index })}
+                              onDragEnd={() => setDraggedClassificationItem(null)}
+                              onDragOver={(event) => event.preventDefault()}
+                              onDrop={() => handleClassificationDrop('groups', index)}
+                            >
+                              <span className="group-order-position">{index + 1}</span>
+                              <GripVertical size={15} />
+                              <strong>{group}</strong>
+                              <div className="matrix-item-order-btns">
+                                <button type="button" className="matrix-order-btn" disabled={index === 0} onClick={() => handleMoveGroup(index, 'up')} title="Mover grupo para cima">
+                                  <ArrowUp size={14} />
+                                </button>
+                                <button type="button" className="matrix-order-btn" disabled={index === groupOrderDraft.length - 1} onClick={() => handleMoveGroup(index, 'down')} title="Mover grupo para baixo">
+                                  <ArrowDown size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p>
+                          Defina a sequência dos pavimentos de{' '}
+                          <strong>{projects.find((project) => project.id_prevision === selectedProject)?.nome_projeto || 'Todas as Obras'}</strong>.
+                          Esta ordem será usada na coluna “Pavimentos previstos no mês” do Painel 2.
+                        </p>
+                        <label className="search-field settings-floor-search">
+                          <Search size={13} />
+                          <input
+                            value={floorOrderSearch}
+                            onChange={(event) => setFloorOrderSearch(event.target.value)}
+                            placeholder="Buscar pavimento..."
+                          />
+                        </label>
+                        <div className="group-order-list floor-order-list">
+                          {floorOrderDraft
+                            .map((floor, index) => ({ floor, index }))
+                            .filter(({ floor }) =>
+                              !floorOrderSearch.trim() ||
+                              floor.toLocaleLowerCase('pt-BR').includes(floorOrderSearch.trim().toLocaleLowerCase('pt-BR')),
+                            )
+                            .map(({ floor, index }) => (
+                            <div
+                              key={floor}
+                              className="group-order-row"
+                              draggable
+                              onDragStart={() => setDraggedClassificationItem({ type: 'floors', index })}
+                              onDragEnd={() => setDraggedClassificationItem(null)}
+                              onDragOver={(event) => event.preventDefault()}
+                              onDrop={() => handleClassificationDrop('floors', index)}
+                            >
+                              <span className="group-order-position">{index + 1}</span>
+                              <GripVertical size={15} />
+                              <strong>{floor}</strong>
+                              <div className="matrix-item-order-btns">
+                                <button type="button" className="matrix-order-btn" disabled={index === 0} onClick={() => handleMoveFloor(index, 'up')} title="Mover pavimento para cima">
+                                  <ArrowUp size={14} />
+                                </button>
+                                <button type="button" className="matrix-order-btn" disabled={index === floorOrderDraft.length - 1} onClick={() => handleMoveFloor(index, 'down')} title="Mover pavimento para baixo">
+                                  <ArrowDown size={14} />
+                                </button>
+                              </div>
+                            </div>
+                            ))}
+                        </div>
+                      </>
+                    )}
+                    {settingsClassificationTab === 'floors' && floorOrderDraft.length === 0 && (
+                      <div className="state-message">Nenhum pavimento disponível para este projeto.</div>
+                    )}
                   </div>
                   <div className="matrix-modal-footer">
                     <button type="button" className="matrix-btn" onClick={() => setIsGroupOrderModalOpen(false)}>
                       Cancelar
                     </button>
                     <button type="button" className="matrix-btn btn-primary" onClick={handleSaveGroupOrder}>
-                      Salvar classificação
+                      Salvar classificações
                     </button>
                   </div>
                 </div>
