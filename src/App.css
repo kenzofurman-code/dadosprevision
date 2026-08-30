@@ -59,6 +59,22 @@
   gap: 8px;
 }
 
+.header-view-button {
+  border-color: #cfd8d5;
+  background: #ffffff;
+  color: #263b37;
+}
+
+.header-view-button:hover:not(:disabled) {
+  background: #edf3f1;
+}
+
+.header-view-button.active {
+  border-color: #173f38;
+  background: #173f38;
+  color: #ffffff;
+}
+
 button {
   display: inline-flex;
   min-height: 38px;

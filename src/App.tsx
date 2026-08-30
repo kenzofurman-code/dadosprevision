@@ -894,7 +894,8 @@ function App() {
   const [projects, setProjects] = useState<Project[]>([])
   const [records, setRecords] = useState<DataRecord[]>([])
   const [gestaoMilestones, setGestaoMilestones] = useState<DataRecord[]>([])
-  const [activeView, setActiveView] = useState<DataView>('projects')
+  const [activeView, setActiveView] = useState<DataView>('gestao_a_vista')
+  const lastDataView = useRef<Exclude<DataView, 'gestao_a_vista'>>('projects')
   const [activityMode, setActivityMode] = useState<ActivityMode>('planning')
   const [budgetMode, setBudgetMode] = useState<BudgetMode>('reports')
   const [dashboardMode, setDashboardMode] = useState<DashboardMode>('general')
@@ -2177,6 +2178,7 @@ function App() {
           : columns[activeView]
 
   function changeView(view: DataView) {
+    if (view !== 'gestao_a_vista') lastDataView.current = view
     setActiveView(view)
     setPage(0)
     setSearch('')
@@ -2208,6 +2210,22 @@ function App() {
           <button className="secondary-button" type="button" onClick={reload} disabled={loading}>
             <RefreshCw size={16} className={loading ? 'spin' : ''} />
             Recarregar
+          </button>
+          <button
+            className={`header-view-button ${activeView === 'gestao_a_vista' ? 'active' : ''}`}
+            type="button"
+            onClick={() => changeView('gestao_a_vista')}
+          >
+            <Presentation size={16} />
+            Gestão à Vista
+          </button>
+          <button
+            className={`header-view-button ${activeView !== 'gestao_a_vista' ? 'active' : ''}`}
+            type="button"
+            onClick={() => changeView(lastDataView.current)}
+          >
+            <Database size={16} />
+            Dados Prevision
           </button>
           <button type="button" onClick={synchronize} disabled={synchronizing}>
             <Database size={16} />
@@ -2243,23 +2261,27 @@ function App() {
         </div>
       </section>
 
-      <nav className="data-tabs" aria-label="Conjuntos de dados">
-        {tabs.map((tab) => {
-          const Icon = tab.icon
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              className={activeView === tab.key ? 'active' : ''}
-              onClick={() => changeView(tab.key)}
-            >
-              <Icon size={16} />
-              <span>{tab.label}</span>
-              <small>{integerFormatter.format(Number(tabTotals[tab.key]) || 0)}</small>
-            </button>
-          )
-        })}
-      </nav>
+      {activeView !== 'gestao_a_vista' && (
+        <nav className="data-tabs" aria-label="Dados Prevision">
+          {tabs
+            .filter((tab) => tab.key !== 'gestao_a_vista')
+            .map((tab) => {
+              const Icon = tab.icon
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className={activeView === tab.key ? 'active' : ''}
+                  onClick={() => changeView(tab.key)}
+                >
+                  <Icon size={16} />
+                  <span>{tab.label}</span>
+                  <small>{integerFormatter.format(Number(tabTotals[tab.key]) || 0)}</small>
+                </button>
+              )
+            })}
+        </nav>
+      )}
 
       <section className="workspace">
         <div className="toolbar">
