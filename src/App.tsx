@@ -50,7 +50,7 @@ type DataView =
   | 'dashboard'
   | 'gestao_a_vista'
 
-type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix' | 'milestones'
+type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix' | 'panel5' | 'milestones'
 type GestaoTablePanel = 'panel1' | 'panel2' | 'panel3'
 type ReorderableGestaoPanel = GestaoTablePanel | 'panel4'
 
@@ -917,6 +917,7 @@ function App() {
   const [gestaoMonth, setGestaoMonth] = useState<string>('')
   const [gestaoGroup, setGestaoGroup] = useState<string>('all')
   const [gestaoPanelTab, setGestaoPanelTab] = useState<GestaoPanelTab>('panel1')
+  const [panel5Service, setPanel5Service] = useState('')
   const [a4LayoutMode, setA4LayoutMode] = useState<boolean>(true)
   const [groupOrders, setGroupOrders] = useState<Record<string, string[]>>(() => {
     try {
@@ -1513,6 +1514,72 @@ function App() {
       ),
     }
   }, [currentGroupOrder, gestaoActivities])
+
+  const panel5ServiceOptions = useMemo(
+    () => gestaoCatalog.services.filter((service) =>
+      gestaoGroup === 'all' ||
+      service.activities.some((activity) => activityGroupName(activity) === gestaoGroup),
+    ),
+    [gestaoCatalog.services, gestaoGroup],
+  )
+
+  useEffect(() => {
+    if (
+      panel5ServiceOptions.length > 0 &&
+      !panel5ServiceOptions.some((service) => service.name === panel5Service)
+    ) {
+      setPanel5Service(panel5ServiceOptions[0].name)
+    } else if (panel5ServiceOptions.length === 0 && panel5Service) {
+      setPanel5Service('')
+    }
+  }, [panel5Service, panel5ServiceOptions])
+
+  const panel5Rows = useMemo(() => {
+    if (!panel5Service) return []
+    const groupIndex = new Map(currentGroupOrder.map((group, index) => [group, index]))
+    const query = search.trim().toLocaleLowerCase('pt-BR')
+    return gestaoActivities
+      .filter((activity) => {
+        if (String(activity.servico_nome || '-') !== panel5Service) return false
+        if (gestaoGroup !== 'all' && activityGroupName(activity) !== gestaoGroup) return false
+        if (!query) return true
+        return `${activity.servico_nome || ''} ${activity.pavimento_nome || ''}`
+          .toLocaleLowerCase('pt-BR')
+          .includes(query)
+      })
+      .map((activity, index) => {
+        const service = String(activity.servico_nome || '-')
+        const floor = String(activity.pavimento_nome || '-')
+        const explicitDuration =
+          activity.duracao_dias === null || activity.duracao_dias === undefined || activity.duracao_dias === ''
+            ? Number.NaN
+            : Number(activity.duracao_dias)
+        const start = activity.data_inicio ? new Date(activity.data_inicio) : null
+        const end = activity.data_fim ? new Date(activity.data_fim) : null
+        const calculatedDuration =
+          start && end && !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())
+            ? Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1)
+            : null
+        return {
+          key: String(activity.firestore_id || activity.id_prevision || `${service}-${floor}-${index}`),
+          service,
+          floor,
+          serviceFloor: `${service} - ${floor}`,
+          duration: Number.isFinite(explicitDuration) ? explicitDuration : calculatedDuration,
+          startDate: formatDate(activity.data_inicio),
+          endDate: formatDate(activity.data_fim),
+          groupRank: groupIndex.get(activityGroupName(activity)) ?? currentGroupOrder.length,
+          floorPosition: Number(activity.posicao_pavimento) || Number.MAX_SAFE_INTEGER,
+        }
+      })
+      .sort(
+        (a, b) =>
+          a.groupRank - b.groupRank ||
+          a.floorPosition - b.floorPosition ||
+          compareNatural(a.floor, b.floor) ||
+          compareNatural(a.startDate, b.startDate),
+      )
+  }, [currentGroupOrder, gestaoActivities, gestaoGroup, panel5Service, search])
 
   const gestaoMonthOptions = useMemo(() => {
     const months = new Set<string>()
@@ -2438,6 +2505,26 @@ function App() {
     }
   }
 
+  async function handleCopyPanel5Table() {
+    const lines = [
+      ['SERVIÇO + PAVIMENTO', 'DURAÇÃO', 'DATA DE INÍCIO', 'DATA DE TÉRMINO'],
+      ...panel5Rows.map((row) => [
+        row.serviceFloor,
+        row.duration ?? '',
+        row.startDate,
+        row.endDate,
+      ]),
+    ]
+    try {
+      await navigator.clipboard.writeText(lines.map((line) => line.join('\t')).join('\n'))
+      setError('')
+      setMessage(`${panel5Rows.length} linha(s) copiadas. Cole diretamente no Excel.`)
+    } catch {
+      setMessage('')
+      setError('Não foi possível copiar automaticamente. Selecione as células da tabela e copie.')
+    }
+  }
+
   function handlePrint() {
     window.print()
   }
@@ -2923,6 +3010,15 @@ function App() {
                   {projectCustomMatrices.length > 0 && (
                     <span className="badge-pill">{projectCustomMatrices.length + 1} matrizes</span>
                   )}
+                </button>
+
+                <button
+                  type="button"
+                  className={`gestao-panel-tab-btn ${gestaoPanelTab === 'panel5' ? 'active' : ''}`}
+                  onClick={() => setGestaoPanelTab('panel5')}
+                >
+                  <ListChecks size={14} />
+                  <span>Painel 5: Tabela de Serviços</span>
                 </button>
 
                 <div className="gestao-top-actions">
@@ -3626,6 +3722,108 @@ function App() {
                         </span>
                       </div>
                       <span>Linha de Balanço · Dados Prevision</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ---------------------------------------------------- */}
+              {/* SUB-ABA: PAINEL 5 (TABELA PARA EXCEL)                */}
+              {/* ---------------------------------------------------- */}
+              {gestaoPanelTab === 'panel5' && (
+                <div className={a4LayoutMode ? 'a4-landscape-container' : ''}>
+                  <div className={a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-card'}>
+                    <div className="a4-sheet-header">
+                      <div className="a4-sheet-brand">
+                        <h3 className="a4-sheet-title">PAINEL 5: TABELA DE SERVIÇOS E PAVIMENTOS</h3>
+                        <span className="a4-sheet-subtitle">
+                          Selecione um serviço e copie as informações diretamente para o Excel
+                        </span>
+                      </div>
+                      <div className="a4-sheet-meta">
+                        <div className="a4-sheet-meta-item">
+                          <strong>{projects.find((project) => project.id_prevision === selectedProject)?.nome_projeto || 'Todas as Obras'}</strong>
+                          <small>{gestaoGroup !== 'all' ? gestaoGroup : 'Todos os grupos'}</small>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="a4-sheet-body panel5-sheet-body">
+                      <div className="panel5-export-grid">
+                        <aside className="panel5-service-column">
+                          <label htmlFor="panel5-service-select">Serviço</label>
+                          <select
+                            id="panel5-service-select"
+                            value={panel5Service}
+                            onChange={(event) => setPanel5Service(event.target.value)}
+                          >
+                            {panel5ServiceOptions.length === 0 ? (
+                              <option value="">Nenhum serviço disponível</option>
+                            ) : (
+                              panel5ServiceOptions.map((service) => (
+                                <option key={service.name} value={service.name}>
+                                  {service.name}
+                                </option>
+                              ))
+                            )}
+                          </select>
+                          <span>{panel5Rows.length} linha(s) na tabela</span>
+                        </aside>
+
+                        <section className="panel5-table-section">
+                          <div className="panel5-table-actions">
+                            <div>
+                              <strong>Dados para exportação</strong>
+                              <span>Formato tabular compatível com Excel</span>
+                            </div>
+                            <button
+                              type="button"
+                              className="matrix-btn btn-primary"
+                              onClick={handleCopyPanel5Table}
+                              disabled={panel5Rows.length === 0}
+                            >
+                              <Copy size={13} />
+                              Copiar para Excel
+                            </button>
+                          </div>
+
+                          <div className="panel5-table-scroll">
+                            <table className="panel5-export-table">
+                              <thead>
+                                <tr>
+                                  <th>SERVIÇO + PAVIMENTO</th>
+                                  <th>DURAÇÃO</th>
+                                  <th>DATA DE INÍCIO</th>
+                                  <th>DATA DE TÉRMINO</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {panel5Rows.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={4} className="panel5-empty-cell">
+                                      Nenhuma atividade encontrada para o serviço selecionado.
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  panel5Rows.map((row) => (
+                                    <tr key={row.key}>
+                                      <td>{row.serviceFloor}</td>
+                                      <td>{row.duration ?? '-'}</td>
+                                      <td>{row.startDate}</td>
+                                      <td>{row.endDate}</td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </section>
+                      </div>
+                    </div>
+
+                    <div className="a4-sheet-footer">
+                      <span>Use “Copiar para Excel” ou selecione diretamente as células da tabela</span>
+                      <span>Gestão à Vista · Dados Prevision</span>
                     </div>
                   </div>
                 </div>

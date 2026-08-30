@@ -1119,6 +1119,123 @@ td strong {
   white-space: nowrap;
 }
 
+.panel5-sheet-body {
+  overflow-x: hidden;
+}
+
+.panel5-export-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+  min-width: 0;
+}
+
+.panel5-service-column,
+.panel5-table-section {
+  min-width: 0;
+  border: 1px solid #d8e4e0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.panel5-service-column {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 14px;
+}
+
+.panel5-service-column label {
+  color: #173f38;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.panel5-service-column select {
+  width: 100%;
+  min-width: 0;
+}
+
+.panel5-service-column > span {
+  color: #64748b;
+  font-size: 10.5px;
+}
+
+.panel5-table-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #d8e4e0;
+  background: #f7faf9;
+}
+
+.panel5-table-actions > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.panel5-table-actions strong {
+  color: #173f38;
+  font-size: 12px;
+}
+
+.panel5-table-actions span {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.panel5-table-scroll {
+  max-height: 480px;
+  overflow: auto;
+}
+
+.panel5-export-table {
+  width: 100%;
+  min-width: 680px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  user-select: text;
+}
+
+.panel5-export-table th,
+.panel5-export-table td {
+  height: auto;
+  padding: 8px 10px;
+  border: 1px solid #dfe8e5;
+  background: #ffffff;
+  color: #263b37;
+  font-size: 11.5px;
+  white-space: nowrap;
+  user-select: text;
+}
+
+.panel5-export-table th {
+  background: #eaf2ef;
+  color: #173f38;
+  font-size: 10.5px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.panel5-export-table th:first-child {
+  width: 46%;
+}
+
+.panel5-export-table th:nth-child(2) {
+  width: 14%;
+}
+
+.panel5-empty-cell {
+  padding: 28px !important;
+  color: #7b8c88 !important;
+  text-align: center;
+}
+
 .gestao-matrix-card {
   background: #ffffff;
   border: 1px solid #d8e0de;
@@ -2078,6 +2195,15 @@ td strong {
 }
 
 @media (max-width: 760px) {
+  .panel5-export-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .panel5-table-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .matrix-modal-backdrop {
     align-items: stretch;
     padding: 8px;
