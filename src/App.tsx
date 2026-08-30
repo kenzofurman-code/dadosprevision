@@ -2708,7 +2708,111 @@ function App() {
   }
 
   function handlePrint() {
-    window.print()
+    if (gestaoPanelTab !== 'matrix') {
+      window.print()
+      return
+    }
+
+    const source = document.querySelector('.matrix-print-source') as HTMLElement | null
+    if (!source) {
+      window.print()
+      return
+    }
+
+    const printWindow = window.open('', '_blank', 'width=1440,height=900')
+    if (!printWindow) {
+      alert('O navegador bloqueou a nova janela. Permita pop-ups para abrir a visualização da Escadinha.')
+      return
+    }
+
+    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map((node) => node.outerHTML)
+      .join('')
+    printWindow.document.open()
+    printWindow.document.write(`<!doctype html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Escadinha — Visualização de impressão</title>
+          ${styles}
+          <style>
+            :root { color-scheme: light; }
+            html, body { margin: 0; min-height: 100%; background: #f1f5f3; }
+            body { font-family: Arial, sans-serif; color: #173f38; }
+            .print-preview-toolbar {
+              position: sticky;
+              top: 0;
+              z-index: 100;
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 16px;
+              flex-wrap: wrap;
+              padding: 10px 16px;
+              background: #ffffff;
+              border-bottom: 1px solid #cbdcd7;
+              box-shadow: 0 2px 8px rgba(23, 63, 56, 0.1);
+            }
+            .print-preview-toolbar strong { font-size: 14px; }
+            .print-preview-controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+            .print-preview-controls label { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+            .print-preview-controls input[type="range"] { width: 110px; accent-color: #174f46; }
+            .print-preview-actions { display: flex; align-items: center; gap: 7px; }
+            .print-preview-actions button { border: 1px solid #b8ccc6; border-radius: 6px; padding: 7px 11px; background: #ffffff; color: #173f38; font-size: 11px; font-weight: 700; cursor: pointer; }
+            .print-preview-actions button.primary { border-color: #173f38; background: #173f38; color: #ffffff; }
+            .print-preview-content { padding: 20px; overflow: auto; }
+            .print-preview-content .matrix-print-source { width: max-content; min-width: 100%; max-width: none; margin: 0 auto; overflow: visible; }
+            .matrix-print-source .gestao-matrix-container { max-height: none; overflow: visible; }
+            .matrix-print-source .gestao-matrix-table { width: max-content; min-width: 100%; }
+            .matrix-print-source .gestao-matrix-table th:not(.matrix-service-th),
+            .matrix-print-source .gestao-matrix-table td.matrix-cell { width: var(--matrix-column-width, 110px); min-width: var(--matrix-column-width, 110px); }
+            @media print {
+              @page { size: A4 landscape; margin: 6mm; }
+              html, body { background: #ffffff !important; }
+              .print-preview-toolbar { display: none !important; }
+              .print-preview-content { padding: 0 !important; overflow: visible !important; }
+              .print-preview-content .matrix-print-source { width: max-content !important; min-width: 100% !important; box-shadow: none !important; border: 1px solid #888888 !important; }
+              .matrix-print-source .gestao-matrix-container { overflow: visible !important; max-height: none !important; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="print-preview-toolbar">
+            <strong>Escadinha · Visualização de impressão</strong>
+            <div class="print-preview-controls">
+              <label>Zoom <output id="zoom-value">100%</output><input id="zoom-input" type="range" min="60" max="120" step="5" value="100" /></label>
+              <label>Largura das colunas <output id="column-value">110px</output><input id="column-input" type="range" min="70" max="220" step="5" value="110" /></label>
+            </div>
+            <div class="print-preview-actions">
+              <button id="close-preview" type="button">Fechar janela</button>
+              <button id="print-now" class="primary" type="button">Imprimir / PDF</button>
+            </div>
+          </div>
+          <main class="print-preview-content">${source.outerHTML}</main>
+        </body>
+      </html>`)
+    printWindow.document.close()
+
+    const printSource = printWindow.document.querySelector('.matrix-print-source') as HTMLElement | null
+    const zoomInput = printWindow.document.getElementById('zoom-input') as HTMLInputElement | null
+    const columnInput = printWindow.document.getElementById('column-input') as HTMLInputElement | null
+    const zoomValue = printWindow.document.getElementById('zoom-value')
+    const columnValue = printWindow.document.getElementById('column-value')
+    const syncPrintSettings = () => {
+      const zoom = Number(zoomInput?.value || 100)
+      const width = Number(columnInput?.value || 110)
+      printSource?.style.setProperty('--matrix-column-width', `${width}px`)
+      if (printSource) printSource.style.zoom = String(zoom / 100)
+      if (zoomValue) zoomValue.textContent = `${zoom}%`
+      if (columnValue) columnValue.textContent = `${width}px`
+    }
+    zoomInput?.addEventListener('input', syncPrintSettings)
+    columnInput?.addEventListener('input', syncPrintSettings)
+    printWindow.document.getElementById('print-now')?.addEventListener('click', () => printWindow.print())
+    printWindow.document.getElementById('close-preview')?.addEventListener('click', () => printWindow.close())
+    syncPrintSettings()
+    printWindow.focus()
   }
 
   const isMilestoneDashboard = activeView === 'gestao_a_vista' && gestaoPanelTab === 'milestones'
@@ -3214,7 +3318,7 @@ function App() {
                     type="button"
                     className="matrix-btn btn-primary"
                     onClick={handlePrint}
-                    title="Imprimir ou Salvar em PDF (A4 Paisagem)"
+                    title={gestaoPanelTab === 'matrix' ? 'Abrir a Escadinha em uma nova janela para impressão' : 'Imprimir ou Salvar em PDF'}
                   >
                     <Printer size={13} />
                     <span>Imprimir / PDF</span>
@@ -3793,7 +3897,7 @@ function App() {
                     </div>
                   </div>
 
-                  <div className={a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-matrix-card'}>
+                  <div className={`${a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-matrix-card'} matrix-print-source`}>
                     <div className="a4-sheet-header">
                       <div className="a4-sheet-brand">
                         <h3 className="a4-sheet-title">
