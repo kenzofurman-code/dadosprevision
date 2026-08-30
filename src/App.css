@@ -1560,7 +1560,7 @@ td strong {
   border-radius: 10px;
   box-shadow: 0 10px 35px rgba(0, 0, 0, 0.2);
   width: 100%;
-  max-width: 1120px;
+  max-width: 1280px;
   max-height: 92vh;
   display: flex;
   flex-direction: column;
@@ -1581,6 +1581,13 @@ td strong {
   margin: 0;
   font-size: 16px;
   color: #173f38;
+}
+
+.matrix-modal-header p {
+  margin: 2px 0 0;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .matrix-modal-body {
@@ -1607,10 +1614,75 @@ td strong {
 
 .matrix-config-columns {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  grid-template-columns: minmax(190px, 0.72fr) minmax(0, 1.2fr) minmax(0, 1fr);
   gap: 16px;
   min-width: 0;
   width: 100%;
+}
+
+.matrix-groups-section .matrix-items-list {
+  max-height: 342px;
+}
+
+.group-order-modal {
+  width: min(100%, 620px);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #cbd5d2;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.2);
+}
+
+.group-order-body {
+  min-height: 0;
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+
+.group-order-body > p {
+  margin: 0 0 12px;
+  color: #52635f;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.group-order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.group-order-row {
+  display: grid;
+  grid-template-columns: 28px 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 5px 8px;
+  border: 1px solid #e0e9e6;
+  border-radius: 7px;
+  background: #f9fbfa;
+  color: #263b37;
+  font-size: 12px;
+}
+
+.group-order-row > svg {
+  color: #8ba19b;
+}
+
+.group-order-position {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  background: #dfece8;
+  color: #173f38;
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .matrix-config-section {

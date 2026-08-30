@@ -67,18 +67,21 @@ type GestaoPanelPreferences = Record<
 interface GestaoServiceItem {
   name: string
   position: number
+  groupRank: number
   activities: DataRecord[]
 }
 
 interface GestaoFloorItem {
   id: string
   name: string
+  groupRank: number
 }
 
 interface CustomMatrixConfig {
   id: string
   name: string
   projectId: string
+  selectedGroups?: string[]
   selectedServices: string[]
   selectedFloors: string[]
   floorSortOrder?: 'asc' | 'desc'
@@ -227,6 +230,10 @@ function compareNatural(left?: string | number | boolean | null, right?: string 
     numeric: true,
     sensitivity: 'base',
   })
+}
+
+function activityGroupName(activity: DataRecord) {
+  return String(activity.grupo_repeticao || '').trim()
 }
 
 function formatMonthLabel(value?: string | null) {
@@ -911,6 +918,16 @@ function App() {
   const [gestaoGroup, setGestaoGroup] = useState<string>('all')
   const [gestaoPanelTab, setGestaoPanelTab] = useState<GestaoPanelTab>('panel1')
   const [a4LayoutMode, setA4LayoutMode] = useState<boolean>(true)
+  const [groupOrders, setGroupOrders] = useState<Record<string, string[]>>(() => {
+    try {
+      const saved = localStorage.getItem('dadosprevision_gestao_group_orders_v1')
+      return saved ? JSON.parse(saved) : {}
+    } catch {
+      return {}
+    }
+  })
+  const [isGroupOrderModalOpen, setIsGroupOrderModalOpen] = useState(false)
+  const [groupOrderDraft, setGroupOrderDraft] = useState<string[]>([])
   const [gestaoPanelPreferences, setGestaoPanelPreferences] = useState<GestaoPanelPreferences>(() => {
     try {
       const saved = localStorage.getItem('dadosprevision_gestao_panel_preferences_v1')
@@ -936,6 +953,7 @@ function App() {
   const [isMatrixModalOpen, setIsMatrixModalOpen] = useState(false)
   const [editingMatrixId, setEditingMatrixId] = useState<string | null>(null)
   const [modalMatrixName, setModalMatrixName] = useState('')
+  const [modalSelectedGroups, setModalSelectedGroups] = useState<string[]>([])
   const [modalSelectedServices, setModalSelectedServices] = useState<string[]>([])
   const [modalSelectedFloors, setModalSelectedFloors] = useState<string[]>([])
   const [modalFloorSortOrder, setModalFloorSortOrder] = useState<'asc' | 'desc'>('asc')
@@ -952,10 +970,13 @@ function App() {
   const [message, setMessage] = useState('')
   const cffMonthInitialized = useRef(false)
   const cffWeekInitialized = useRef(false)
+  const defaultProjectApplied = useRef(false)
 
   const loadProjects = useCallback(async () => {
     const payload = await fetchJson('/api/projects')
-    setProjects(Array.isArray(payload.projects) ? payload.projects : [])
+    const loadedProjects = Array.isArray(payload.projects) ? payload.projects : []
+    setProjects(loadedProjects)
+    return loadedProjects as Project[]
   }, [])
 
   const loadCurrentView = useCallback(async () => {
@@ -1006,14 +1027,28 @@ function App() {
     try {
       setLoading(true)
       setError('')
-      await loadProjects()
+      const loadedProjects = await loadProjects()
+      if (
+        activeView === 'gestao_a_vista' &&
+        !selectedProject &&
+        !defaultProjectApplied.current
+      ) {
+        defaultProjectApplied.current = true
+        const qoya = loadedProjects.find(
+          (project) => String(project.nome_projeto || '').trim().toLocaleUpperCase('pt-BR') === 'QOYA',
+        )
+        if (qoya?.id_prevision) {
+          setSelectedProject(String(qoya.id_prevision))
+          return
+        }
+      }
       await loadCurrentView()
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Erro ao carregar os dados.')
     } finally {
       setLoading(false)
     }
-  }, [loadCurrentView, loadProjects])
+  }, [activeView, loadCurrentView, loadProjects, selectedProject])
 
   useEffect(() => {
     reload()
@@ -1412,10 +1447,72 @@ function App() {
   const gestaoGroupOptions = useMemo(() => {
     const groups = new Set<string>()
     for (const act of gestaoActivities) {
-      if (act.grupo_repeticao) groups.add(String(act.grupo_repeticao))
+      const group = activityGroupName(act)
+      if (group) groups.add(group)
     }
     return Array.from(groups).sort(compareNatural)
   }, [gestaoActivities])
+
+  const groupOrderKey = selectedProject || '__all_projects__'
+  const currentGroupOrder = useMemo(() => {
+    const savedOrder = groupOrders[groupOrderKey] || []
+    return [
+      ...savedOrder.filter((group) => gestaoGroupOptions.includes(group)),
+      ...gestaoGroupOptions.filter((group) => !savedOrder.includes(group)),
+    ]
+  }, [groupOrderKey, groupOrders, gestaoGroupOptions])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('dadosprevision_gestao_group_orders_v1', JSON.stringify(groupOrders))
+    } catch (e) {
+      console.error('Erro ao salvar a classificação dos grupos no localStorage:', e)
+    }
+  }, [groupOrders])
+
+  useEffect(() => {
+    if (gestaoGroup !== 'all' && !currentGroupOrder.includes(gestaoGroup)) {
+      setGestaoGroup('all')
+    }
+  }, [currentGroupOrder, gestaoGroup])
+
+  const gestaoCatalog = useMemo(() => {
+    const orderIndex = new Map(currentGroupOrder.map((group, index) => [group, index]))
+    const fallbackRank = currentGroupOrder.length
+    const services = new Map<string, GestaoServiceItem>()
+    const floors = new Map<string, GestaoFloorItem>()
+    for (const activity of gestaoActivities) {
+      const serviceName = String(activity.servico_nome || '-')
+      const floorName = String(activity.pavimento_nome || '-')
+      const rank = orderIndex.get(activityGroupName(activity)) ?? fallbackRank
+      const service = services.get(serviceName) || {
+        name: serviceName,
+        position: Number(activity.posicao_servico) || 999,
+        groupRank: rank,
+        activities: [],
+      }
+      service.groupRank = Math.min(service.groupRank, rank)
+      service.activities.push(activity)
+      services.set(serviceName, service)
+      if (activity.pavimento_nome) {
+        const floor = floors.get(floorName) || {
+          id: String(activity.pavimento_id || ''),
+          name: floorName,
+          groupRank: rank,
+        }
+        floor.groupRank = Math.min(floor.groupRank, rank)
+        floors.set(floorName, floor)
+      }
+    }
+    return {
+      services: Array.from(services.values()).sort(
+        (a, b) => a.groupRank - b.groupRank || a.position - b.position || compareNatural(a.name, b.name),
+      ),
+      floors: Array.from(floors.values()).sort(
+        (a, b) => a.groupRank - b.groupRank || compareNatural(a.name, b.name),
+      ),
+    }
+  }, [currentGroupOrder, gestaoActivities])
 
   const gestaoMonthOptions = useMemo(() => {
     const months = new Set<string>()
@@ -1451,7 +1548,7 @@ function App() {
 
   const gestaoFilteredActivities = useMemo(() => {
     return gestaoActivities.filter((act) => {
-      if (gestaoGroup !== 'all' && String(act.grupo_repeticao || '') !== gestaoGroup) {
+      if (gestaoGroup !== 'all' && activityGroupName(act) !== gestaoGroup) {
         return false
       }
       if (search.trim()) {
@@ -1666,29 +1763,41 @@ function App() {
     const mPlus2 = getMonthRange(year, monthIdx + 2)
     const mPlus3 = getMonthRange(year, monthIdx + 3)
 
-    const serviceMap = new Map<string, { name: string; position: number; activities: DataRecord[] }>()
-    const floorMap = new Map<string, { id: string; name: string }>()
+    const groupOrderIndex = new Map(currentGroupOrder.map((group, index) => [group, index]))
+    const fallbackGroupRank = currentGroupOrder.length
+    const serviceMap = new Map<string, GestaoServiceItem>()
+    const floorMap = new Map<string, GestaoFloorItem>()
     const matrixMap = new Map<string, DataRecord>()
 
     for (const act of gestaoFilteredActivities) {
       const sName = act.servico_nome || '-'
       const fName = act.pavimento_nome || '-'
       const sPos = act.posicao_servico ?? 999
+      const groupRank = groupOrderIndex.get(activityGroupName(act)) ?? fallbackGroupRank
 
       if (!serviceMap.has(sName)) {
-        serviceMap.set(sName, { name: sName, position: sPos, activities: [] })
+        serviceMap.set(sName, { name: sName, position: sPos, groupRank, activities: [] })
       }
-      serviceMap.get(sName)!.activities.push(act)
+      const service = serviceMap.get(sName)!
+      service.groupRank = Math.min(service.groupRank, groupRank)
+      service.activities.push(act)
 
       if (act.pavimento_nome && !floorMap.has(fName)) {
-        floorMap.set(fName, { id: String(act.pavimento_id || ''), name: fName })
+        floorMap.set(fName, { id: String(act.pavimento_id || ''), name: fName, groupRank })
+      } else if (act.pavimento_nome) {
+        const floor = floorMap.get(fName)!
+        floor.groupRank = Math.min(floor.groupRank, groupRank)
       }
 
       matrixMap.set(`${sName}__${fName}`, act)
     }
 
-    const services = Array.from(serviceMap.values()).sort((a, b) => a.position - b.position || compareNatural(a.name, b.name))
-    const floors = Array.from(floorMap.values()).sort((a, b) => compareNatural(a.name, b.name))
+    const services = Array.from(serviceMap.values()).sort(
+      (a, b) => a.groupRank - b.groupRank || a.position - b.position || compareNatural(a.name, b.name),
+    )
+    const floors = Array.from(floorMap.values()).sort(
+      (a, b) => a.groupRank - b.groupRank || compareNatural(a.name, b.name),
+    )
 
     function calcProgressAt(activities: DataRecord[], range: { start: Date; end: Date }) {
       let prevTotal = 0
@@ -1763,6 +1872,7 @@ function App() {
       const pM1 = calcProgressAt(s.activities, mMinus1)
       return {
         service: s.name,
+        groupRank: s.groupRank,
         m3: pM3,
         m2: pM2,
         m1: pM1,
@@ -1793,6 +1903,7 @@ function App() {
       }
       return {
         service: s.name,
+        groupRank: s.groupRank,
         qtdePrevista,
         qtdeAtrasada,
         pavimentos: Array.from(activePavs, ([name, isOverdue]) => ({ name, isOverdue })),
@@ -1805,6 +1916,7 @@ function App() {
       const c3 = countActive(s.activities, mPlus3)
       return {
         service: s.name,
+        groupRank: s.groupRank,
         mPlus1: c1,
         mPlus2: c2,
         mPlus3: c3,
@@ -1826,7 +1938,7 @@ function App() {
       panel3Rows,
       matrixMap,
     }
-  }, [gestaoFilteredActivities, gestaoMonth])
+  }, [currentGroupOrder, gestaoFilteredActivities, gestaoMonth])
 
   const gestaoPanelPreferenceKey = selectedProject || '__all_projects__'
   const currentGestaoPanelPreferences = useMemo(() => {
@@ -1844,7 +1956,7 @@ function App() {
   }, [gestaoPanelPreferenceKey, gestaoPanelPreferences])
 
   const gestaoPanelRows = useMemo(() => {
-    function orderRows<T extends { service: string }>(
+    function orderRows<T extends { service: string; groupRank: number }>(
       rows: T[],
       preference: GestaoPanelPreference,
       hasData: (row: T) => boolean,
@@ -1860,8 +1972,9 @@ function App() {
         .slice()
         .sort(
           (a, b) =>
+            a.groupRank - b.groupRank ||
             (orderIndex.get(a.service) ?? Number.MAX_SAFE_INTEGER) -
-            (orderIndex.get(b.service) ?? Number.MAX_SAFE_INTEGER),
+              (orderIndex.get(b.service) ?? Number.MAX_SAFE_INTEGER),
         )
     }
 
@@ -1953,6 +2066,27 @@ function App() {
     }
   }, [customMatrices])
 
+  function handleOpenGroupOrderModal() {
+    setGroupOrderDraft(currentGroupOrder)
+    setIsGroupOrderModalOpen(true)
+  }
+
+  function handleMoveGroup(index: number, direction: 'up' | 'down') {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= groupOrderDraft.length) return
+    setGroupOrderDraft((previous) => {
+      const next = [...previous]
+      const [group] = next.splice(index, 1)
+      next.splice(targetIndex, 0, group)
+      return next
+    })
+  }
+
+  function handleSaveGroupOrder() {
+    setGroupOrders((previous) => ({ ...previous, [groupOrderKey]: groupOrderDraft }))
+    setIsGroupOrderModalOpen(false)
+  }
+
   // Custom matrices filtered for current project
   const projectCustomMatrices = useMemo(() => {
     return customMatrices.filter(
@@ -1965,27 +2099,48 @@ function App() {
     return customMatrices.find((m) => m.id === activeMatrixId) || null
   }, [activeMatrixId, customMatrices])
 
+  const matrixGroupSet = useMemo(
+    () => new Set(
+      currentCustomMatrix?.selectedGroups?.length
+        ? currentCustomMatrix.selectedGroups
+        : currentGroupOrder,
+    ),
+    [currentCustomMatrix, currentGroupOrder],
+  )
+
   const matrixServices = useMemo(() => {
+    const servicesInGroups = gestaoData.services.filter((service) =>
+      service.activities.some((activity) => matrixGroupSet.has(activityGroupName(activity))),
+    )
     if (!currentCustomMatrix || currentCustomMatrix.selectedServices.length === 0) {
       const order = currentGestaoPanelPreferences.panel4.serviceOrder
       const orderIndex = new Map(order.map((service, index) => [service, index]))
-      return gestaoData.services
+      return servicesInGroups
         .map((service, naturalIndex) => ({ service, naturalIndex }))
         .sort(
           (a, b) =>
+            a.service.groupRank - b.service.groupRank ||
             (orderIndex.get(a.service.name) ?? order.length + a.naturalIndex) -
-            (orderIndex.get(b.service.name) ?? order.length + b.naturalIndex),
+              (orderIndex.get(b.service.name) ?? order.length + b.naturalIndex),
         )
         .map(({ service }) => service)
     }
-    const serviceMap = new Map(gestaoData.services.map((s) => [s.name, s]))
+    const serviceMap = new Map(servicesInGroups.map((service) => [service.name, service]))
+    const selectedOrder = new Map(
+      currentCustomMatrix.selectedServices.map((service, index) => [service, index]),
+    )
     const result: GestaoServiceItem[] = []
     for (const sName of currentCustomMatrix.selectedServices) {
       const found = serviceMap.get(sName)
       if (found) result.push(found)
     }
-    return result
-  }, [currentCustomMatrix, currentGestaoPanelPreferences.panel4.serviceOrder, gestaoData.services])
+    return result.sort(
+      (a, b) =>
+        a.groupRank - b.groupRank ||
+        (selectedOrder.get(a.name) ?? Number.MAX_SAFE_INTEGER) -
+          (selectedOrder.get(b.name) ?? Number.MAX_SAFE_INTEGER),
+    )
+  }, [currentCustomMatrix, currentGestaoPanelPreferences.panel4.serviceOrder, gestaoData.services, matrixGroupSet])
 
   const handleMatrixServiceDrop = useCallback(
     (targetService: string) => {
@@ -2024,22 +2179,60 @@ function App() {
   )
 
   const matrixFloors = useMemo(() => {
-    let result = gestaoData.floors
+    const selectedServiceNames = new Set(matrixServices.map((service) => service.name))
+    const availableFloorNames = new Set<string>()
+    for (const activity of gestaoActivities) {
+      if (
+        matrixGroupSet.has(activityGroupName(activity)) &&
+        selectedServiceNames.has(String(activity.servico_nome || '')) &&
+        activity.pavimento_nome
+      ) {
+        availableFloorNames.add(String(activity.pavimento_nome))
+      }
+    }
+    let result = gestaoData.floors.filter((floor) => availableFloorNames.has(floor.name))
     if (currentCustomMatrix && currentCustomMatrix.selectedFloors.length > 0) {
       const selectedSet = new Set(currentCustomMatrix.selectedFloors)
       result = result.filter((f) => selectedSet.has(f.name))
     }
-    if (currentCustomMatrix?.floorSortOrder === 'desc') {
-      return [...result].reverse()
+    const direction = currentCustomMatrix?.floorSortOrder === 'desc' ? -1 : 1
+    return [...result].sort(
+      (a, b) => a.groupRank - b.groupRank || direction * compareNatural(a.name, b.name),
+    )
+  }, [currentCustomMatrix, gestaoActivities, gestaoData.floors, matrixGroupSet, matrixServices])
+
+  const modalAvailableServices = useMemo(() => {
+    const selectedGroups = new Set(modalSelectedGroups)
+    return gestaoCatalog.services.filter((service) =>
+      service.activities.some((activity) => selectedGroups.has(activityGroupName(activity))),
+    )
+  }, [gestaoCatalog.services, modalSelectedGroups])
+
+  const modalAvailableFloors = useMemo(() => {
+    const selectedGroups = new Set(modalSelectedGroups)
+    const selectedServices = new Set(modalSelectedServices)
+    const floorNames = new Set<string>()
+    for (const activity of gestaoActivities) {
+      if (
+        selectedGroups.has(activityGroupName(activity)) &&
+        selectedServices.has(String(activity.servico_nome || '')) &&
+        activity.pavimento_nome
+      ) {
+        floorNames.add(String(activity.pavimento_nome))
+      }
     }
-    return result
-  }, [currentCustomMatrix, gestaoData.floors])
+    return gestaoCatalog.floors.filter((floor) => floorNames.has(floor.name))
+  }, [gestaoActivities, gestaoCatalog.floors, modalSelectedGroups, modalSelectedServices])
 
   function handleOpenCreateMatrix() {
+    const groups = currentGroupOrder
+    const services = Array.from(getAvailableServiceNames(groups))
+    const floors = getAvailableFloorNames(groups, services)
     setEditingMatrixId(null)
     setModalMatrixName(`Matriz Personalizada ${projectCustomMatrices.length + 1}`)
-    setModalSelectedServices(gestaoData.services.map((s) => s.name))
-    setModalSelectedFloors(gestaoData.floors.map((f) => f.name))
+    setModalSelectedGroups(groups)
+    setModalSelectedServices(services)
+    setModalSelectedFloors(gestaoCatalog.floors.filter((floor) => floors.has(floor.name)).map((floor) => floor.name))
     setModalFloorSortOrder('asc')
     setModalServiceSearch('')
     setModalFloorSearch('')
@@ -2049,10 +2242,24 @@ function App() {
   function handleOpenEditMatrix(matrixId: string) {
     const target = customMatrices.find((m) => m.id === matrixId)
     if (!target) return
+    const groups = target.selectedGroups?.length ? target.selectedGroups : currentGroupOrder
+    const availableServices = getAvailableServiceNames(groups)
+    const services = (
+      target.selectedServices.length > 0
+        ? target.selectedServices
+        : Array.from(availableServices)
+    ).filter((service) => availableServices.has(service))
+    const availableFloors = getAvailableFloorNames(groups, services)
+    const floors = (
+      target.selectedFloors.length > 0
+        ? target.selectedFloors
+        : Array.from(availableFloors)
+    ).filter((floor) => availableFloors.has(floor))
     setEditingMatrixId(matrixId)
     setModalMatrixName(target.name)
-    setModalSelectedServices(target.selectedServices.length > 0 ? target.selectedServices : gestaoData.services.map((s) => s.name))
-    setModalSelectedFloors(target.selectedFloors.length > 0 ? target.selectedFloors : gestaoData.floors.map((f) => f.name))
+    setModalSelectedGroups(groups)
+    setModalSelectedServices(services)
+    setModalSelectedFloors(floors)
     setModalFloorSortOrder(target.floorSortOrder || 'asc')
     setModalServiceSearch('')
     setModalFloorSearch('')
@@ -2088,6 +2295,18 @@ function App() {
       alert('Informe um nome para a matriz.')
       return
     }
+    if (modalSelectedGroups.length === 0) {
+      alert('Selecione pelo menos um grupo para a matriz.')
+      return
+    }
+    if (modalSelectedServices.length === 0) {
+      alert('Selecione pelo menos um serviço para a matriz.')
+      return
+    }
+    if (modalSelectedFloors.length === 0) {
+      alert('Selecione pelo menos um pavimento para a matriz.')
+      return
+    }
     const now = new Date().toISOString()
     if (editingMatrixId) {
       setCustomMatrices((prev) =>
@@ -2096,6 +2315,7 @@ function App() {
             ? {
                 ...m,
                 name: modalMatrixName.trim(),
+                selectedGroups: modalSelectedGroups,
                 selectedServices: modalSelectedServices,
                 selectedFloors: modalSelectedFloors,
                 floorSortOrder: modalFloorSortOrder,
@@ -2110,6 +2330,7 @@ function App() {
         id: newId,
         name: modalMatrixName.trim(),
         projectId: selectedProject,
+        selectedGroups: modalSelectedGroups,
         selectedServices: modalSelectedServices,
         selectedFloors: modalSelectedFloors,
         floorSortOrder: modalFloorSortOrder,
@@ -2122,7 +2343,8 @@ function App() {
     setIsMatrixModalOpen(false)
   }
 
-  function handleMoveService(index: number, direction: 'up' | 'down') {
+  function handleMoveService(serviceName: string, direction: 'up' | 'down') {
+    const index = modalSelectedServices.indexOf(serviceName)
     const targetIndex = direction === 'up' ? index - 1 : index + 1
     if (targetIndex < 0 || targetIndex >= modalSelectedServices.length) return
     setModalSelectedServices((prev) => {
@@ -2133,10 +2355,62 @@ function App() {
     })
   }
 
-  function handleToggleService(serviceName: string) {
-    setModalSelectedServices((prev) =>
-      prev.includes(serviceName) ? prev.filter((s) => s !== serviceName) : [...prev, serviceName],
+  function getAvailableServiceNames(groups: string[]) {
+    const selectedGroups = new Set(groups)
+    return new Set(
+      gestaoCatalog.services
+        .filter((service) =>
+          service.activities.some((activity) => selectedGroups.has(activityGroupName(activity))),
+        )
+        .map((service) => service.name),
     )
+  }
+
+  function getAvailableFloorNames(groups: string[], services: string[]) {
+    const selectedGroups = new Set(groups)
+    const selectedServices = new Set(services)
+    const floors = new Set<string>()
+    for (const activity of gestaoActivities) {
+      if (
+        selectedGroups.has(activityGroupName(activity)) &&
+        selectedServices.has(String(activity.servico_nome || '')) &&
+        activity.pavimento_nome
+      ) {
+        floors.add(String(activity.pavimento_nome))
+      }
+    }
+    return floors
+  }
+
+  function handleToggleMatrixGroup(groupName: string) {
+    const nextGroups = modalSelectedGroups.includes(groupName)
+      ? modalSelectedGroups.filter((group) => group !== groupName)
+      : [...modalSelectedGroups, groupName]
+    const availableServices = getAvailableServiceNames(nextGroups)
+    const nextServices = modalSelectedServices.filter((service) => availableServices.has(service))
+    const availableFloors = getAvailableFloorNames(nextGroups, nextServices)
+    setModalSelectedGroups(nextGroups)
+    setModalSelectedServices(nextServices)
+    setModalSelectedFloors((previous) => previous.filter((floor) => availableFloors.has(floor)))
+  }
+
+  function handleToggleAllGroups(select: boolean) {
+    if (select) {
+      setModalSelectedGroups(currentGroupOrder)
+      return
+    }
+    setModalSelectedGroups([])
+    setModalSelectedServices([])
+    setModalSelectedFloors([])
+  }
+
+  function handleToggleService(serviceName: string) {
+    const nextServices = modalSelectedServices.includes(serviceName)
+      ? modalSelectedServices.filter((service) => service !== serviceName)
+      : [...modalSelectedServices, serviceName]
+    const availableFloors = getAvailableFloorNames(modalSelectedGroups, nextServices)
+    setModalSelectedServices(nextServices)
+    setModalSelectedFloors((previous) => previous.filter((floor) => availableFloors.has(floor)))
   }
 
   function handleToggleFloor(floorName: string) {
@@ -2147,16 +2421,17 @@ function App() {
 
   function handleToggleAllServices(select: boolean) {
     if (select) {
-      const allNames = gestaoData.services.map((s) => s.name)
+      const allNames = modalAvailableServices.map((service) => service.name)
       setModalSelectedServices(allNames)
     } else {
       setModalSelectedServices([])
+      setModalSelectedFloors([])
     }
   }
 
   function handleToggleAllFloors(select: boolean) {
     if (select) {
-      const allNames = gestaoData.floors.map((f) => f.name)
+      const allNames = modalAvailableFloors.map((floor) => floor.name)
       setModalSelectedFloors(allNames)
     } else {
       setModalSelectedFloors([])
@@ -2167,7 +2442,10 @@ function App() {
     window.print()
   }
 
-  const activeTab = tabs.find((tab) => tab.key === activeView) || tabs[0]
+  const isMilestoneDashboard = activeView === 'gestao_a_vista' && gestaoPanelTab === 'milestones'
+  const activeTab = isMilestoneDashboard
+    ? { label: 'Dashboard de Marcos', icon: Flag }
+    : tabs.find((tab) => tab.key === activeView) || tabs[0]
   const currentColumns =
     activeView === 'activities'
       ? activityColumns[activityMode]
@@ -2212,12 +2490,26 @@ function App() {
             Recarregar
           </button>
           <button
-            className={`header-view-button ${activeView === 'gestao_a_vista' ? 'active' : ''}`}
+            className={`header-view-button ${activeView === 'gestao_a_vista' && !isMilestoneDashboard ? 'active' : ''}`}
             type="button"
-            onClick={() => changeView('gestao_a_vista')}
+            onClick={() => {
+              setGestaoPanelTab('panel1')
+              changeView('gestao_a_vista')
+            }}
           >
             <Presentation size={16} />
             Gestão à Vista
+          </button>
+          <button
+            className={`header-view-button ${isMilestoneDashboard ? 'active' : ''}`}
+            type="button"
+            onClick={() => {
+              setGestaoPanelTab('milestones')
+              changeView('gestao_a_vista')
+            }}
+          >
+            <Flag size={16} />
+            Dashboard de Marcos
           </button>
           <button
             className={`header-view-button ${activeView !== 'gestao_a_vista' ? 'active' : ''}`}
@@ -2534,12 +2826,12 @@ function App() {
                   ))}
                 </select>
               </label>
-              {activeView === 'gestao_a_vista' && gestaoPanelTab !== 'milestones' && gestaoGroupOptions.length > 0 && (
+              {activeView === 'gestao_a_vista' && gestaoPanelTab !== 'milestones' && currentGroupOrder.length > 0 && (
                 <label>
                   <span>Torre / Grupo</span>
                   <select value={gestaoGroup} onChange={(event) => setGestaoGroup(event.target.value)}>
-                    <option value="all">Todos os grupos ({gestaoGroupOptions.length})</option>
-                    {gestaoGroupOptions.map((group) => (
+                    <option value="all">Todos os grupos ({currentGroupOrder.length})</option>
+                    {currentGroupOrder.map((group) => (
                       <option key={group} value={group}>
                         {group}
                       </option>
@@ -2591,7 +2883,8 @@ function App() {
           ) : activeView === 'gestao_a_vista' ? (
             <div className="gestao-vista-wrapper">
               {/* PANEL SUB-TABS NAVIGATION & A4 PRINT BAR */}
-              <div className="gestao-panel-tabs">
+              {gestaoPanelTab !== 'milestones' && (
+                <div className="gestao-panel-tabs">
                 <button
                   type="button"
                   className={`gestao-panel-tab-btn ${gestaoPanelTab === 'panel1' ? 'active' : ''}`}
@@ -2632,16 +2925,6 @@ function App() {
                   )}
                 </button>
 
-                <button
-                  type="button"
-                  className={`gestao-panel-tab-btn ${gestaoPanelTab === 'milestones' ? 'active' : ''}`}
-                  onClick={() => setGestaoPanelTab('milestones')}
-                >
-                  <Flag size={14} />
-                  <span>Dashboard: Marcos</span>
-                  <span className="badge-pill">{gestaoMilestones.length}</span>
-                </button>
-
                 <div className="gestao-top-actions">
                   <button
                     type="button"
@@ -2662,8 +2945,18 @@ function App() {
                     <Printer size={13} />
                     <span>Imprimir / PDF</span>
                   </button>
+                  <button
+                    type="button"
+                    className="matrix-btn"
+                    onClick={handleOpenGroupOrderModal}
+                    title="Configurações da Gestão à Vista"
+                  >
+                    <Settings2 size={14} />
+                    <span>Configurações</span>
+                  </button>
                 </div>
-              </div>
+                </div>
+              )}
 
               {gestaoPanelTab === 'milestones' && (
                 <div className="milestone-dashboard">
@@ -3650,6 +3943,71 @@ function App() {
               </>
             )}
 
+            {isGroupOrderModalOpen && (
+              <div className="matrix-modal-backdrop" onClick={() => setIsGroupOrderModalOpen(false)}>
+                <div className="group-order-modal" onClick={(event) => event.stopPropagation()}>
+                  <div className="matrix-modal-header">
+                    <div>
+                      <h3>Configurações da Gestão à Vista</h3>
+                      <p>Classificação por Grupo</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="matrix-order-btn"
+                      onClick={() => setIsGroupOrderModalOpen(false)}
+                      aria-label="Fechar configurações"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                  <div className="group-order-body">
+                    <p>
+                      Defina a prioridade dos grupos de{' '}
+                      <strong>{projects.find((project) => project.id_prevision === selectedProject)?.nome_projeto || 'Todas as Obras'}</strong>.
+                      Esta ordem será aplicada a todos os painéis.
+                    </p>
+                    <div className="group-order-list">
+                      {groupOrderDraft.map((group, index) => (
+                        <div key={group} className="group-order-row">
+                          <span className="group-order-position">{index + 1}</span>
+                          <GripVertical size={15} />
+                          <strong>{group}</strong>
+                          <div className="matrix-item-order-btns">
+                            <button
+                              type="button"
+                              className="matrix-order-btn"
+                              disabled={index === 0}
+                              onClick={() => handleMoveGroup(index, 'up')}
+                              title="Mover grupo para cima"
+                            >
+                              <ArrowUp size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className="matrix-order-btn"
+                              disabled={index === groupOrderDraft.length - 1}
+                              onClick={() => handleMoveGroup(index, 'down')}
+                              title="Mover grupo para baixo"
+                            >
+                              <ArrowDown size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="matrix-modal-footer">
+                    <button type="button" className="matrix-btn" onClick={() => setIsGroupOrderModalOpen(false)}>
+                      Cancelar
+                    </button>
+                    <button type="button" className="matrix-btn btn-primary" onClick={handleSaveGroupOrder}>
+                      Salvar classificação
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ---------------------------------------------------- */}
             {/* MODAL DO CONSTRUTOR DE MATRIZES PERSONALIZADAS       */}
             {/* ---------------------------------------------------- */}
@@ -3688,11 +4046,42 @@ function App() {
                     </label>
 
                     <div className="matrix-config-columns">
+                      {/* COLUNA DE GRUPOS */}
+                      <div className="matrix-config-section matrix-groups-section">
+                        <div className="matrix-config-section-header">
+                          <h4>
+                            Grupos ({modalSelectedGroups.length} de {currentGroupOrder.length})
+                          </h4>
+                          <div className="matrix-selection-actions">
+                            <button type="button" className="matrix-mini-btn" onClick={() => handleToggleAllGroups(true)}>
+                              Todos
+                            </button>
+                            <button type="button" className="matrix-mini-btn" onClick={() => handleToggleAllGroups(false)}>
+                              Limpar
+                            </button>
+                          </div>
+                        </div>
+                        <div className="matrix-items-list">
+                          {currentGroupOrder.map((group) => (
+                            <div key={group} className="matrix-item-row">
+                              <label className="matrix-item-label">
+                                <input
+                                  type="checkbox"
+                                  checked={modalSelectedGroups.includes(group)}
+                                  onChange={() => handleToggleMatrixGroup(group)}
+                                />
+                                <span>{group}</span>
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
                       {/* COLUNA DE SERVIÇOS */}
                       <div className="matrix-config-section">
                         <div className="matrix-config-section-header">
                           <h4>
-                            Serviços ({modalSelectedServices.length} de {gestaoData.services.length})
+                            Serviços ({modalSelectedServices.length} de {modalAvailableServices.length})
                           </h4>
                           <div className="matrix-selection-actions">
                             <button
@@ -3724,11 +4113,14 @@ function App() {
 
                         <div className="matrix-items-list">
                           {modalSelectedServices
+                            .filter((serviceName) =>
+                              modalAvailableServices.some((service) => service.name === serviceName),
+                            )
                             .filter((s) =>
                               !modalServiceSearch.trim() ||
                               s.toLowerCase().includes(modalServiceSearch.toLowerCase()),
                             )
-                            .map((serviceName, idx) => (
+                            .map((serviceName) => (
                               <div key={serviceName} className="matrix-item-row">
                                 <label className="matrix-item-label">
                                   <input
@@ -3742,8 +4134,8 @@ function App() {
                                   <button
                                     type="button"
                                     className="matrix-order-btn"
-                                    disabled={idx === 0}
-                                    onClick={() => handleMoveService(idx, 'up')}
+                                    disabled={modalSelectedServices.indexOf(serviceName) === 0}
+                                    onClick={() => handleMoveService(serviceName, 'up')}
                                     title="Mover para cima"
                                   >
                                     <ArrowUp size={13} />
@@ -3751,8 +4143,8 @@ function App() {
                                   <button
                                     type="button"
                                     className="matrix-order-btn"
-                                    disabled={idx === modalSelectedServices.length - 1}
-                                    onClick={() => handleMoveService(idx, 'down')}
+                                    disabled={modalSelectedServices.indexOf(serviceName) === modalSelectedServices.length - 1}
+                                    onClick={() => handleMoveService(serviceName, 'down')}
                                     title="Mover para baixo"
                                   >
                                     <ArrowDown size={13} />
@@ -3762,7 +4154,7 @@ function App() {
                             ))}
 
                           {/* Serviços Desmarcados */}
-                          {gestaoData.services
+                          {modalAvailableServices
                             .filter((s) => !modalSelectedServices.includes(s.name))
                             .filter((s) =>
                               !modalServiceSearch.trim() ||
@@ -3787,7 +4179,7 @@ function App() {
                       <div className="matrix-config-section">
                         <div className="matrix-config-section-header">
                           <h4>
-                            Pavimentos ({modalSelectedFloors.length} de {gestaoData.floors.length})
+                            Pavimentos ({modalSelectedFloors.length} de {modalAvailableFloors.length})
                           </h4>
                           <div className="matrix-selection-actions">
                             <button
@@ -3829,7 +4221,7 @@ function App() {
                         </label>
 
                         <div className="matrix-items-list">
-                          {gestaoData.floors
+                          {modalAvailableFloors
                             .filter((f) =>
                               !modalFloorSearch.trim() ||
                               f.name.toLowerCase().includes(modalFloorSearch.toLowerCase()),
