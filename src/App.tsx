@@ -89,6 +89,8 @@ interface CustomMatrixConfig {
   updatedAt: string
 }
 
+type DefaultMatrixConfigs = Record<string, CustomMatrixConfig | null>
+
 type ActivityMode = 'planning' | 'jobs' | 'progress' | 'measurements' | 'resources'
 type BudgetMode = 'reports' | 'items' | 'weights'
 type DashboardMode = 'general' | 'weekly' | 'monthly' | 'cff' | 'services' | 'floors' | 'states'
@@ -223,6 +225,35 @@ function formatCurrency(value?: string | number | boolean | null) {
 function formatPercent(value?: string | number | boolean | null) {
   const number = Number(value)
   return Number.isFinite(number) ? `${numberFormatter.format(number * 100)}%` : '-'
+}
+
+function matrixProgressTooltip(activity: DataRecord) {
+  let microservices = activity.microservicos
+  if (typeof microservices === 'string') {
+    try {
+      microservices = JSON.parse(microservices)
+    } catch {
+      microservices = []
+    }
+  }
+  if (!Array.isArray(microservices) || microservices.length === 0) {
+    return `Andamento do serviço: ${formatPercent(activity.progresso_realizado)}\nSem microserviços cadastrados.`
+  }
+  return [
+    `Andamento do serviço: ${formatPercent(activity.progresso_realizado)}`,
+    '',
+    'Microserviços:',
+    ...microservices.map((microservice) => {
+      const name = String(microservice.nome || microservice.name || 'Microserviço')
+      const realized = formatPercent(
+        microservice.progresso_realizado ?? microservice.percentageCompleted,
+      )
+      const expected = formatPercent(
+        microservice.progresso_esperado ?? microservice.expectedPercentageCompleted,
+      )
+      return `${name}: ${realized} realizado · ${expected} previsto`
+    }),
+  ].join('\n')
 }
 
 function compareNatural(left?: string | number | boolean | null, right?: string | number | boolean | null) {
@@ -948,6 +979,14 @@ function App() {
       return saved ? JSON.parse(saved) : []
     } catch {
       return []
+    }
+  })
+  const [defaultMatrixConfigs, setDefaultMatrixConfigs] = useState<DefaultMatrixConfigs>(() => {
+    try {
+      const saved = localStorage.getItem('dadosprevision_default_matrix_configs_v1')
+      return saved ? JSON.parse(saved) : {}
+    } catch {
+      return {}
     }
   })
   const [activeMatrixId, setActiveMatrixId] = useState<string>('default')
@@ -2133,6 +2172,17 @@ function App() {
     }
   }, [customMatrices])
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        'dadosprevision_default_matrix_configs_v1',
+        JSON.stringify(defaultMatrixConfigs),
+      )
+    } catch (e) {
+      console.error('Erro ao salvar a matriz padrão no localStorage:', e)
+    }
+  }, [defaultMatrixConfigs])
+
   function handleOpenGroupOrderModal() {
     setGroupOrderDraft(currentGroupOrder)
     setIsGroupOrderModalOpen(true)
@@ -2161,10 +2211,26 @@ function App() {
     )
   }, [customMatrices, selectedProject])
 
+  const defaultMatrixKey = selectedProject || '__all_projects__'
+  const defaultMatrixConfig = defaultMatrixConfigs[defaultMatrixKey]
+  const isDefaultMatrixAvailable = defaultMatrixConfig !== null
+
+  useEffect(() => {
+    const customMatrixExists = projectCustomMatrices.some((matrix) => matrix.id === activeMatrixId)
+    if (activeMatrixId === 'default' && !isDefaultMatrixAvailable) {
+      setActiveMatrixId(projectCustomMatrices[0]?.id || 'none')
+    } else if (activeMatrixId === 'none' && (isDefaultMatrixAvailable || projectCustomMatrices.length > 0)) {
+      setActiveMatrixId(isDefaultMatrixAvailable ? 'default' : projectCustomMatrices[0].id)
+    } else if (activeMatrixId !== 'default' && activeMatrixId !== 'none' && !customMatrixExists) {
+      setActiveMatrixId(isDefaultMatrixAvailable ? 'default' : projectCustomMatrices[0]?.id || 'none')
+    }
+  }, [activeMatrixId, isDefaultMatrixAvailable, projectCustomMatrices])
+
   const currentCustomMatrix = useMemo(() => {
-    if (activeMatrixId === 'default') return null
+    if (activeMatrixId === 'default') return defaultMatrixConfig || null
+    if (activeMatrixId === 'none') return null
     return customMatrices.find((m) => m.id === activeMatrixId) || null
-  }, [activeMatrixId, customMatrices])
+  }, [activeMatrixId, customMatrices, defaultMatrixConfig])
 
   const matrixGroupSet = useMemo(
     () => new Set(
@@ -2176,6 +2242,7 @@ function App() {
   )
 
   const matrixServices = useMemo(() => {
+    if (activeMatrixId === 'none') return []
     const servicesInGroups = gestaoData.services.filter((service) =>
       service.activities.some((activity) => matrixGroupSet.has(activityGroupName(activity))),
     )
@@ -2207,7 +2274,7 @@ function App() {
         (selectedOrder.get(a.name) ?? Number.MAX_SAFE_INTEGER) -
           (selectedOrder.get(b.name) ?? Number.MAX_SAFE_INTEGER),
     )
-  }, [currentCustomMatrix, currentGestaoPanelPreferences.panel4.serviceOrder, gestaoData.services, matrixGroupSet])
+  }, [activeMatrixId, currentCustomMatrix, currentGestaoPanelPreferences.panel4.serviceOrder, gestaoData.services, matrixGroupSet])
 
   const handleMatrixServiceDrop = useCallback(
     (targetService: string) => {
@@ -2223,6 +2290,17 @@ function App() {
       visibleOrder.splice(targetIndex, 0, sourceService)
 
       if (activeMatrixId === 'default') {
+        if (defaultMatrixConfig) {
+          setDefaultMatrixConfigs((previous) => ({
+            ...previous,
+            [defaultMatrixKey]: {
+              ...defaultMatrixConfig,
+              selectedServices: visibleOrder,
+              updatedAt: new Date().toISOString(),
+            },
+          }))
+          return
+        }
         updateGestaoPanelPreference('panel4', (preference) => ({
           ...preference,
           serviceOrder: visibleOrder,
@@ -2242,10 +2320,11 @@ function App() {
         ),
       )
     },
-    [activeMatrixId, draggedMatrixService, matrixServices, updateGestaoPanelPreference],
+    [activeMatrixId, defaultMatrixConfig, defaultMatrixKey, draggedMatrixService, matrixServices, updateGestaoPanelPreference],
   )
 
   const matrixFloors = useMemo(() => {
+    if (activeMatrixId === 'none') return []
     const selectedServiceNames = new Set(matrixServices.map((service) => service.name))
     const availableFloorNames = new Set<string>()
     for (const activity of gestaoActivities) {
@@ -2266,7 +2345,7 @@ function App() {
     return [...result].sort(
       (a, b) => a.groupRank - b.groupRank || direction * compareNatural(a.name, b.name),
     )
-  }, [currentCustomMatrix, gestaoActivities, gestaoData.floors, matrixGroupSet, matrixServices])
+  }, [activeMatrixId, currentCustomMatrix, gestaoActivities, gestaoData.floors, matrixGroupSet, matrixServices])
 
   const modalAvailableServices = useMemo(() => {
     const selectedGroups = new Set(modalSelectedGroups)
@@ -2307,7 +2386,19 @@ function App() {
   }
 
   function handleOpenEditMatrix(matrixId: string) {
-    const target = customMatrices.find((m) => m.id === matrixId)
+    const target = matrixId === 'default'
+      ? defaultMatrixConfig || {
+          id: 'default',
+          name: 'Matriz Padrão',
+          projectId: selectedProject,
+          selectedGroups: currentGroupOrder,
+          selectedServices: matrixServices.map((service) => service.name),
+          selectedFloors: matrixFloors.map((floor) => floor.name),
+          floorSortOrder: 'asc' as const,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }
+      : customMatrices.find((m) => m.id === matrixId)
     if (!target) return
     const groups = target.selectedGroups?.length ? target.selectedGroups : currentGroupOrder
     const availableServices = getAvailableServiceNames(groups)
@@ -2349,10 +2440,18 @@ function App() {
   }
 
   function handleDeleteMatrix(matrixId: string) {
-    if (confirm('Tem certeza que deseja excluir esta matriz personalizada?')) {
+    const isDefault = matrixId === 'default'
+    const label = isDefault ? 'a matriz padrão deste projeto' : 'esta matriz personalizada'
+    if (confirm(`Tem certeza que deseja excluir ${label}?`)) {
+      if (isDefault) {
+        setDefaultMatrixConfigs((previous) => ({ ...previous, [defaultMatrixKey]: null }))
+        setActiveMatrixId(projectCustomMatrices[0]?.id || 'none')
+        return
+      }
       setCustomMatrices((prev) => prev.filter((m) => m.id !== matrixId))
       if (activeMatrixId === matrixId) {
-        setActiveMatrixId('default')
+        const remainingMatrix = projectCustomMatrices.find((matrix) => matrix.id !== matrixId)
+        setActiveMatrixId(isDefaultMatrixAvailable ? 'default' : remainingMatrix?.id || 'none')
       }
     }
   }
@@ -2375,7 +2474,22 @@ function App() {
       return
     }
     const now = new Date().toISOString()
-    if (editingMatrixId) {
+    if (editingMatrixId === 'default') {
+      setDefaultMatrixConfigs((previous) => ({
+        ...previous,
+        [defaultMatrixKey]: {
+          id: 'default',
+          name: modalMatrixName.trim(),
+          projectId: selectedProject,
+          selectedGroups: modalSelectedGroups,
+          selectedServices: modalSelectedServices,
+          selectedFloors: modalSelectedFloors,
+          floorSortOrder: modalFloorSortOrder,
+          createdAt: defaultMatrixConfig?.createdAt || now,
+          updatedAt: now,
+        },
+      }))
+    } else if (editingMatrixId) {
       setCustomMatrices((prev) =>
         prev.map((m) =>
           m.id === editingMatrixId
@@ -2988,7 +3102,6 @@ function App() {
                 >
                   <CalendarCheck size={14} />
                   <span>Painel 2: Mês Vigente</span>
-                  {gestaoData.m0 && <span className="badge-pill">{gestaoData.m0.label}</span>}
                 </button>
 
                 <button
@@ -3006,10 +3119,7 @@ function App() {
                   onClick={() => setGestaoPanelTab('matrix')}
                 >
                   <FileSpreadsheet size={14} />
-                  <span>Painel 4: Linha de Balanço</span>
-                  {projectCustomMatrices.length > 0 && (
-                    <span className="badge-pill">{projectCustomMatrices.length + 1} matrizes</span>
-                  )}
+                  <span>Painel 4: Escadinha</span>
                 </button>
 
                 <button
@@ -3544,7 +3654,7 @@ function App() {
               )}
 
               {/* ---------------------------------------------------- */}
-              {/* SUB-ABA: PAINEL 4 (MATRIZ / LINHA DE BALANÇO)        */}
+              {/* SUB-ABA: PAINEL 4 (MATRIZ / ESCADINHA)               */}
               {/* ---------------------------------------------------- */}
               {gestaoPanelTab === 'matrix' && (
                 <div className={a4LayoutMode ? 'a4-landscape-container' : ''}>
@@ -3556,14 +3666,19 @@ function App() {
                         value={activeMatrixId}
                         onChange={(e) => setActiveMatrixId(e.target.value)}
                       >
-                        <option value="default">
-                          Matriz Padrão ({gestaoData.services.length} serviços / {gestaoData.floors.length} pavimentos)
-                        </option>
+                        {isDefaultMatrixAvailable && (
+                          <option value="default">
+                            {defaultMatrixConfig?.name || 'Matriz Padrão'} ({defaultMatrixConfig?.selectedServices.length || gestaoData.services.length} serviços / {defaultMatrixConfig?.selectedFloors.length || gestaoData.floors.length} pavimentos)
+                          </option>
+                        )}
                         {projectCustomMatrices.map((m) => (
                           <option key={m.id} value={m.id}>
                             {m.name} ({m.selectedServices.length} serv. / {m.selectedFloors.length} pav.)
                           </option>
                         ))}
+                        {!isDefaultMatrixAvailable && projectCustomMatrices.length === 0 && (
+                          <option value="none">Nenhuma matriz disponível</option>
+                        )}
                       </select>
                     </div>
 
@@ -3577,7 +3692,7 @@ function App() {
                         Nova Matriz
                       </button>
 
-                      {activeMatrixId !== 'default' && (
+                      {activeMatrixId !== 'none' && (
                         <>
                           <button
                             type="button"
@@ -3587,14 +3702,16 @@ function App() {
                             <Edit2 size={13} />
                             Editar
                           </button>
-                          <button
-                            type="button"
-                            className="matrix-btn"
-                            onClick={() => handleDuplicateMatrix(activeMatrixId)}
-                          >
-                            <Copy size={13} />
-                            Duplicar
-                          </button>
+                          {activeMatrixId !== 'default' && (
+                            <button
+                              type="button"
+                              className="matrix-btn"
+                              onClick={() => handleDuplicateMatrix(activeMatrixId)}
+                            >
+                              <Copy size={13} />
+                              Duplicar
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="matrix-btn btn-danger"
@@ -3612,7 +3729,7 @@ function App() {
                     <div className="a4-sheet-header">
                       <div className="a4-sheet-brand">
                         <h3 className="a4-sheet-title">
-                          PAINEL 4: LINHA DE BALANÇO — {currentCustomMatrix?.name || 'MATRIZ PADRÃO'}
+                          PAINEL 4: ESCADINHA — {currentCustomMatrix?.name || (activeMatrixId === 'none' ? 'SEM MATRIZ' : 'MATRIZ PADRÃO')}
                         </h3>
                         <span className="a4-sheet-subtitle">
                           {matrixServices.length} Serviços · {matrixFloors.length} Pavimentos
@@ -3691,6 +3808,7 @@ function App() {
                                         className={`matrix-cell-content ${
                                           isDone ? 'cell-done' : isProgress ? 'cell-progress' : ''
                                         } ${isM0Active ? 'cell-active-month' : ''}`}
+                                        title={matrixProgressTooltip(act)}
                                       >
                                         <span className="matrix-dates">
                                           {formatDateCompact(act.data_inicio)} - {formatDateCompact(act.data_fim)}
@@ -3721,7 +3839,7 @@ function App() {
                           <span className="a4-legend-color" style={{ background: '#ffffff', border: '2px solid #10b981' }} /> Ativo no Mês {gestaoData.m0?.label}
                         </span>
                       </div>
-                      <span>Linha de Balanço · Dados Prevision</span>
+                      <span>Escadinha · Dados Prevision</span>
                     </div>
                   </div>
                 </div>
@@ -4053,7 +4171,7 @@ function App() {
                 <div className="gestao-matrix-card">
                   <div className="gestao-card-header">
                     <div className="gestao-card-title">
-                      <span>Matriz de Serviços x Pavimentos (Linha de Balanço)</span>
+                      <span>Matriz de Serviços x Pavimentos (Escadinha)</span>
                     </div>
                     <span className="gestao-card-badge">
                       {matrixServices.length} Serviços · {matrixFloors.length} Pavimentos
@@ -4213,7 +4331,7 @@ function App() {
               <div className="matrix-modal-backdrop" onClick={() => setIsMatrixModalOpen(false)}>
                 <div className="matrix-modal" onClick={(e) => e.stopPropagation()}>
                   <div className="matrix-modal-header">
-                    <h3>{editingMatrixId ? 'Editar Matriz Personalizada' : 'Criar Nova Matriz Personalizada'}</h3>
+                    <h3>{editingMatrixId === 'default' ? 'Editar Matriz Padrão' : editingMatrixId ? 'Editar Matriz Personalizada' : 'Criar Nova Matriz Personalizada'}</h3>
                     <button
                       type="button"
                       className="matrix-order-btn"
