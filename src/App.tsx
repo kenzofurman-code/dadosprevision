@@ -1467,8 +1467,15 @@ function App() {
 
   const milestoneDashboard = useMemo(() => {
     const query = search.trim().toLowerCase()
-    const milestoneName = (milestone: DataRecord) =>
+    const rawMilestoneName = (milestone: DataRecord) =>
       String(milestone.nome || '').trim() || 'Marco sem nome'
+    const milestoneTypeKey = (name: string) =>
+      name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, ' ')
+        .trim()
     const milestones = gestaoMilestones
       .filter((milestone) => {
         if (!query) return true
@@ -1489,6 +1496,28 @@ function App() {
           Boolean(milestone.date && !Number.isNaN(milestone.date.getTime())),
       )
 
+    const variantsByType = new Map<string, Map<string, number>>()
+    for (const milestone of milestones) {
+      const rawName = rawMilestoneName(milestone)
+      const typeKey = milestoneTypeKey(rawName)
+      const variants = variantsByType.get(typeKey) || new Map<string, number>()
+      variants.set(rawName, (variants.get(rawName) || 0) + 1)
+      variantsByType.set(typeKey, variants)
+    }
+    const displayNameByType = new Map(
+      Array.from(variantsByType, ([typeKey, variants]) => [
+        typeKey,
+        Array.from(variants)
+          .sort(([nameA, countA], [nameB, countB]) =>
+            countB - countA || compareNatural(nameA, nameB),
+          )[0][0],
+      ]),
+    )
+    const milestoneName = (milestone: DataRecord) => {
+      const rawName = rawMilestoneName(milestone)
+      return displayNameByType.get(milestoneTypeKey(rawName)) || rawName
+    }
+
     const today = new Date()
     const currentMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1))
     const windowStart = new Date(Date.UTC(
@@ -1504,6 +1533,13 @@ function App() {
 
     const milestoneNames = Array.from(
       new Set(milestones.map(milestoneName)),
+    ).sort(compareNatural)
+    const chartMilestoneNames = Array.from(
+      new Set(
+        milestones
+          .filter((milestone) => milestone.date >= windowStart && milestone.date < windowEnd)
+          .map(milestoneName),
+      ),
     ).sort(compareNatural)
     const colorByName = new Map<string, string>()
     const usedColors = new Set<string>()
@@ -1542,7 +1578,7 @@ function App() {
           .replace('.', ''),
         isCurrent: date.getTime() === currentMonth.getTime(),
         total: monthMilestones.length,
-        segments: milestoneNames
+        segments: chartMilestoneNames
           .map((name) => ({ name, count: counts.get(name) || 0, color: colorByName.get(name)! }))
           .filter((segment) => segment.count > 0),
       }
@@ -1579,6 +1615,7 @@ function App() {
     return {
       months,
       milestoneNames,
+      chartMilestoneNames,
       colorByName,
       projectRows,
       totalInWindow: milestones.filter(
@@ -2704,7 +2741,7 @@ function App() {
                         </div>
 
                         <div className="milestone-legend">
-                          {milestoneDashboard.milestoneNames.map((name) => (
+                          {milestoneDashboard.chartMilestoneNames.map((name) => (
                             <span key={name}>
                               <i style={{ backgroundColor: milestoneDashboard.colorByName.get(name) }} />
                               {name}
