@@ -2750,6 +2750,7 @@ function App() {
     const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
       .map((node) => node.outerHTML)
       .join('')
+    const defaultPrintOrientation = gestaoPanelTab === 'matrix' ? 'landscape' : 'portrait'
     printWindow.document.open()
     printWindow.document.write(`<!doctype html>
       <html lang="pt-BR">
@@ -2758,6 +2759,9 @@ function App() {
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
           <title>Gestão à Vista — Visualização de impressão</title>
           ${styles}
+          <style id="print-page-style">
+            @page { size: A4 ${defaultPrintOrientation}; margin: 6mm; }
+          </style>
           <style>
             :root { color-scheme: light; }
             html, body { margin: 0; min-height: 100%; background: #f1f5f3; }
@@ -2784,11 +2788,14 @@ function App() {
             .print-column-resizer { position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; z-index: 20; }
             .print-column-resizer:hover { background: rgba(23, 79, 70, 0.18); }
             body.print-column-resizing, body.print-column-resizing * { cursor: col-resize !important; user-select: none !important; }
+            .print-orientation-toggle { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid #b8ccc6; border-radius: 6px; background: #f1f6f4; }
+            .print-orientation-toggle button { border: 0; border-radius: 4px; padding: 5px 8px; background: transparent; color: #173f38; font-size: 10px; font-weight: 700; cursor: pointer; }
+            .print-orientation-toggle button.active { background: #173f38; color: #ffffff; }
             .print-preview-actions { display: flex; align-items: center; gap: 7px; }
             .print-preview-actions button { border: 1px solid #b8ccc6; border-radius: 6px; padding: 7px 11px; background: #ffffff; color: #173f38; font-size: 11px; font-weight: 700; cursor: pointer; }
             .print-preview-actions button.primary { border-color: #173f38; background: #173f38; color: #ffffff; }
             .print-preview-content { padding: 20px; overflow: auto; }
-            .print-preview-content .gestao-print-source { width: max-content; min-width: 100%; max-width: none; margin: 0 auto; overflow: visible; }
+            .print-preview-content .gestao-print-source { width: max-content; min-width: 0; max-width: none; margin: 0 auto; overflow: visible; }
             .gestao-print-source .gestao-panel-data-filter,
             .gestao-print-source .gestao-service-drag svg,
             .gestao-print-source .panel5-service-column,
@@ -2798,7 +2805,7 @@ function App() {
             .gestao-print-source .panel5-export-grid { display: block; }
             .gestao-print-source th { position: relative; }
             .gestao-print-source .gestao-table,
-            .gestao-print-source .panel5-export-table { table-layout: fixed; width: max-content; min-width: 100%; }
+            .gestao-print-source .panel5-export-table { table-layout: fixed; width: max-content; min-width: 0; }
             .gestao-print-source .gestao-table th:not(.service-col),
             .gestao-print-source .gestao-table td:not(.service-col),
             .gestao-print-source .panel5-export-table th:not(:first-child),
@@ -2827,7 +2834,7 @@ function App() {
               overflow-wrap: anywhere;
             }
             .matrix-print-source .gestao-matrix-container { max-height: none; overflow: visible; }
-            .matrix-print-source .gestao-matrix-table { table-layout: fixed; width: max-content; min-width: 100%; }
+            .matrix-print-source .gestao-matrix-table { table-layout: fixed; width: max-content; min-width: 0; }
             .matrix-print-source .gestao-matrix-table th:not(.matrix-service-th),
             .matrix-print-source .gestao-matrix-table td.matrix-cell {
               width: var(--matrix-column-width, 110px);
@@ -2853,15 +2860,15 @@ function App() {
             }
             .matrix-print-source .matrix-dates { white-space: normal; overflow-wrap: anywhere; }
             @media print {
-              @page { size: A4 landscape; margin: 6mm; }
               html, body { background: #ffffff !important; }
               .print-preview-toolbar { display: none !important; }
               .print-column-resizer { display: none !important; }
               .print-preview-content { padding: 0 !important; overflow: visible !important; }
-              .print-preview-content .gestao-print-source { width: max-content !important; min-width: 100% !important; box-shadow: none !important; border: 1px solid #888888 !important; }
+              .print-preview-content .gestao-print-source { width: max-content !important; min-width: 0 !important; box-shadow: none !important; border: 1px solid #888888 !important; }
               .gestao-print-source .gestao-table,
-              .gestao-print-source .panel5-export-table { width: max-content !important; min-width: 100% !important; }
+              .gestao-print-source .panel5-export-table { width: max-content !important; min-width: 0 !important; }
               .matrix-print-source .gestao-matrix-container { overflow: visible !important; max-height: none !important; }
+              .matrix-print-source .gestao-matrix-table { width: max-content !important; min-width: 0 !important; }
             }
           </style>
         </head>
@@ -2872,6 +2879,10 @@ function App() {
               <label title="Ajustar zoom da impressão"><span class="print-preview-control-label">Zoom</span><input id="zoom-input" aria-label="Zoom da impressão" type="range" min="40" max="140" step="5" value="100" /></label>
               <label title="Ajustar largura das colunas"><span class="print-preview-control-label">Colunas</span><input id="column-input" aria-label="Largura das colunas" type="range" min="60" max="220" step="5" value="110" /></label>
               <label title="Ajustar largura da primeira coluna"><span class="print-preview-control-label">Primeira coluna</span><input id="service-input" aria-label="Largura da primeira coluna" type="range" min="160" max="520" step="10" value="260" /></label>
+            </div>
+            <div class="print-orientation-toggle" role="group" aria-label="Orientação da página">
+              <button id="orientation-portrait" class="${defaultPrintOrientation === 'portrait' ? 'active' : ''}" type="button">Retrato</button>
+              <button id="orientation-landscape" class="${defaultPrintOrientation === 'landscape' ? 'active' : ''}" type="button">Paisagem</button>
             </div>
             <div class="print-preview-actions">
               <button id="reset-widths" type="button">Restaurar larguras</button>
@@ -2935,7 +2946,7 @@ function App() {
     const applyPrintWidths = () => {
       printTableSettings.forEach((settings) => {
         settings.columns.forEach((column, columnIndex) => {
-          column.style.width = `${getPrintColumnWidth(columnIndex, settings.widths)}px`
+          column.style.setProperty('width', `${getPrintColumnWidth(columnIndex, settings.widths)}px`, 'important')
         })
         Array.from(settings.table.rows).forEach((row) => {
           Array.from(row.cells).forEach((cell) => {
@@ -2945,9 +2956,9 @@ function App() {
             const cellWidth = Array.from({ length: columnSpan }, (_, offset) =>
               getPrintColumnWidth(startColumn + offset, settings.widths),
             ).reduce((total, width) => total + width, 0)
-            cell.style.width = `${cellWidth}px`
-            cell.style.minWidth = `${cellWidth}px`
-            cell.style.maxWidth = `${cellWidth}px`
+            cell.style.setProperty('width', `${cellWidth}px`, 'important')
+            cell.style.setProperty('min-width', `${cellWidth}px`, 'important')
+            cell.style.setProperty('max-width', `${cellWidth}px`, 'important')
           })
         })
       })
@@ -3017,16 +3028,27 @@ function App() {
       printSource?.style.setProperty('--print-first-column-width', `${serviceWidth}px`)
       printSource?.style.setProperty('--matrix-column-width', `${width}px`)
       printSource?.style.setProperty('--matrix-service-column-width', `${serviceWidth}px`)
-      if (printSource) printSource.style.zoom = String(zoom / 100)
+      printSource?.style.setProperty('zoom', String(zoom / 100), 'important')
       applyPrintWidths()
+    }
+    const pageStyle = printWindow.document.getElementById('print-page-style')
+    const orientationPortraitButton = printWindow.document.getElementById('orientation-portrait')
+    const orientationLandscapeButton = printWindow.document.getElementById('orientation-landscape')
+    const setPrintOrientation = (orientation: 'portrait' | 'landscape') => {
+      if (pageStyle) pageStyle.textContent = `@page { size: A4 ${orientation}; margin: 6mm; }`
+      orientationPortraitButton?.classList.toggle('active', orientation === 'portrait')
+      orientationLandscapeButton?.classList.toggle('active', orientation === 'landscape')
     }
     zoomInput?.addEventListener('input', syncPrintSettings)
     columnInput?.addEventListener('input', syncPrintSettings)
     serviceInput?.addEventListener('input', syncPrintSettings)
+    orientationPortraitButton?.addEventListener('click', () => setPrintOrientation('portrait'))
+    orientationLandscapeButton?.addEventListener('click', () => setPrintOrientation('landscape'))
     printWindow.document.getElementById('reset-widths')?.addEventListener('click', () => {
       printTableSettings.forEach((settings) => settings.widths.fill(null))
       syncPrintSettings()
     })
+    printWindow.addEventListener('beforeprint', syncPrintSettings)
     printWindow.document.getElementById('print-now')?.addEventListener('click', () => printWindow.print())
     printWindow.document.getElementById('close-preview')?.addEventListener('click', () => printWindow.close())
     syncPrintSettings()
