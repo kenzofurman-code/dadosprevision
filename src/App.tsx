@@ -1766,16 +1766,34 @@ function App() {
       1,
     ))
 
-    const milestoneNames = Array.from(
-      new Set(milestones.map(milestoneName)),
-    ).sort(compareNatural)
-    const chartMilestoneNames = Array.from(
-      new Set(
-        milestones
-          .filter((milestone) => milestone.date >= windowStart && milestone.date < windowEnd)
-          .map(milestoneName),
+    const firstDateByMilestone = new Map<string, number>()
+    for (const milestone of milestones) {
+      const name = milestoneName(milestone)
+      const timestamp = milestone.date.getTime()
+      const currentTimestamp = firstDateByMilestone.get(name)
+      if (currentTimestamp === undefined || timestamp < currentTimestamp) {
+        firstDateByMilestone.set(name, timestamp)
+      }
+    }
+    const sortMilestoneNamesChronologically = (names: string[]) =>
+      [...names].sort(
+        (nameA, nameB) =>
+          (firstDateByMilestone.get(nameA) ?? Number.MAX_SAFE_INTEGER) -
+            (firstDateByMilestone.get(nameB) ?? Number.MAX_SAFE_INTEGER) ||
+          compareNatural(nameA, nameB),
+      )
+    const milestoneNames = sortMilestoneNamesChronologically(
+      Array.from(new Set(milestones.map(milestoneName))),
+    )
+    const chartMilestoneNames = sortMilestoneNamesChronologically(
+      Array.from(
+        new Set(
+          milestones
+            .filter((milestone) => milestone.date >= windowStart && milestone.date < windowEnd)
+            .map(milestoneName),
+        ),
       ),
-    ).sort(compareNatural)
+    )
     const colorByName = new Map<string, string>()
     const usedColors = new Set<string>()
     milestoneNames.forEach((name, index) => {
