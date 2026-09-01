@@ -15,6 +15,13 @@
   box-shadow: 0 2px 8px rgba(23, 63, 56, 0.05);
 }
 
+.curvas-chart-layout {
+  display: grid;
+  grid-template-columns: minmax(210px, 258px) minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+
 .curvas-heading-card,
 .curvas-chart-toolbar,
 .curvas-table-heading {
@@ -111,6 +118,11 @@
   padding: 12px 14px;
 }
 
+.curvas-chart-layout > .curvas-legend-card {
+  position: sticky;
+  top: 12px;
+}
+
 .curvas-legend-intro {
   display: flex;
   align-items: baseline;
@@ -128,13 +140,14 @@
 
 .curvas-legend-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 7px;
 }
 
 .curvas-legend-item {
   display: inline-flex;
-  min-width: 188px;
+  width: 100%;
+  min-width: 0;
   min-height: 42px;
   align-items: center;
   gap: 8px;
@@ -696,6 +709,19 @@
 }
 
 @media (max-width: 900px) {
+  .curvas-chart-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .curvas-chart-layout > .curvas-legend-card {
+    position: static;
+  }
+
+  .curvas-legend-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .curvas-heading-card,
   .curvas-chart-toolbar,
   .curvas-table-heading {
@@ -723,6 +749,10 @@
 }
 
 @media (max-width: 560px) {
+  .curvas-legend-list {
+    grid-template-columns: 1fr;
+  }
+
   .curvas-legend-intro {
     align-items: flex-start;
     flex-direction: column;

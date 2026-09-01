@@ -225,6 +225,15 @@ function curveDash(style: CurveStyle) {
   return CURVE_STYLES.find((item) => item.value === style)?.dash || 'none'
 }
 
+function isRepeatedActualValue(curve: CurveSeries, rangeStart: number, pointIndex: number) {
+  if (curve.kind !== 'actual') return false
+  const absoluteIndex = rangeStart + pointIndex
+  if (absoluteIndex <= 0) return false
+  const current = curve.points[absoluteIndex]?.value
+  const previous = curve.points[absoluteIndex - 1]?.value
+  return current !== null && current !== undefined && previous !== null && previous !== undefined && Math.abs(current - previous) < 0.000001
+}
+
 function sanitizeCurves(value: unknown): CurveDefinition[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((item): CurveDefinition[] => {
@@ -444,7 +453,7 @@ function CurveChart({
               {showMarkers && points.map((point, index) => point.value === null ? null : (
                 <circle key={`${curve.id}-point-${index}`} className="curvas-marker" cx={x(index)} cy={y(point.value)} r={focusedId === curve.id ? 4 : 3} fill={curve.color} />
               ))}
-              {showValues && points.map((point, index) => point.value === null || (index % labelStride !== 0 && index !== points.length - 1) ? null : (
+              {showValues && points.map((point, index) => point.value === null || isRepeatedActualValue(curve, range.start, index) || (index % labelStride !== 0 && index !== points.length - 1) ? null : (
                 <text key={`${curve.id}-value-${index}`} className="curvas-point-label" x={x(index)} y={y(point.value) - 9} textAnchor="middle" fill={curve.color}>{formatPercent(point.value)}</text>
               ))}
               <path
@@ -743,37 +752,39 @@ export function CurvasView({ projectId, projectName, records, loading = false }:
         <div className="curvas-empty-card">Escolha um projeto no seletor acima para carregar suas curvas.</div>
       ) : (
         <>
-          <div className="curvas-legend-card">
-            <div className="curvas-legend-intro"><strong>Curvas exibidas</strong><span>Clique para ligar/desligar · duplo clique para destacar uma curva</span></div>
-            <div className="curvas-legend-list">
-              {series.map((curve) => {
-                const available = curve.points.some((point) => point.value !== null)
-                return (
-                  <button
-                    key={curve.id}
-                    type="button"
-                    className={`curvas-legend-item ${curve.visible ? 'selected' : ''} ${focusedId === curve.id ? 'focused' : ''}`}
-                    aria-pressed={curve.visible}
-                    disabled={!available && curve.origin === 'prevision'}
-                    onClick={() => updateDefinitions(definitions.map((item) => item.id === curve.id ? { ...item, visible: !item.visible } : item))}
-                    onDoubleClick={() => setFocusedId((value) => value === curve.id ? null : curve.id)}
-                    title={available ? 'Clique para alternar a curva' : 'Sem dados deste tipo para o projeto'}
-                  >
-                    <span className="curvas-legend-line" style={{ backgroundColor: curve.color, borderTopStyle: curve.style === 'solid' ? 'solid' : curve.style === 'dashed' ? 'dashed' : 'dotted' }} />
-                    <span className="curvas-legend-copy"><strong>{curve.label}</strong><small>{curve.origin === 'prevision' ? 'Prevision' : 'Manual'}</small></span>
-                    {curve.visible ? <Eye size={14} /> : <EyeOff size={14} />}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
+          <div className="curvas-chart-layout">
+            <aside className="curvas-legend-card" aria-label="Curvas exibidas">
+              <div className="curvas-legend-intro"><strong>Curvas exibidas</strong><span>Clique para ligar/desligar · duplo clique para destacar uma curva</span></div>
+              <div className="curvas-legend-list">
+                {series.map((curve) => {
+                  const available = curve.points.some((point) => point.value !== null)
+                  return (
+                    <button
+                      key={curve.id}
+                      type="button"
+                      className={`curvas-legend-item ${curve.visible ? 'selected' : ''} ${focusedId === curve.id ? 'focused' : ''}`}
+                      aria-pressed={curve.visible}
+                      disabled={!available && curve.origin === 'prevision'}
+                      onClick={() => updateDefinitions(definitions.map((item) => item.id === curve.id ? { ...item, visible: !item.visible } : item))}
+                      onDoubleClick={() => setFocusedId((value) => value === curve.id ? null : curve.id)}
+                      title={available ? 'Clique para alternar a curva' : 'Sem dados deste tipo para o projeto'}
+                    >
+                      <span className="curvas-legend-line" style={{ backgroundColor: curve.color, borderTopStyle: curve.style === 'solid' ? 'solid' : curve.style === 'dashed' ? 'dashed' : 'dotted' }} />
+                      <span className="curvas-legend-copy"><strong>{curve.label}</strong><small>{curve.origin === 'prevision' ? 'Prevision' : 'Manual'}</small></span>
+                      {curve.visible ? <Eye size={14} /> : <EyeOff size={14} />}
+                    </button>
+                  )
+                })}
+              </div>
+            </aside>
 
-          <div className="curvas-chart-card">
-            <div className="curvas-chart-toolbar">
-              <div><strong>{hasAnyData ? `${months.length} meses disponíveis` : 'Sem dados de curva'}</strong><span>Arraste sobre o gráfico para aplicar zoom · duplo clique restaura o período completo</span></div>
-              <button type="button" className="curvas-secondary-button" onClick={() => setRange({ start: 0, end: Math.max(0, months.length - 1) })} disabled={!months.length}><RotateCcw size={14} /> Período completo</button>
+            <div className="curvas-chart-card">
+              <div className="curvas-chart-toolbar">
+                <div><strong>{hasAnyData ? `${months.length} meses disponíveis` : 'Sem dados de curva'}</strong><span>Arraste sobre o gráfico para aplicar zoom · duplo clique restaura o período completo</span></div>
+                <button type="button" className="curvas-secondary-button" onClick={() => setRange({ start: 0, end: Math.max(0, months.length - 1) })} disabled={!months.length}><RotateCcw size={14} /> Período completo</button>
+              </div>
+              {loading || configState === 'loading' ? <div className="curvas-loading">Carregando curvas...</div> : months.length > 0 ? <CurveChart months={months} series={series} range={range} onZoom={setRange} onResetZoom={() => setRange({ start: 0, end: Math.max(0, months.length - 1) })} showMarkers={showMarkers} showValues={showValues} focusedId={focusedId} onFocus={setFocusedId} /> : <div className="curvas-empty-card">O projeto não possui pontos mensais de andamento disponíveis.</div>}
             </div>
-            {loading || configState === 'loading' ? <div className="curvas-loading">Carregando curvas...</div> : months.length > 0 ? <CurveChart months={months} series={series} range={range} onZoom={setRange} onResetZoom={() => setRange({ start: 0, end: Math.max(0, months.length - 1) })} showMarkers={showMarkers} showValues={showValues} focusedId={focusedId} onFocus={setFocusedId} /> : <div className="curvas-empty-card">O projeto não possui pontos mensais de andamento disponíveis.</div>}
           </div>
 
           {tableOpen && (
