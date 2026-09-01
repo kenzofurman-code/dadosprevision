@@ -164,6 +164,63 @@ function parseInputValue(value: string) {
   return Math.max(0, Math.min(1.5, number > 1.5 ? number / 100 : number))
 }
 
+function ManualCurveCell({
+  value,
+  label,
+  onCommit,
+}: {
+  value: number | null
+  label: string
+  onCommit: (value: number | null) => void
+}) {
+  const [raw, setRaw] = useState(() => formatInputValue(value))
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (document.activeElement !== inputRef.current) setRaw(formatInputValue(value))
+  }, [value])
+
+  function commit() {
+    const text = raw.trim()
+    if (!text || text === '—') {
+      onCommit(null)
+      setRaw('')
+      return
+    }
+    const parsed = parseInputValue(text)
+    if (parsed === null) {
+      setRaw(formatInputValue(value))
+      return
+    }
+    onCommit(parsed)
+    setRaw(formatInputValue(parsed))
+  }
+
+  return (
+    <input
+      ref={inputRef}
+      aria-label={label}
+      inputMode="decimal"
+      value={raw}
+      placeholder="—"
+      onChange={(event) => setRaw(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          commit()
+          inputRef.current?.blur()
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          setRaw(formatInputValue(value))
+          inputRef.current?.blur()
+        }
+      }}
+    />
+  )
+}
+
 function curveDash(style: CurveStyle) {
   return CURVE_STYLES.find((item) => item.value === style)?.dash || 'none'
 }
@@ -725,7 +782,7 @@ export function CurvasView({ projectId, projectName, records, loading = false }:
               <div className="curvas-table-scroll">
                 <table className="curvas-data-table">
                   <thead><tr><th>Mês</th>{series.filter((curve) => curve.points.some((point) => point.value !== null) || curve.origin === 'manual').map((curve) => <th key={curve.id}><span className="curvas-table-title"><i style={{ backgroundColor: curve.color }} />{curve.label}</span></th>)}</tr></thead>
-                  <tbody>{months.map((month, monthIndex) => <tr key={month}><td>{formatMonth(month)}</td>{series.filter((curve) => curve.points.some((point) => point.value !== null) || curve.origin === 'manual').map((curve) => { const value = curve.points[monthIndex]?.value ?? null; return <td key={curve.id} className={curve.origin === 'manual' ? 'editable-cell' : 'locked-cell'}>{curve.origin === 'manual' ? <input aria-label={`${curve.label} em ${formatMonth(month)}`} value={formatInputValue(value)} placeholder="—" onChange={(event) => updateManualPoint(curve.id, month, parseInputValue(event.target.value))} /> : <span title="Valor fornecido pelo Prevision">{formatPercent(value)}</span>}</td> })}</tr>)}</tbody>
+                  <tbody>{months.map((month, monthIndex) => <tr key={month}><td>{formatMonth(month)}</td>{series.filter((curve) => curve.points.some((point) => point.value !== null) || curve.origin === 'manual').map((curve) => { const value = curve.points[monthIndex]?.value ?? null; return <td key={curve.id} className={curve.origin === 'manual' ? 'editable-cell' : 'locked-cell'}>{curve.origin === 'manual' ? <ManualCurveCell label={`${curve.label} em ${formatMonth(month)}`} value={value} onCommit={(nextValue) => updateManualPoint(curve.id, month, nextValue)} /> : <span title="Valor fornecido pelo Prevision">{formatPercent(value)}</span>}</td> })}</tr>)}</tbody>
                 </table>
               </div>
             </div>
