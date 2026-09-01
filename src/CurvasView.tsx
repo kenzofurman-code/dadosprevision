@@ -231,7 +231,7 @@ function isRepeatedActualValue(curve: CurveSeries, rangeStart: number, pointInde
   if (absoluteIndex <= 0) return false
   const current = curve.points[absoluteIndex]?.value
   const previous = curve.points[absoluteIndex - 1]?.value
-  return current !== null && current !== undefined && previous !== null && previous !== undefined && Math.abs(current - previous) < 0.000001
+  return current !== null && current !== undefined && previous !== null && previous !== undefined && Math.abs(current - previous) < 0.0005
 }
 
 function sanitizeCurves(value: unknown): CurveDefinition[] {
@@ -475,12 +475,14 @@ function CurveChart({
         <div className="curvas-tooltip" style={{ left: tooltipLeft }} role="status">
           <strong>{formatMonth(hoveredMonth)}</strong>
           {visibleSeries.map((curve) => {
-            const point = curve.points[range.start + (hoverIndex || 0)]
+            const pointIndex = hoverIndex || 0
+            const point = curve.points[range.start + pointIndex]
+            const repeated = isRepeatedActualValue(curve, range.start, pointIndex)
             return (
               <div key={curve.id} className="curvas-tooltip-row">
                 <i style={{ backgroundColor: curve.color }} />
                 <span>{curve.label}</span>
-                <b>{formatPercent(point?.value ?? null)}</b>
+                {!repeated && <b>{formatPercent(point?.value ?? null)}</b>}
               </div>
             )
           })}
@@ -793,7 +795,7 @@ export function CurvasView({ projectId, projectName, records, loading = false }:
               <div className="curvas-table-scroll">
                 <table className="curvas-data-table">
                   <thead><tr><th>Mês</th>{series.filter((curve) => curve.points.some((point) => point.value !== null) || curve.origin === 'manual').map((curve) => <th key={curve.id}><span className="curvas-table-title"><i style={{ backgroundColor: curve.color }} />{curve.label}</span></th>)}</tr></thead>
-                  <tbody>{months.map((month, monthIndex) => <tr key={month}><td>{formatMonth(month)}</td>{series.filter((curve) => curve.points.some((point) => point.value !== null) || curve.origin === 'manual').map((curve) => { const value = curve.points[monthIndex]?.value ?? null; return <td key={curve.id} className={curve.origin === 'manual' ? 'editable-cell' : 'locked-cell'}>{curve.origin === 'manual' ? <ManualCurveCell label={`${curve.label} em ${formatMonth(month)}`} value={value} onCommit={(nextValue) => updateManualPoint(curve.id, month, nextValue)} /> : <span title="Valor fornecido pelo Prevision">{formatPercent(value)}</span>}</td> })}</tr>)}</tbody>
+                  <tbody>{months.map((month, monthIndex) => <tr key={month}><td>{formatMonth(month)}</td>{series.filter((curve) => curve.points.some((point) => point.value !== null) || curve.origin === 'manual').map((curve) => { const value = curve.points[monthIndex]?.value ?? null; const repeated = isRepeatedActualValue(curve, 0, monthIndex); return <td key={curve.id} className={curve.origin === 'manual' ? 'editable-cell' : 'locked-cell'}>{curve.origin === 'manual' ? <ManualCurveCell label={`${curve.label} em ${formatMonth(month)}`} value={value} onCommit={(nextValue) => updateManualPoint(curve.id, month, nextValue)} /> : repeated ? <span className="curvas-unchanged-value" title="Sem alteração em relação ao mês anterior" /> : <span title="Valor fornecido pelo Prevision">{formatPercent(value)}</span>}</td> })}</tr>)}</tbody>
                 </table>
               </div>
             </div>
