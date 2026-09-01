@@ -35,6 +35,7 @@ import {
   X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { CurvasVisualizer } from './components/curvas/CurvasVisualizer'
 import './App.css'
 
 type DataView =
@@ -48,6 +49,7 @@ type DataView =
   | 'restrictions'
   | 'budgets'
   | 'dashboard'
+  | 'curvas'
   | 'gestao_a_vista'
 
 type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix' | 'panel5' | 'milestones'
@@ -175,6 +177,7 @@ const tabs: TabDefinition[] = [
   { key: 'restrictions', label: 'Restrições', icon: ShieldAlert, totalField: 'total_restricoes' },
   { key: 'budgets', label: 'Orçamento', icon: WalletCards, totalField: 'total_orcamentos' },
   { key: 'dashboard', label: 'Dashboard', icon: ChartNoAxesCombined, totalField: 'total_dashboards' },
+  { key: 'curvas', label: 'Curvas', icon: TrendingUp },
   { key: 'gestao_a_vista', label: 'Gestão à Vista', icon: Presentation, totalField: 'total_atividades' },
 ]
 
@@ -188,6 +191,7 @@ const dataViews = new Set<DataView>([
   'restrictions',
   'budgets',
   'dashboard',
+  'curvas',
   'gestao_a_vista',
 ])
 
@@ -517,6 +521,7 @@ const columns: Record<DataView, Column[]> = {
       align: 'right',
     },
   ],
+  curvas: [],
   gestao_a_vista: [],
 }
 
@@ -1047,6 +1052,8 @@ function App() {
           : budgetMode === 'weights'
           ? 'budgetWeights'
           : 'budgets'
+        : activeView === 'curvas'
+        ? 'dashboardCff'
         : activeView === 'gestao_a_vista'
         ? 'gestaoVista'
         : activeView === 'dashboard'
@@ -3444,7 +3451,7 @@ function App() {
                 </div>
               </div>
             </div>
-          ) : (
+          ) : activeView === 'gestao_a_vista' || activeView === 'curvas' ? null : (
             <div className="filters">
               <label>
                 <span>Projeto</span>
@@ -3505,12 +3512,19 @@ function App() {
           <div className={`feedback ${error ? 'error' : 'success'}`}>{error || message}</div>
         )}
 
-        <div className={`table-panel ${activeView === 'dashboard' && dashboardMode === 'cff' ? 'cff-panel' : activeView === 'gestao_a_vista' ? 'gestao-panel' : ''}`} aria-live="polite">
+        <div className={`table-panel ${activeView === 'dashboard' && dashboardMode === 'cff' ? 'cff-panel' : activeView === 'gestao_a_vista' || activeView === 'curvas' ? 'gestao-panel' : ''}`} aria-live="polite">
           {loading ? (
             <div className="state-message">
               <RefreshCw size={20} className="spin" />
               Carregando dados
             </div>
+          ) : activeView === 'curvas' ? (
+            <CurvasVisualizer
+              projects={projects}
+              selectedProject={selectedProject}
+              onSelectProject={changeProject}
+              cffSummaries={cffSummaries}
+            />
           ) : activeView === 'gestao_a_vista' ? (
             <div className="gestao-vista-wrapper">
               {/* PANEL SUB-TABS NAVIGATION & A4 PRINT BAR */}
