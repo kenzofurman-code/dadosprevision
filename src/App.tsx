@@ -35,8 +35,8 @@ import {
   X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { CurvasVisualizer } from './components/curvas/CurvasVisualizer'
 import './App.css'
+import { CurvasView } from './CurvasView'
 
 type DataView =
   | 'projects'
@@ -177,7 +177,6 @@ const tabs: TabDefinition[] = [
   { key: 'restrictions', label: 'Restrições', icon: ShieldAlert, totalField: 'total_restricoes' },
   { key: 'budgets', label: 'Orçamento', icon: WalletCards, totalField: 'total_orcamentos' },
   { key: 'dashboard', label: 'Dashboard', icon: ChartNoAxesCombined, totalField: 'total_dashboards' },
-  { key: 'curvas', label: 'Curvas', icon: TrendingUp },
   { key: 'gestao_a_vista', label: 'Gestão à Vista', icon: Presentation, totalField: 'total_atividades' },
 ]
 
@@ -938,7 +937,7 @@ function App() {
   const [records, setRecords] = useState<DataRecord[]>([])
   const [gestaoMilestones, setGestaoMilestones] = useState<DataRecord[]>([])
   const [activeView, setActiveView] = useState<DataView>('gestao_a_vista')
-  const lastDataView = useRef<Exclude<DataView, 'gestao_a_vista'>>('projects')
+  const lastDataView = useRef<Exclude<DataView, 'gestao_a_vista' | 'curvas'>>('projects')
   const [activityMode, setActivityMode] = useState<ActivityMode>('planning')
   const [budgetMode, setBudgetMode] = useState<BudgetMode>('reports')
   const [dashboardMode, setDashboardMode] = useState<DashboardMode>('general')
@@ -1052,10 +1051,10 @@ function App() {
           : budgetMode === 'weights'
           ? 'budgetWeights'
           : 'budgets'
-        : activeView === 'curvas'
-        ? 'dashboardCff'
         : activeView === 'gestao_a_vista'
         ? 'gestaoVista'
+        : activeView === 'curvas'
+        ? 'dashboardMonthly'
         : activeView === 'dashboard'
           ? {
               general: 'dashboard',
@@ -1070,7 +1069,7 @@ function App() {
     const params = new URLSearchParams({
       type: requestedType,
       page: String(page),
-      limit: String(pageSize),
+      limit: String(activeView === 'curvas' ? 200 : pageSize),
     })
     if (selectedProject) params.set('projectId', selectedProject)
 
@@ -1129,7 +1128,7 @@ function App() {
           body: JSON.stringify({
             ...(selectedProject ? { projectId: selectedProject } : {}),
             ...(activeView === 'restrictions' ? { scope: 'restrictions' } : {}),
-            ...(activeView === 'budgets' || activeView === 'dashboard'
+            ...(activeView === 'budgets' || activeView === 'dashboard' || activeView === 'curvas'
               ? { scope: 'analytics' }
               : {}),
           }),
@@ -1140,7 +1139,7 @@ function App() {
         setMessage(
           `${integerFormatter.format(payload.totals?.restrictions ?? 0)} restrições atualizadas.`,
         )
-      } else if (activeView === 'budgets' || activeView === 'dashboard') {
+      } else if (activeView === 'budgets' || activeView === 'dashboard' || activeView === 'curvas') {
         setMessage(
           `${integerFormatter.format(payload.totals?.budgets ?? 0)} orçamentos, ${integerFormatter.format(payload.totals?.budgetWeights ?? 0)} vínculos com cronograma e ${integerFormatter.format(payload.totals?.dashboards ?? 0)} dashboards atualizados.`,
         )
@@ -3083,7 +3082,9 @@ function App() {
   const isMilestoneDashboard = activeView === 'gestao_a_vista' && gestaoPanelTab === 'milestones'
   const activeTab = isMilestoneDashboard
     ? { label: 'Dashboard de Marcos', icon: Flag }
-    : tabs.find((tab) => tab.key === activeView) || tabs[0]
+    : activeView === 'curvas'
+      ? { label: 'Curvas', icon: TrendingUp }
+      : tabs.find((tab) => tab.key === activeView) || tabs[0]
   const currentColumns =
     activeView === 'activities'
       ? activityColumns[activityMode]
@@ -3091,10 +3092,12 @@ function App() {
         ? budgetColumns[budgetMode]
         : activeView === 'dashboard'
           ? dashboardColumns[dashboardMode]
-          : columns[activeView]
+          : activeView === 'curvas'
+            ? []
+            : columns[activeView]
 
   function changeView(view: DataView) {
-    if (view !== 'gestao_a_vista') lastDataView.current = view
+    if (view !== 'gestao_a_vista' && view !== 'curvas') lastDataView.current = view
     setActiveView(view)
     setPage(0)
     setSearch('')
@@ -3128,6 +3131,14 @@ function App() {
             Recarregar
           </button>
           <button
+            className={`header-view-button ${activeView === 'curvas' ? 'active' : ''}`}
+            type="button"
+            onClick={() => changeView('curvas')}
+          >
+            <TrendingUp size={16} />
+            Curvas
+          </button>
+          <button
             className={`header-view-button ${activeView === 'gestao_a_vista' && !isMilestoneDashboard ? 'active' : ''}`}
             type="button"
             onClick={() => {
@@ -3150,7 +3161,7 @@ function App() {
             Dashboard de Marcos
           </button>
           <button
-            className={`header-view-button ${activeView !== 'gestao_a_vista' ? 'active' : ''}`}
+            className={`header-view-button ${activeView !== 'gestao_a_vista' && activeView !== 'curvas' ? 'active' : ''}`}
             type="button"
             onClick={() => changeView(lastDataView.current)}
           >
@@ -3191,7 +3202,7 @@ function App() {
         </div>
       </section>
 
-      {activeView !== 'gestao_a_vista' && (
+      {activeView !== 'gestao_a_vista' && activeView !== 'curvas' && (
         <nav className="data-tabs" aria-label="Dados Prevision">
           {tabs
             .filter((tab) => tab.key !== 'gestao_a_vista')
@@ -3451,7 +3462,7 @@ function App() {
                 </div>
               </div>
             </div>
-          ) : activeView === 'curvas' ? null : (
+          ) : (
             <div className="filters">
               <label>
                 <span>Projeto</span>
@@ -3489,7 +3500,7 @@ function App() {
                   </select>
                 </label>
               )}
-              <label className="search-field">
+              {activeView !== 'curvas' && <label className="search-field">
                 <span>Buscar</span>
                 <Search size={16} />
                 <input
@@ -3503,7 +3514,7 @@ function App() {
                       : 'Buscar nesta página'
                   }
                 />
-              </label>
+              </label>}
             </div>
           )}
         </div>
@@ -3512,18 +3523,18 @@ function App() {
           <div className={`feedback ${error ? 'error' : 'success'}`}>{error || message}</div>
         )}
 
-        <div className={`table-panel ${activeView === 'dashboard' && dashboardMode === 'cff' ? 'cff-panel' : activeView === 'gestao_a_vista' || activeView === 'curvas' ? 'gestao-panel' : ''}`} aria-live="polite">
+        <div className={`table-panel ${activeView === 'dashboard' && dashboardMode === 'cff' ? 'cff-panel' : activeView === 'gestao_a_vista' ? 'gestao-panel' : ''}`} aria-live="polite">
           {loading ? (
             <div className="state-message">
               <RefreshCw size={20} className="spin" />
               Carregando dados
             </div>
           ) : activeView === 'curvas' ? (
-            <CurvasVisualizer
-              projects={projects}
-              selectedProject={selectedProject}
-              onSelectProject={changeProject}
-              cffSummaries={cffSummaries}
+            <CurvasView
+              projectId={selectedProject}
+              projectName={projects.find((project) => project.id_prevision === selectedProject)?.nome_projeto || ''}
+              records={records}
+              loading={loading}
             />
           ) : activeView === 'gestao_a_vista' ? (
             <div className="gestao-vista-wrapper">

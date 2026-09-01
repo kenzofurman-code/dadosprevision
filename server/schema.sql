@@ -288,6 +288,12 @@ CREATE TABLE IF NOT EXISTS analiticos (
   PRIMARY KEY (projeto_id, id_prevision)
 );
 
+CREATE TABLE IF NOT EXISTS curvas_config (
+  projeto_id TEXT PRIMARY KEY REFERENCES projetos(id_prevision) ON DELETE CASCADE,
+  config JSONB NOT NULL DEFAULT '{"curvas": []}'::jsonb,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Migra volumes criados pelas primeiras versoes da stack VPS.
 ALTER TABLE projetos
   ADD COLUMN IF NOT EXISTS area NUMERIC,

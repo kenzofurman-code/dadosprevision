@@ -243,6 +243,25 @@ export async function getAnalyticsData(type, { projectId = '', page = 0, pageSiz
   }
 }
 
+export async function getCurveConfig(projectId) {
+  const { rows } = await query(
+    'SELECT config FROM curvas_config WHERE projeto_id = $1 LIMIT 1',
+    [projectId],
+  )
+  return rows[0]?.config || null
+}
+
+export async function saveCurveConfig(projectId, config) {
+  await query(
+    `INSERT INTO curvas_config (projeto_id, config, updated_at)
+     VALUES ($1, $2::jsonb, NOW())
+     ON CONFLICT (projeto_id)
+     DO UPDATE SET config = EXCLUDED.config, updated_at = NOW()`,
+    [projectId, JSON.stringify(config)],
+  )
+  return config
+}
+
 export async function getRestrictions({ projectId = '', page = 0, pageSize = 100 } = {}) {
   const { rows } = await query(
     projectId

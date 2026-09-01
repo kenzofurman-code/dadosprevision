@@ -13,6 +13,8 @@ import {
   getGenericTable,
   getCffData,
   getAnalyticsData,
+  getCurveConfig,
+  saveCurveConfig,
   getRestrictions,
 } from './db.js'
 import { syncProjects } from './sync.js'
@@ -41,6 +43,33 @@ app.get('/api/projects', async (_req, res) => {
   } catch (err) {
     console.error('Erro em /api/projects:', err)
     res.status(500).json({ error: err.message || 'Erro ao carregar projetos' })
+  }
+})
+
+app.get('/api/curve-config', async (req, res) => {
+  try {
+    const projectId = String(req.query.projectId || '').trim()
+    if (!projectId) return res.status(400).json({ error: 'projectId Ã© obrigatÃ³rio.' })
+    const config = await getCurveConfig(projectId)
+    return res.json({ ok: true, config })
+  } catch (err) {
+    console.error('Erro em /api/curve-config GET:', err)
+    return res.status(500).json({ error: err.message || 'Erro ao carregar a configuraÃ§Ã£o das curvas.' })
+  }
+})
+
+app.put('/api/curve-config', async (req, res) => {
+  try {
+    const projectId = String(req.body?.projectId || '').trim()
+    if (!projectId) return res.status(400).json({ error: 'projectId Ã© obrigatÃ³rio.' })
+    const incoming = req.body?.config
+    const curves = Array.isArray(incoming?.curves) ? incoming.curves.slice(0, 100) : []
+    const config = { curves }
+    await saveCurveConfig(projectId, config)
+    return res.json({ ok: true, config })
+  } catch (err) {
+    console.error('Erro em /api/curve-config PUT:', err)
+    return res.status(500).json({ error: err.message || 'Erro ao salvar a configuraÃ§Ã£o das curvas.' })
   }
 })
 
