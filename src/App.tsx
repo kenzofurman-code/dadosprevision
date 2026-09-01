@@ -3451,7 +3451,7 @@ function App() {
                 </div>
               </div>
             </div>
-          ) : activeView === 'gestao_a_vista' || activeView === 'curvas' ? null : (
+          ) : activeView === 'curvas' ? null : (
             <div className="filters">
               <label>
                 <span>Projeto</span>
