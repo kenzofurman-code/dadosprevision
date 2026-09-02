@@ -474,6 +474,7 @@ function CurveChart({
   const wrapRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const [width, setWidth] = useState(900)
+  const [height, setHeight] = useState(360)
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
   const [hoverY, setHoverY] = useState<number | null>(null)
   const [dragBand, setDragBand] = useState<{ start: number; end: number } | null>(null)
@@ -481,7 +482,7 @@ function CurveChart({
   const windowMonths = months.slice(range.start, range.end + 1)
   const visibleSeries = series.filter((item) => item.visible && item.points.some((point) => point.value !== null))
   const W = Math.max(500, width)
-  const H = 360
+  const H = Math.max(360, height)
   const margin = { top: 28, right: 24, bottom: 64, left: 58 }
   const chartWidth = W - margin.left - margin.right
   const chartHeight = H - margin.top - margin.bottom
@@ -495,7 +496,11 @@ function CurveChart({
   useEffect(() => {
     const node = wrapRef.current
     if (!node) return
-    const update = () => setWidth(node.getBoundingClientRect().width || 900)
+    const update = () => {
+      const bounds = node.getBoundingClientRect()
+      setWidth(bounds.width || 900)
+      setHeight(Math.max(360, Math.round(bounds.height || 360)))
+    }
     update()
     const observer = new ResizeObserver(update)
     observer.observe(node)

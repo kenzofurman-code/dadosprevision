@@ -3,6 +3,7 @@
   flex-direction: column;
   gap: 12px;
   width: 100%;
+  min-height: calc(100vh - 190px);
 }
 
 .curvas-heading-card,
@@ -18,8 +19,10 @@
 .curvas-chart-layout {
   display: grid;
   grid-template-columns: minmax(210px, 258px) minmax(0, 1fr);
-  align-items: start;
+  align-items: stretch;
   gap: 12px;
+  flex: 1 1 auto;
+  min-height: 360px;
 }
 
 .curvas-heading-card,
@@ -149,6 +152,8 @@
 .curvas-chart-layout > .curvas-legend-card {
   position: sticky;
   top: 12px;
+  height: 100%;
+  overflow-y: auto;
 }
 
 .curvas-legend-intro {
@@ -232,6 +237,9 @@
 
 .curvas-chart-card {
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .curvas-chart-toolbar {
@@ -248,6 +256,7 @@
 
 .curvas-chart-wrap {
   position: relative;
+  flex: 1 1 auto;
   min-height: 360px;
   padding: 2px 4px 4px;
   background: #f7f6f1;
@@ -256,7 +265,8 @@
 .curvas-chart {
   display: block;
   width: 100%;
-  height: 360px;
+  height: 100%;
+  min-height: 360px;
   touch-action: none;
   user-select: none;
 }
@@ -876,6 +886,14 @@
   .curvas-chart {
     min-height: 300px;
     height: 300px;
+  }
+
+  .curvas-view {
+    min-height: calc(100vh - 150px);
+  }
+
+  .curvas-chart-layout {
+    min-height: 300px;
   }
 
   .curvas-setting-row {
