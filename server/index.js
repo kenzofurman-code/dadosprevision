@@ -130,7 +130,14 @@ app.get('/api/data', async (req, res) => {
       ].includes(type)
     ) {
       const data = await getAnalyticsData(type, { projectId, page, pageSize })
-      return res.json({ ok: true, type, records: data.records, page, hasMore: data.hasMore })
+      return res.json({
+        ok: true,
+        type,
+        records: data.records,
+        ...(type === 'dashboardMonthly' ? { baselines: data.baselines || [] } : {}),
+        page,
+        hasMore: data.hasMore,
+      })
     }
 
     const tableMap = {

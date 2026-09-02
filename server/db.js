@@ -221,10 +221,11 @@ export async function getAnalyticsData(type, { projectId = '', page = 0, pageSiz
   }
 
   const field = fieldMap[type] || 'dashboard_geral'
+  const selectFields = type === 'dashboardMonthly' ? `${field}, curvas_linhas_base` : field
   const { rows } = await query(
     projectId
-      ? `SELECT ${field} FROM analiticos WHERE projeto_id = $1`
-      : `SELECT ${field} FROM analiticos`,
+      ? `SELECT ${selectFields} FROM analiticos WHERE projeto_id = $1`
+      : `SELECT ${selectFields} FROM analiticos`,
     projectId ? [projectId] : [],
   )
 
@@ -240,6 +241,9 @@ export async function getAnalyticsData(type, { projectId = '', page = 0, pageSiz
   return {
     records,
     hasMore: start + pageSize < allRecords.length,
+    baselines: type === 'dashboardMonthly'
+      ? [...new Map(rows.flatMap((row) => row.curvas_linhas_base || []).map((item) => [String(item.id), item])).values()]
+      : [],
   }
 }
 

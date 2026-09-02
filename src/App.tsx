@@ -935,6 +935,7 @@ function calculateItemWeeklyProgress(item: CffRecord, weekStartStr: string, week
 function App() {
   const [projects, setProjects] = useState<Project[]>([])
   const [records, setRecords] = useState<DataRecord[]>([])
+  const [curveBaselines, setCurveBaselines] = useState<DataRecord[]>([])
   const [gestaoMilestones, setGestaoMilestones] = useState<DataRecord[]>([])
   const [activeView, setActiveView] = useState<DataView>('gestao_a_vista')
   const lastDataView = useRef<Exclude<DataView, 'gestao_a_vista' | 'curvas'>>('projects')
@@ -1075,6 +1076,11 @@ function App() {
 
     const payload = await fetchJson(`/api/data?${params}`)
     setRecords(Array.isArray(payload.records) ? payload.records : [])
+    setCurveBaselines(
+      activeView === 'curvas' && Array.isArray((payload as any).baselines)
+        ? (payload as any).baselines
+        : [],
+    )
     setGestaoMilestones(
       activeView === 'gestao_a_vista' && Array.isArray(payload.milestones)
         ? payload.milestones
@@ -3534,6 +3540,7 @@ function App() {
               projectId={selectedProject}
               projectName={projects.find((project) => project.id_prevision === selectedProject)?.nome_projeto || ''}
               records={records}
+              baselineCurves={curveBaselines}
               loading={loading}
             />
           ) : activeView === 'gestao_a_vista' ? (

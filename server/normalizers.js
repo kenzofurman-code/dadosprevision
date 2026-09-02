@@ -21,7 +21,7 @@ const DATE_KEYS = new Set([
   'data_inicio_obra', 'data_fim_obra',
 ])
 
-const TIMESTAMP_KEYS = new Set(['criado_em', 'excluido_em', 'vencimento_em', 'concluido_em'])
+const TIMESTAMP_KEYS = new Set(['criado_em', 'excluido_em', 'vencimento_em', 'concluido_em', 'restaurada_em'])
 
 function clean(value) {
   const result = JSON.parse(JSON.stringify(value ?? {}))
@@ -232,7 +232,17 @@ export function normalizeMilestone(item, project, projectName) {
 }
 
 export function normalizeBaseline(item, project, projectName) {
-  return clean({ ...projectReference(project, projectName), id_prevision: String(item.id), ativa: Boolean(item.active), criado_em: item.createdAt || null, versao_lob_id: item.lobVersionId || null })
+  return clean({
+    ...projectReference(project, projectName),
+    id_prevision: String(item.id),
+    nome: item.lobVersion?.name || item.name || null,
+    descricao: item.lobVersion?.description || item.description || null,
+    ativa: Boolean(item.active),
+    criado_em: item.createdAt || null,
+    restaurada_em: item.lobVersion?.restoredAt || null,
+    versao_lob_id: item.lobVersionId || item.lobVersion?.id || null,
+    origem_versao: item.lobVersion?.source || null,
+  })
 }
 
 export function normalizeResponsible(item, project, projectName) {
@@ -314,6 +324,38 @@ function weeklyCurve(curve, reference, perspective) {
     })
 }
 
+function normalizeBaselineCurves(curves, dashboardMonthly) {
+  const source = Array.isArray(curves) ? curves : []
+  const monthly = Array.isArray(dashboardMonthly) ? dashboardMonthly : []
+  const active = source.find((curve) => curve.ativa)
+  const activeByMonth = new Map()
+  monthly.forEach((row) => {
+    const month = String(row.data || '').slice(0, 7)
+    if (!month) return
+    const current = activeByMonth.get(month) || { data: month, fisico: null, financeiro: null }
+    if (String(row.perspectiva || '').toLowerCase() === 'physical') current.fisico = Number(row.curva_base) || 0
+    if (String(row.perspectiva || '').toLowerCase() === 'monetary') current.financeiro = Number(row.curva_base) || 0
+    activeByMonth.set(month, current)
+  })
+  return source.map((curve) => {
+    const points = Array.isArray(curve.pontos) ? curve.pontos : []
+    if (!active || String(curve.id) !== String(active.id) || !activeByMonth.size) {
+      return clean(curve)
+    }
+    const pointsByMonth = new Map(points.map((point) => [String(point.data || '').slice(0, 7), point]))
+    activeByMonth.forEach((point, month) => {
+      pointsByMonth.set(month, {
+        ...(pointsByMonth.get(month) || { data: month }),
+        data: month,
+        fisico: point.fisico,
+        financeiro: point.financeiro,
+      })
+    })
+    const normalizedPoints = [...pointsByMonth.values()].filter((point) => point.data).sort((left, right) => String(left.data).localeCompare(String(right.data)))
+    return clean({ ...curve, pontos: normalizedPoints })
+  })
+}
+
 export function normalizeAnalytics(project, data) {
   const reference = projectReference(project, project.name || '-')
   const released = new Set((data.contractWhitelistedBudgetReports || []).map((item) => String(item.id)))
@@ -353,6 +395,17 @@ export function normalizeAnalytics(project, data) {
     dashboard_servicos.push(...(dashboard.data.workPackageEvolution || []).map(evolution))
     dashboard_lotes.push(...(dashboard.data.floorEvolution || []).map(evolution))
   }
-  const analyticsDoc = clean({ ...reference, orcamentos, cff_resumo: (data.cffReports || []).map((report) => cffSummary(report, reference)), dashboard_estados: (data.dashboardWeights || []).map((item) => ({ ...reference, id_prevision: String(item.id), nome: item.name || null, categoria: item.category || null, perspectiva: item.perspective || null, padrao: Boolean(item.primary), possui_orcamento: Boolean(item.hasBudgetLink), status: item.dashboardStatus?.status || null, atualizado_em: item.dashboardStatus?.updatedAt || null })), dashboard_geral, dashboard_semanal, dashboard_mensal, dashboard_servicos, dashboard_lotes })
+  const analyticsDoc = clean({
+    ...reference,
+    orcamentos,
+    cff_resumo: (data.cffReports || []).map((report) => cffSummary(report, reference)),
+    dashboard_estados: (data.dashboardWeights || []).map((item) => ({ ...reference, id_prevision: String(item.id), nome: item.name || null, categoria: item.category || null, perspectiva: item.perspective || null, padrao: Boolean(item.primary), possui_orcamento: Boolean(item.hasBudgetLink), status: item.dashboardStatus?.status || null, atualizado_em: item.dashboardStatus?.updatedAt || null })),
+    dashboard_geral,
+    dashboard_semanal,
+    dashboard_mensal,
+    dashboard_servicos,
+    dashboard_lotes,
+    curvas_linhas_base: normalizeBaselineCurves(data.baselineCurves, dashboard_mensal),
+  })
   return { analyticsDoc, budgetItems: budgetItems.map(clean), budgetWeights: budgetWeights.map(clean) }
 }

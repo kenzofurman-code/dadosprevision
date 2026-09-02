@@ -152,6 +152,9 @@ export default async function handler(req, res) {
         (document) => !projectId || String(document.projeto_id) === projectId,
       )
       const allRecords = scopedDocuments.flatMap((document) => document[field] || [])
+      const baselines = type === 'dashboardMonthly'
+        ? [...new Map(scopedDocuments.flatMap((document) => document.curvas_linhas_base || []).map((item) => [String(item.id), item])).values()]
+        : []
       const start = page * pageSize
       const records = allRecords.slice(start, start + pageSize)
 
@@ -160,6 +163,7 @@ export default async function handler(req, res) {
         ok: true,
         type,
         records,
+        ...(type === 'dashboardMonthly' ? { baselines } : {}),
         page,
         hasMore: start + pageSize < allRecords.length,
       })

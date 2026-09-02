@@ -39,13 +39,32 @@ export type CurveDefinition = {
 
 type CurveSeries = CurveDefinition & {
   points: CurvePoint[]
+  displayLabel: string
 }
 
 type Props = {
   projectId: string
   projectName: string
   records: Array<Record<string, any>>
+  baselineCurves?: Array<Record<string, any>>
   loading?: boolean
+}
+
+type BaselineCurvePoint = {
+  data: string
+  fisico: number | null
+  financeiro: number | null
+}
+
+type BaselineCurve = {
+  id: string
+  nome: string | null
+  descricao: string | null
+  criada_em: string | null
+  restaurada_em: string | null
+  ativa: boolean
+  versao_lob_id: string | null
+  pontos: BaselineCurvePoint[]
 }
 
 type Range = { start: number; end: number }
@@ -265,6 +284,51 @@ function sanitizeCurves(value: unknown): CurveDefinition[] {
   })
 }
 
+function sanitizeBaselineCurves(value: unknown): BaselineCurve[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item): BaselineCurve[] => {
+    if (!item || typeof item !== 'object' || !(item as any).id) return []
+    const raw = item as Record<string, any>
+    const pontos = Array.isArray(raw.pontos)
+      ? raw.pontos.flatMap((point: any): BaselineCurvePoint[] => {
+          const data = monthKey(point?.data)
+          if (!data) return []
+          return [{
+            data,
+            fisico: normalizeValue(point?.fisico),
+            financeiro: normalizeValue(point?.financeiro),
+          }]
+        })
+      : []
+    return [{
+      id: String(raw.id),
+      nome: raw.nome ? String(raw.nome) : null,
+      descricao: raw.descricao ? String(raw.descricao) : null,
+      criada_em: raw.criada_em ? String(raw.criada_em) : null,
+      restaurada_em: raw.restaurada_em ? String(raw.restaurada_em) : null,
+      ativa: Boolean(raw.ativa),
+      versao_lob_id: raw.versao_lob_id ? String(raw.versao_lob_id) : null,
+      pontos,
+    }]
+  })
+}
+
+function formatBaselineDate(value: string | null) {
+  if (!value) return ''
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : value
+}
+
+function baselineDisplayName(baseline: BaselineCurve | null) {
+  if (!baseline) return 'Linha de base'
+  const name = baseline.nome || `Linha de base ${baseline.id}`
+  return `${name}${baseline.criada_em ? ` · ${formatBaselineDate(baseline.criada_em)}` : ''}`
+}
+
+function baselineOptionLabel(baseline: BaselineCurve) {
+  return `${baselineDisplayName(baseline)}${baseline.ativa ? ' · ativa' : ''}`
+}
+
 function persistableCurves(curves: CurveDefinition[]) {
   return curves.map((curve) => {
     const { points, ...base } = curve
@@ -481,7 +545,7 @@ function CurveChart({
             return (
               <div key={curve.id} className="curvas-tooltip-row">
                 <i style={{ backgroundColor: curve.color }} />
-                <span>{curve.label}</span>
+                <span>{curve.displayLabel}</span>
                 {!repeated && <b>{formatPercent(point?.value ?? null)}</b>}
               </div>
             )
@@ -594,8 +658,10 @@ function ManualCurveModal({
   )
 }
 
-export function CurvasView({ projectId, projectName, records, loading = false }: Props) {
+export function CurvasView({ projectId, projectName, records, baselineCurves = [], loading = false }: Props) {
   const [storedCurves, setStoredCurves] = useState<CurveDefinition[] | null>(null)
+  const [storedBaselineId, setStoredBaselineId] = useState<string | null>(null)
+  const [selectedBaselineId, setSelectedBaselineId] = useState<string | null>(null)
   const [configState, setConfigState] = useState<'idle' | 'loading' | 'ready'>('idle')
   const [configError, setConfigError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -623,18 +689,45 @@ export function CurvasView({ projectId, projectName, records, loading = false }:
         if (!response.ok) throw new Error(payload?.error || 'Não foi possível carregar a configuração.')
         if (!cancelled) {
           setStoredCurves(sanitizeCurves(payload?.config?.curves))
+          setStoredBaselineId(payload?.config?.linha_base_id ? String(payload.config.linha_base_id) : null)
           setConfigState('ready')
         }
       })
       .catch((error) => {
         if (!cancelled) {
           setStoredCurves([])
+          setStoredBaselineId(null)
           setConfigState('ready')
           setConfigError(error instanceof Error ? error.message : 'Não foi possível carregar a configuração.')
         }
       })
     return () => { cancelled = true }
   }, [projectId])
+
+  const availableBaselines = useMemo(() => sanitizeBaselineCurves(baselineCurves).sort((left, right) => {
+    if (left.ativa !== right.ativa) return left.ativa ? -1 : 1
+    return String(right.criada_em || '').localeCompare(String(left.criada_em || ''))
+  }), [baselineCurves])
+
+  const activeBaseline = useMemo(
+    () => availableBaselines.find((baseline) => baseline.ativa) || availableBaselines[0] || null,
+    [availableBaselines],
+  )
+
+  useEffect(() => {
+    if (!availableBaselines.length) {
+      setSelectedBaselineId(null)
+      return
+    }
+    const requested = storedBaselineId || selectedBaselineId
+    const selected = availableBaselines.find((baseline) => baseline.id === requested)
+    setSelectedBaselineId(selected?.id || activeBaseline?.id || availableBaselines[0].id)
+  }, [activeBaseline, availableBaselines, projectId, selectedBaselineId, storedBaselineId])
+
+  const selectedBaseline = useMemo(
+    () => availableBaselines.find((baseline) => baseline.id === selectedBaselineId) || activeBaseline,
+    [activeBaseline, availableBaselines, selectedBaselineId],
+  )
 
   const definitions = useMemo(() => {
     const stored = storedCurves || []
@@ -663,14 +756,26 @@ export function CurvasView({ projectId, projectName, records, loading = false }:
     return [...all].sort()
   }, [definitions, recordByPerspective])
 
+  const selectedBaselinePoints = useMemo(
+    () => new Map((selectedBaseline?.pontos || []).map((point) => [point.data, point])),
+    [selectedBaseline],
+  )
+
   const series = useMemo<CurveSeries[]>(() => definitions.map((curve) => {
     const manualMap = new Map((curve.points || []).map((point) => [point.date, point.value]))
     const points = months.map((date) => ({
       date,
-      value: curve.origin === 'manual' ? (manualMap.get(date) ?? null) : getPrevisionValue(recordByPerspective[curve.perspective].get(date), curve.kind),
+      value: curve.origin === 'manual'
+        ? (manualMap.get(date) ?? null)
+        : curve.kind === 'base'
+          ? (selectedBaselinePoints.get(date)?.[curve.perspective === 'physical' ? 'fisico' : 'financeiro'] ?? getPrevisionValue(recordByPerspective[curve.perspective].get(date), curve.kind))
+          : getPrevisionValue(recordByPerspective[curve.perspective].get(date), curve.kind),
     }))
-    return { ...curve, points }
-  }), [definitions, months, recordByPerspective])
+    const displayLabel = curve.kind === 'base'
+      ? `${curve.perspective === 'physical' ? 'Físico' : 'Financeiro'} · ${baselineDisplayName(selectedBaseline)}`
+      : curve.label
+    return { ...curve, points, displayLabel }
+  }), [definitions, months, recordByPerspective, selectedBaseline, selectedBaselinePoints])
 
   useEffect(() => {
     setRange({ start: 0, end: Math.max(0, months.length - 1) })
@@ -685,7 +790,13 @@ export function CurvasView({ projectId, projectName, records, loading = false }:
         const response = await fetch('/api/curve-config', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectId, config: { curves: persistableCurves(storedCurves) } }),
+          body: JSON.stringify({
+            projectId,
+            config: {
+              curves: persistableCurves(storedCurves),
+              linha_base_id: selectedBaselineId,
+            },
+          }),
         })
         const payload = await response.json().catch(() => null)
         if (!response.ok) throw new Error(payload?.error || 'Não foi possível salvar a configuração.')
@@ -697,7 +808,7 @@ export function CurvasView({ projectId, projectName, records, loading = false }:
       }
     }, 450)
     return () => { if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current) }
-  }, [configState, projectId, storedCurves])
+  }, [configState, projectId, selectedBaselineId, storedCurves])
 
   function updateDefinitions(next: CurveDefinition[]) {
     setStoredCurves(persistableCurves(next))
@@ -740,6 +851,20 @@ export function CurvasView({ projectId, projectName, records, loading = false }:
           <p>{projectId ? `${projectName || 'Projeto selecionado'} · período completo disponível no Prevision` : 'Selecione um projeto para visualizar as curvas.'}</p>
         </div>
         <div className="curvas-heading-actions">
+          <label className="curvas-baseline-selector" title={selectedBaseline?.descricao || 'Selecione a linha de base que será exibida'}>
+            <span>Linha de base</span>
+            <select
+              value={selectedBaselineId || ''}
+              disabled={!availableBaselines.length}
+              onChange={(event) => setSelectedBaselineId(event.target.value || null)}
+              aria-label="Selecionar linha de base"
+            >
+              {!availableBaselines.length && <option value="">Nenhuma disponível</option>}
+              {availableBaselines.map((baseline) => (
+                <option key={baseline.id} value={baseline.id}>{baselineOptionLabel(baseline)}</option>
+              ))}
+            </select>
+          </label>
           <button type="button" className={showMarkers ? 'curvas-toggle active' : 'curvas-toggle'} onClick={() => setShowMarkers((value) => !value)}><span className="curvas-toggle-dot" /> Marcadores</button>
           <button type="button" className={showValues ? 'curvas-toggle active' : 'curvas-toggle'} onClick={() => setShowValues((value) => !value)}>Valores</button>
           <button type="button" className={tableOpen ? 'curvas-toggle active' : 'curvas-toggle'} onClick={() => setTableOpen((value) => !value)}><Table2 size={14} /> {tableOpen ? 'Ocultar tabela' : 'Mostrar tabela'}</button>
@@ -772,7 +897,7 @@ export function CurvasView({ projectId, projectName, records, loading = false }:
                       title={available ? 'Clique para alternar a curva' : 'Sem dados deste tipo para o projeto'}
                     >
                       <span className="curvas-legend-line" style={{ backgroundColor: curve.color, borderTopStyle: curve.style === 'solid' ? 'solid' : curve.style === 'dashed' ? 'dashed' : 'dotted' }} />
-                      <span className="curvas-legend-copy"><strong>{curve.label}</strong><small>{curve.origin === 'prevision' ? 'Prevision' : 'Manual'}</small></span>
+                      <span className="curvas-legend-copy"><strong>{curve.displayLabel}</strong><small>{curve.origin === 'prevision' ? 'Prevision' : 'Manual'}</small></span>
                       {curve.visible ? <Eye size={14} /> : <EyeOff size={14} />}
                     </button>
                   )
@@ -794,8 +919,8 @@ export function CurvasView({ projectId, projectName, records, loading = false }:
               <div className="curvas-table-heading"><div><strong>Dados mensais das curvas</strong><span>Curvas do Prevision ficam bloqueadas; curvas manuais podem ser preenchidas e copiadas para o Excel.</span></div><span className="curvas-table-project">{projectName}</span></div>
               <div className="curvas-table-scroll">
                 <table className="curvas-data-table">
-                  <thead><tr><th>Mês</th>{series.filter((curve) => curve.points.some((point) => point.value !== null) || curve.origin === 'manual').map((curve) => <th key={curve.id}><span className="curvas-table-title"><i style={{ backgroundColor: curve.color }} />{curve.label}</span></th>)}</tr></thead>
-                  <tbody>{months.map((month, monthIndex) => <tr key={month}><td>{formatMonth(month)}</td>{series.filter((curve) => curve.points.some((point) => point.value !== null) || curve.origin === 'manual').map((curve) => { const value = curve.points[monthIndex]?.value ?? null; const repeated = isRepeatedActualValue(curve, 0, monthIndex); return <td key={curve.id} className={curve.origin === 'manual' ? 'editable-cell' : 'locked-cell'}>{curve.origin === 'manual' ? <ManualCurveCell label={`${curve.label} em ${formatMonth(month)}`} value={value} onCommit={(nextValue) => updateManualPoint(curve.id, month, nextValue)} /> : repeated ? <span className="curvas-unchanged-value" title="Sem alteração em relação ao mês anterior" /> : <span title="Valor fornecido pelo Prevision">{formatPercent(value)}</span>}</td> })}</tr>)}</tbody>
+                  <thead><tr><th>Mês</th>{series.filter((curve) => curve.points.some((point) => point.value !== null) || curve.origin === 'manual').map((curve) => <th key={curve.id}><span className="curvas-table-title"><i style={{ backgroundColor: curve.color }} />{curve.displayLabel}</span></th>)}</tr></thead>
+                  <tbody>{months.map((month, monthIndex) => <tr key={month}><td>{formatMonth(month)}</td>{series.filter((curve) => curve.points.some((point) => point.value !== null) || curve.origin === 'manual').map((curve) => { const value = curve.points[monthIndex]?.value ?? null; const repeated = isRepeatedActualValue(curve, 0, monthIndex); return <td key={curve.id} className={curve.origin === 'manual' ? 'editable-cell' : 'locked-cell'}>{curve.origin === 'manual' ? <ManualCurveCell label={`${curve.displayLabel} em ${formatMonth(month)}`} value={value} onCommit={(nextValue) => updateManualPoint(curve.id, month, nextValue)} /> : repeated ? <span className="curvas-unchanged-value" title="Sem alteração em relação ao mês anterior" /> : <span title="Valor fornecido pelo Prevision">{formatPercent(value)}</span>}</td> })}</tr>)}</tbody>
                 </table>
               </div>
             </div>

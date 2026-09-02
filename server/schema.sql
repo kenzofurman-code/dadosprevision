@@ -195,9 +195,12 @@ CREATE TABLE IF NOT EXISTS linhas_base (
   id_prevision TEXT NOT NULL,
   projeto_nome TEXT,
   nome TEXT,
+  descricao TEXT,
   ativa BOOLEAN DEFAULT FALSE,
   criado_em TIMESTAMPTZ,
+  restaurada_em TIMESTAMPTZ,
   versao_lob_id TEXT,
+  origem_versao TEXT,
   raw_data JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -282,6 +285,7 @@ CREATE TABLE IF NOT EXISTS analiticos (
   dashboard_servicos JSONB DEFAULT '[]'::jsonb,
   dashboard_lotes JSONB DEFAULT '[]'::jsonb,
   dashboard_estados JSONB DEFAULT '[]'::jsonb,
+  curvas_linhas_base JSONB DEFAULT '[]'::jsonb,
   raw_data JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -377,9 +381,13 @@ ALTER TABLE marcos
   ADD COLUMN IF NOT EXISTS operacao_tempo TEXT, ADD COLUMN IF NOT EXISTS visivel_na_obra BOOLEAN DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS origem_incorporacao BOOLEAN DEFAULT FALSE, ADD COLUMN IF NOT EXISTS atividade_id TEXT;
 ALTER TABLE linhas_base
-  ADD COLUMN IF NOT EXISTS ativa BOOLEAN DEFAULT FALSE, ADD COLUMN IF NOT EXISTS criado_em TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS versao_lob_id TEXT;
+  ADD COLUMN IF NOT EXISTS descricao TEXT, ADD COLUMN IF NOT EXISTS ativa BOOLEAN DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS criado_em TIMESTAMPTZ, ADD COLUMN IF NOT EXISTS restaurada_em TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS versao_lob_id TEXT, ADD COLUMN IF NOT EXISTS origem_versao TEXT;
 ALTER TABLE linhas_base ALTER COLUMN nome DROP NOT NULL;
+
+ALTER TABLE analiticos
+  ADD COLUMN IF NOT EXISTS curvas_linhas_base JSONB DEFAULT '[]'::jsonb;
 
 ALTER TABLE cff_itens
   ADD COLUMN IF NOT EXISTS orcamento_id TEXT, ADD COLUMN IF NOT EXISTS orcamento_nome TEXT,

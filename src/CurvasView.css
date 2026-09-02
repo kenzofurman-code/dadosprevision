@@ -69,6 +69,34 @@
   flex-wrap: wrap;
 }
 
+.curvas-baseline-selector {
+  display: grid;
+  min-width: 220px;
+  gap: 3px;
+  color: #397267;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.curvas-baseline-selector select {
+  min-height: 34px;
+  max-width: 290px;
+  border: 1px solid #cbdcd7;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #2e4d45;
+  padding: 0 9px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.curvas-baseline-selector select:focus {
+  outline: 2px solid rgba(57, 114, 103, 0.25);
+  outline-offset: 1px;
+}
+
 .curvas-toggle,
 .curvas-secondary-button,
 .curvas-primary-button,

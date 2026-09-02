@@ -270,9 +270,13 @@ function normalizeBaseline(item, project, projectName) {
   return clean({
     ...projectReference(project, projectName),
     id_prevision: String(item.id),
+    nome: item.lobVersion?.name || item.name || null,
+    descricao: item.lobVersion?.description || item.description || null,
     ativa: Boolean(item.active),
     criado_em: item.createdAt,
-    versao_lob_id: item.lobVersionId || null,
+    restaurada_em: item.lobVersion?.restoredAt || null,
+    versao_lob_id: item.lobVersionId || item.lobVersion?.id || null,
+    origem_versao: item.lobVersion?.source || null,
   })
 }
 
@@ -751,6 +755,23 @@ function normalizeAnalytics(project, data) {
     )
   }
 
+  const activeBaseline = (data.baselineCurves || []).find((curve) => curve.ativa)
+  const activeBaselineByMonth = new Map()
+  monthly.forEach((row) => {
+    const month = String(row.data || '').slice(0, 7)
+    if (!month) return
+    const point = activeBaselineByMonth.get(month) || { data: month, fisico: null, financeiro: null }
+    if (String(row.perspectiva || '').toLowerCase() === 'physical') point.fisico = Number(row.curva_base) || 0
+    if (String(row.perspectiva || '').toLowerCase() === 'monetary') point.financeiro = Number(row.curva_base) || 0
+    activeBaselineByMonth.set(month, point)
+  })
+  const baselineCurves = (data.baselineCurves || []).map((curve) => {
+    if (!activeBaseline || String(curve.id) !== String(activeBaseline.id) || !activeBaselineByMonth.size) return clean(curve)
+    const points = new Map((curve.pontos || []).map((point) => [String(point.data || '').slice(0, 7), point]))
+    activeBaselineByMonth.forEach((point, month) => points.set(month, { ...(points.get(month) || { data: month }), data: month, fisico: point.fisico, financeiro: point.financeiro }))
+    return clean({ ...curve, pontos: [...points.values()].filter((point) => point.data).sort((left, right) => String(left.data).localeCompare(String(right.data))) })
+  })
+
   return {
     analyticsDoc: clean({
       ...projectReferenceData,
@@ -762,6 +783,7 @@ function normalizeAnalytics(project, data) {
       dashboard_mensal: monthly,
       dashboard_servicos: serviceEvolution,
       dashboard_lotes: floorEvolution,
+      curvas_linhas_base: baselineCurves,
       atualizado_em: new Date().toISOString(),
     }),
     budgetItems: budgetItems.map(clean),

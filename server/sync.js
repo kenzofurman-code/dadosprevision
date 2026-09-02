@@ -33,7 +33,7 @@ const TABLE_FIELDS = {
   pavimentos: ['projeto_nome', 'nome', 'posicao', 'area', 'tag', 'grupo_repeticao', 'data_inicio', 'data_fim', 'excluido_em'],
   servicos: ['projeto_nome', 'nome', 'posicao', 'cor', 'unidade', 'data_inicio', 'data_fim', 'possui_atividades', 'possui_etapas'],
   marcos: ['projeto_nome', 'nome', 'data', 'cor', 'atributo_base', 'defasagem_dias', 'operacao_tempo', 'visivel_na_obra', 'origem_incorporacao', 'atividade_id'],
-  linhas_base: ['projeto_nome', 'ativa', 'criado_em', 'versao_lob_id'],
+  linhas_base: ['projeto_nome', 'nome', 'descricao', 'ativa', 'criado_em', 'restaurada_em', 'versao_lob_id', 'origem_versao'],
   responsaveis: ['projeto_nome', 'nome'],
   cff_itens: [
     'projeto_nome', 'orcamento_id', 'orcamento_nome', 'codigo', 'descricao', 'nivel', 'tipo_grupo',
@@ -101,7 +101,7 @@ const TIMESTAMP_FIELDS = {
   projetos: new Set(['criado_em']),
   atividades: new Set(['excluido_em']),
   pavimentos: new Set(['excluido_em']),
-  linhas_base: new Set(['criado_em']),
+  linhas_base: new Set(['criado_em', 'restaurada_em']),
 }
 
 const JSON_FIELDS = {
@@ -182,7 +182,7 @@ async function syncRows(table, projectId, rows, execute = query) {
 }
 
 async function upsertAnalytics(projectId, projectName, analytics, execute = query) {
-  const fields = ['orcamentos', 'cff_resumo', 'dashboard_geral', 'dashboard_semanal', 'dashboard_mensal', 'dashboard_servicos', 'dashboard_lotes', 'dashboard_estados']
+  const fields = ['orcamentos', 'cff_resumo', 'dashboard_geral', 'dashboard_semanal', 'dashboard_mensal', 'dashboard_servicos', 'dashboard_lotes', 'dashboard_estados', 'curvas_linhas_base']
   const values = [
     projectId,
     projectId,
@@ -233,7 +233,7 @@ export async function syncProjects(apiKeyValue, restTokenValue = '', requestedPr
       }
       const restrictions = kanban.tasks
         .filter((task) => String(task.project?.id) === String(project.id)).map(normalizeRestriction)
-      const analyticsData = await fetchAnalyticsData(apiKey, project, data.details)
+      const analyticsData = await fetchAnalyticsData(apiKey, project, data.details, data)
       const analytics = normalizeAnalytics(project, analyticsData)
       const microservices = normalized.atividades.reduce((total, item) => total + item.total_microservicos, 0)
       const counts = {
