@@ -389,6 +389,7 @@ function CurveChart({
   const svgRef = useRef<SVGSVGElement>(null)
   const [width, setWidth] = useState(900)
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
+  const [hoverY, setHoverY] = useState<number | null>(null)
   const [dragBand, setDragBand] = useState<{ start: number; end: number } | null>(null)
   const dragRef = useRef<{ pixel: number; index: number } | null>(null)
   const windowMonths = months.slice(range.start, range.end + 1)
@@ -415,7 +416,10 @@ function CurveChart({
     return () => observer.disconnect()
   }, [])
 
-  useEffect(() => setHoverIndex(null), [months, range.start, range.end, series])
+  useEffect(() => {
+    setHoverIndex(null)
+    setHoverY(null)
+  }, [months, range.start, range.end, series])
 
   function indexAtPixel(pixel: number) {
     if (windowMonths.length <= 1 || chartWidth <= 0) return 0
@@ -427,11 +431,14 @@ function CurveChart({
     if (!rect) return
     const pixel = event.clientX - rect.left
     const index = indexAtPixel(pixel)
+    const svgY = Math.max(0, Math.min(H, ((event.clientY - rect.top) / Math.max(1, rect.height)) * H))
     if (dragRef.current) {
       setDragBand({ start: dragRef.current.index, end: index })
+      setHoverY(svgY)
       return
     }
     setHoverIndex(index)
+    setHoverY(svgY)
   }
 
   function pointerDown(event: ReactPointerEvent<SVGSVGElement>) {
@@ -464,7 +471,25 @@ function CurveChart({
   }
 
   const hoveredMonth = hoverIndex === null ? null : windowMonths[hoverIndex]
-  const tooltipLeft = hoverIndex === null ? 0 : Math.max(12, Math.min(W - 244, x(hoverIndex) - 108))
+  const tooltipBelow = hoverY !== null && hoverY < H * 0.52
+  const svgRect = svgRef.current?.getBoundingClientRect()
+  const wrapRect = wrapRef.current?.getBoundingClientRect()
+  const wrapWidth = wrapRect?.width || W
+  const wrapHeight = wrapRect?.height || H
+  const svgScaleX = svgRect ? svgRect.width / W : 1
+  const svgScaleY = svgRect ? svgRect.height / H : 1
+  const svgOffsetX = svgRect && wrapRect ? svgRect.left - wrapRect.left : 0
+  const svgOffsetY = svgRect && wrapRect ? svgRect.top - wrapRect.top : 0
+  const tooltipHalfWidth = Math.min(110, Math.max(40, (wrapWidth - 16) / 2))
+  const tooltipLeft = hoverIndex === null
+    ? 0
+    : Math.max(
+      tooltipHalfWidth + 8,
+      Math.min(wrapWidth - tooltipHalfWidth - 8, svgOffsetX + x(hoverIndex) * svgScaleX),
+    )
+  const tooltipTop = hoverY === null
+    ? 18
+    : Math.max(8, Math.min(wrapHeight - 8, svgOffsetY + hoverY * svgScaleY + (tooltipBelow ? 14 : -14)))
   const labelStride = Math.max(1, Math.ceil(windowMonths.length / Math.max(5, Math.floor(chartWidth / 74))))
   const gridValues = Array.from({ length: Math.ceil(topValue / 0.2) + 1 }, (_, index) => Math.min(topValue, index * 0.2))
 
@@ -477,7 +502,7 @@ function CurveChart({
         role="img"
         aria-label="Curvas S de andamento físico e financeiro"
         onPointerMove={pointerMove}
-        onPointerLeave={() => { if (!dragRef.current) setHoverIndex(null) }}
+        onPointerLeave={() => { if (!dragRef.current) { setHoverIndex(null); setHoverY(null) } }}
         onPointerDown={pointerDown}
         onPointerUp={pointerUp}
         onPointerCancel={pointerUp}
@@ -536,7 +561,11 @@ function CurveChart({
         )}
       </svg>
       {hoveredMonth && (
-        <div className="curvas-tooltip" style={{ left: tooltipLeft }} role="status">
+        <div
+          className={`curvas-tooltip ${tooltipBelow ? 'below' : 'above'}`}
+          style={{ left: tooltipLeft, top: tooltipTop }}
+          role="status"
+        >
           <strong>{formatMonth(hoveredMonth)}</strong>
           {visibleSeries.map((curve) => {
             const pointIndex = hoverIndex || 0

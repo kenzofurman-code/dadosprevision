@@ -330,15 +330,25 @@
 
 .curvas-tooltip {
   position: absolute;
-  top: 18px;
   z-index: 3;
   width: 220px;
+  max-width: calc(100% - 16px);
   border: 1px solid #cfe0db;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.97);
   box-shadow: 0 8px 24px rgba(23, 63, 56, 0.14);
   padding: 9px 10px;
   pointer-events: none;
+  transform: translateX(-50%);
+  transition: top 100ms ease, left 100ms ease;
+}
+
+.curvas-tooltip.below {
+  transform: translate(-50%, 0);
+}
+
+.curvas-tooltip.above {
+  transform: translate(-50%, -100%);
 }
 
 .curvas-tooltip > strong {
