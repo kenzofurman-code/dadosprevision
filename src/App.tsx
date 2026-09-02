@@ -2911,6 +2911,18 @@ function App() {
               .print-column-resizer { display: none !important; }
               .print-preview-content { padding: 0 !important; overflow: visible !important; }
               .print-preview-content .gestao-print-source { width: 100% !important; min-width: 0 !important; box-shadow: none !important; border: 1px solid #888888 !important; }
+              .gestao-print-source .a4-sheet-header {
+                background: linear-gradient(135deg, #173f38 0%, #0d2823 100%) !important;
+                color: #ffffff !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              .gestao-print-source .a4-sheet-footer {
+                background: #f7faf9 !important;
+                color: #697975 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
               .gestao-print-source .gestao-table,
               .gestao-print-source .panel5-export-table { width: max-content !important; min-width: 0 !important; }
               .matrix-print-source .gestao-matrix-container { overflow: visible !important; max-height: none !important; }
@@ -2945,8 +2957,9 @@ function App() {
     const zoomInput = printWindow.document.getElementById('zoom-input') as HTMLInputElement | null
     const columnInput = printWindow.document.getElementById('column-input') as HTMLInputElement | null
     const serviceInput = printWindow.document.getElementById('service-input') as HTMLInputElement | null
+    const sourceTables = Array.from(source.querySelectorAll('table')) as HTMLTableElement[]
     const printTableSettings = printSource
-      ? (Array.from(printSource.querySelectorAll('table')) as HTMLTableElement[]).map((table) => {
+      ? (Array.from(printSource.querySelectorAll('table')) as HTMLTableElement[]).map((table, tableIndex) => {
           const columnCount = Math.max(
             1,
             ...Array.from(table.rows).map((row) =>
@@ -2974,9 +2987,34 @@ function App() {
             })
           })
 
+          const measuredWidths = Array<number | null>(columnCount).fill(null)
+          const sourceTable = sourceTables[tableIndex]
+          const sourceHeaderRows = sourceTable?.tHead ? Array.from(sourceTable.tHead.rows) : []
+          sourceHeaderRows.forEach((row) => {
+            Array.from(row.cells).forEach((cell) => {
+              const columnSpan = Math.max(1, cell.colSpan)
+              const width = cell.getBoundingClientRect().width / columnSpan
+              if (!Number.isFinite(width) || width <= 0) return
+              let startColumn = 0
+              while (startColumn < columnCount && measuredWidths[startColumn] !== null) startColumn += 1
+              if (startColumn >= columnCount) return
+              for (let offset = 0; offset < columnSpan && startColumn + offset < columnCount; offset += 1) {
+                measuredWidths[startColumn + offset] = width
+              }
+            })
+          })
+
+          const fallbackWidths = measuredWidths.map((width, columnIndex) => {
+            if (width !== null) return width
+            const cell = table.tHead?.rows[0]?.cells[columnIndex]
+            const cellWidth = cell?.getBoundingClientRect().width
+            return Number.isFinite(cellWidth) && cellWidth && cellWidth > 0 ? cellWidth : columnIndex === 0 ? 260 : 110
+          })
+
           return {
             table,
             columns,
+            baseWidths: fallbackWidths,
             widths: Array<number | null>(columnCount).fill(null),
             cellColumns,
           }
@@ -2986,7 +3024,9 @@ function App() {
     const getPrintColumnWidth = (columnIndex: number, widths: Array<number | null>) => {
       const globalWidth = Number(columnInput?.value || 110)
       const firstColumnWidth = Number(serviceInput?.value || 260)
-      return widths[columnIndex] ?? (columnIndex === 0 ? firstColumnWidth : globalWidth)
+      const settings = printTableSettings.find((item) => item.widths === widths)
+      const baseWidth = settings?.baseWidths[columnIndex]
+      return widths[columnIndex] ?? baseWidth ?? (columnIndex === 0 ? firstColumnWidth : globalWidth)
     }
 
     const applyPrintWidths = () => {
@@ -3077,6 +3117,17 @@ function App() {
       printSource?.style.setProperty('zoom', String(zoom / 100), 'important')
       applyPrintWidths()
     }
+
+    const measuredServiceWidth = printTableSettings[0]?.widths[0]
+    const measuredColumnWidths = printTableSettings
+      .flatMap((settings) => settings.widths.slice(1).filter((width): width is number => width !== null && width > 0))
+    if (columnInput && measuredColumnWidths.length > 0) {
+      const averageWidth = measuredColumnWidths.reduce((total, width) => total + width, 0) / measuredColumnWidths.length
+      columnInput.value = String(Math.max(60, Math.min(220, Math.round(averageWidth / 5) * 5)))
+    }
+    if (serviceInput && measuredServiceWidth && measuredServiceWidth > 0) {
+      serviceInput.value = String(Math.max(160, Math.min(520, Math.round(measuredServiceWidth / 10) * 10)))
+    }
     const pageStyle = printWindow.document.getElementById('print-page-style')
     const orientationPortraitButton = printWindow.document.getElementById('orientation-portrait')
     const orientationLandscapeButton = printWindow.document.getElementById('orientation-landscape')
@@ -3086,8 +3137,22 @@ function App() {
       orientationLandscapeButton?.classList.toggle('active', orientation === 'landscape')
     }
     zoomInput?.addEventListener('input', syncPrintSettings)
-    columnInput?.addEventListener('input', syncPrintSettings)
-    serviceInput?.addEventListener('input', syncPrintSettings)
+    columnInput?.addEventListener('input', () => {
+      const width = Number(columnInput.value || 110)
+      printTableSettings.forEach((settings) => {
+        settings.widths.forEach((_, columnIndex) => {
+          if (columnIndex > 0) settings.widths[columnIndex] = width
+        })
+      })
+      syncPrintSettings()
+    })
+    serviceInput?.addEventListener('input', () => {
+      const width = Number(serviceInput.value || 260)
+      printTableSettings.forEach((settings) => {
+        if (settings.widths.length > 0) settings.widths[0] = width
+      })
+      syncPrintSettings()
+    })
     orientationPortraitButton?.addEventListener('click', () => setPrintOrientation('portrait'))
     orientationLandscapeButton?.addEventListener('click', () => setPrintOrientation('landscape'))
     printWindow.document.getElementById('reset-widths')?.addEventListener('click', () => {
