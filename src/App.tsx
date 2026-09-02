@@ -3189,24 +3189,26 @@ function App() {
         </div>
       </header>
 
-      <section className="summary" aria-label="Resumo da carteira">
-        <div>
-          <span>{integerFormatter.format(totals.projects)}</span>
-          <small>Projetos</small>
-        </div>
-        <div>
-          <span>{integerFormatter.format(totals.activities)}</span>
-          <small>Atividades</small>
-        </div>
-        <div>
-          <span>{integerFormatter.format(totals.area)} m²</span>
-          <small>Área planejada</small>
-        </div>
-        <div>
-          <span>{currencyFormatter.format(totals.budget)}</span>
-          <small>Orçamento total</small>
-        </div>
-      </section>
+      {activeView !== 'curvas' && (
+        <section className="summary" aria-label="Resumo da carteira">
+          <div>
+            <span>{integerFormatter.format(totals.projects)}</span>
+            <small>Projetos</small>
+          </div>
+          <div>
+            <span>{integerFormatter.format(totals.activities)}</span>
+            <small>Atividades</small>
+          </div>
+          <div>
+            <span>{integerFormatter.format(totals.area)} m²</span>
+            <small>Área planejada</small>
+          </div>
+          <div>
+            <span>{currencyFormatter.format(totals.budget)}</span>
+            <small>Orçamento total</small>
+          </div>
+        </section>
+      )}
 
       {activeView !== 'gestao_a_vista' && activeView !== 'curvas' && (
         <nav className="data-tabs" aria-label="Dados Prevision">
