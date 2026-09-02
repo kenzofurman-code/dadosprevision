@@ -157,6 +157,11 @@ function monthKey(value: unknown) {
   return match ? `${match[1]}-${match[2]}` : ''
 }
 
+function currentMonthKey() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
 function formatMonth(value: string) {
   const match = value.match(/^(\d{4})-(\d{2})/)
   return match ? `${MONTH_NAMES[Number(match[2]) - 1]}/${match[1].slice(2)}` : value
@@ -867,6 +872,7 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
     () => new Map((selectedBaseline?.pontos || []).map((point) => [point.data, point])),
     [selectedBaseline],
   )
+  const currentMonth = currentMonthKey()
 
   const series = useMemo<CurveSeries[]>(() => definitions.map((curve) => {
     const manualMap = new Map((curve.points || []).map((point) => [point.date, point.value]))
@@ -874,15 +880,17 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
       date,
       value: curve.origin === 'manual'
         ? (manualMap.get(date) ?? null)
-        : curve.kind === 'base'
-          ? (selectedBaselinePoints.get(date)?.[curve.perspective === 'physical' ? 'fisico' : 'financeiro'] ?? getPrevisionValue(recordByPerspective[curve.perspective].get(date), curve.kind))
-          : getPrevisionValue(recordByPerspective[curve.perspective].get(date), curve.kind),
+        : curve.kind === 'actual' && date >= currentMonth
+          ? null
+          : curve.kind === 'base'
+            ? (selectedBaselinePoints.get(date)?.[curve.perspective === 'physical' ? 'fisico' : 'financeiro'] ?? getPrevisionValue(recordByPerspective[curve.perspective].get(date), curve.kind))
+            : getPrevisionValue(recordByPerspective[curve.perspective].get(date), curve.kind),
     }))
     const displayLabel = curve.kind === 'base'
       ? `${curve.perspective === 'physical' ? 'Físico' : 'Financeiro'} · ${baselineDisplayName(selectedBaseline)}`
       : curve.label
     return { ...curve, points, displayLabel }
-  }), [definitions, months, recordByPerspective, selectedBaseline, selectedBaselinePoints])
+  }), [currentMonth, definitions, months, recordByPerspective, selectedBaseline, selectedBaselinePoints])
 
   useEffect(() => {
     setRange({ start: 0, end: Math.max(0, months.length - 1) })
