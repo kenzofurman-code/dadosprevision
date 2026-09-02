@@ -22,7 +22,7 @@
   align-items: stretch;
   gap: 12px;
   flex: 1 1 auto;
-  min-height: 360px;
+  min-height: max(360px, calc(100vh - 320px));
 }
 
 .curvas-heading-card,
