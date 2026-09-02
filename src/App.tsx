@@ -5276,7 +5276,7 @@ function App() {
           )}
         </div>
 
-        {activeView !== 'projects' && activeView !== 'gestao_a_vista' && (
+        {activeView !== 'projects' && activeView !== 'gestao_a_vista' && activeView !== 'curvas' && (
           <footer className="pagination">
             <span>
               Página {page + 1} · {visibleRecords.length} registros exibidos

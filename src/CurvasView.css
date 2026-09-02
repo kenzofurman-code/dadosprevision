@@ -250,6 +250,7 @@
   position: relative;
   min-height: 360px;
   padding: 2px 4px 4px;
+  background: #f7f6f1;
 }
 
 .curvas-chart {
@@ -315,6 +316,20 @@
   pointer-events: none;
 }
 
+.curvas-hover-indicator {
+  pointer-events: none;
+}
+
+.curvas-hover-indicator rect {
+  fill: #1d2a27;
+}
+
+.curvas-hover-indicator text {
+  fill: #ffffff;
+  font-size: 9px;
+  font-weight: 800;
+}
+
 .curvas-brush {
   fill: rgba(36, 89, 79, 0.13);
   stroke: #397267;
@@ -323,9 +338,16 @@
 }
 
 .curvas-point-label {
-  font-size: 9px;
-  font-weight: 750;
   pointer-events: none;
+}
+
+.curvas-point-label rect {
+  opacity: 0.96;
+}
+
+.curvas-point-label text {
+  font-size: 9px;
+  font-weight: 800;
 }
 
 .curvas-tooltip {
@@ -381,8 +403,48 @@
 }
 
 .curvas-tooltip-row b {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
   color: #263b37;
   font-size: 10px;
+}
+
+.curvas-tooltip-row b small {
+  font-size: 8.5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.curvas-tooltip-row b small.positive,
+.curvas-tooltip-delta b.positive {
+  color: #16804c;
+}
+
+.curvas-tooltip-row b small.negative,
+.curvas-tooltip-delta b.negative {
+  color: #d12d2d;
+}
+
+.curvas-tooltip-delta {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #dce6e2;
+  color: #6d7d79;
+  font-size: 8.5px;
+}
+
+.curvas-tooltip-delta > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.curvas-tooltip-delta b {
+  font-size: 9px;
 }
 
 .curvas-empty-overlay,

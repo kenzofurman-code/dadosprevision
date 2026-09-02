@@ -179,6 +179,12 @@ function formatPercent(value: number | null) {
   return `${(value * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
 }
 
+function formatSignedPercent(value: number | null) {
+  if (value === null || !Number.isFinite(value)) return '—'
+  const sign = value > 0 ? '+' : value < 0 ? '−' : ''
+  return `${sign}${(Math.abs(value) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
+}
+
 function formatInputValue(value: number | null) {
   return value === null ? '' : (value * 100).toFixed(2).replace('.', ',')
 }
@@ -572,6 +578,21 @@ function CurveChart({
     : Math.max(8, Math.min(wrapHeight - 8, svgOffsetY + hoverY * svgScaleY + (tooltipBelow ? 14 : -14)))
   const labelStride = Math.max(1, Math.ceil(windowMonths.length / Math.max(5, Math.floor(chartWidth / 74))))
   const gridValues = Array.from({ length: Math.ceil(topValue / 0.2) + 1 }, (_, index) => Math.min(topValue, index * 0.2))
+  const hoverMonthLabel = hoveredMonth ? formatMonth(hoveredMonth) : ''
+  const hoverMonthPillWidth = Math.max(44, hoverMonthLabel.length * 6 + 12)
+  const hoverMonthPillX = hoverIndex === null
+    ? 0
+    : Math.max(2, Math.min(W - hoverMonthPillWidth - 2, x(hoverIndex) - hoverMonthPillWidth / 2))
+  const hoveredDeltas = hoverIndex === null
+    ? []
+    : (['physical', 'monetary'] as CurvePerspective[]).flatMap((perspective) => {
+      const planned = visibleSeries.find((curve) => curve.kind === 'planned' && curve.perspective === perspective)
+      const actual = visibleSeries.find((curve) => curve.kind === 'actual' && curve.perspective === perspective)
+      const plannedValue = planned?.points[range.start + hoverIndex]?.value ?? null
+      const actualValue = actual?.points[range.start + hoverIndex]?.value ?? null
+      if (plannedValue === null || actualValue === null) return []
+      return [{ perspective, delta: actualValue - plannedValue }]
+    })
 
   return (
     <div ref={wrapRef} className="curvas-chart-wrap">
@@ -588,7 +609,7 @@ function CurveChart({
         onPointerCancel={pointerUp}
         onDoubleClick={onResetZoom}
       >
-        <rect x="0" y="0" width={W} height={H} fill="#ffffff" />
+        <rect x="0" y="0" width={W} height={H} fill="#f7f6f1" />
         {gridValues.map((value) => (
           <g key={`grid-${value}`}>
             <line className="curvas-grid-line" x1={margin.left} x2={W - margin.right} y1={y(value)} y2={y(value)} />
@@ -622,9 +643,17 @@ function CurveChart({
               {showMarkers && points.map((point, index) => point.value === null ? null : (
                 <circle key={`${curve.id}-point-${index}`} className="curvas-marker" cx={x(index)} cy={y(point.value)} r={focusedId === curve.id ? 4 : 3} fill={curve.color} />
               ))}
-              {showValues && points.map((point, index) => point.value === null || isRepeatedActualValue(curve, range.start, index) || (index % labelStride !== 0 && index !== points.length - 1) ? null : (
-                <text key={`${curve.id}-value-${index}`} className="curvas-point-label" x={x(index)} y={y(point.value) - 9} textAnchor="middle" fill={curve.color}>{formatPercent(point.value)}</text>
-              ))}
+              {showValues && points.map((point, index) => point.value === null || isRepeatedActualValue(curve, range.start, index) || (index % labelStride !== 0 && index !== points.length - 1) ? null : (() => {
+                const label = formatPercent(point.value)
+                const labelWidth = Math.max(30, label.length * 5.4 + 8)
+                const labelY = Math.max(18, y(point.value) - 20)
+                return (
+                  <g key={`${curve.id}-value-${index}`} className="curvas-point-label">
+                    <rect x={x(index) - labelWidth / 2} y={labelY} width={labelWidth} height={15} rx={2} fill={curve.color} />
+                    <text x={x(index)} y={labelY + 11} textAnchor="middle" fill="#ffffff">{label}</text>
+                  </g>
+                )
+              })())}
               <path
                 className="curvas-hit-line"
                 d={buildPath(points, (index) => x(index), y)}
@@ -634,7 +663,11 @@ function CurveChart({
           )
         })}
         {hoverIndex !== null && (
-          <line className="curvas-crosshair" x1={x(hoverIndex)} x2={x(hoverIndex)} y1={margin.top} y2={H - margin.bottom} />
+          <g className="curvas-hover-indicator">
+            <line className="curvas-crosshair" x1={x(hoverIndex)} x2={x(hoverIndex)} y1={18} y2={H - margin.bottom} />
+            <rect x={hoverMonthPillX} y={0} width={hoverMonthPillWidth} height={18} rx={2} />
+            <text x={hoverMonthPillX + hoverMonthPillWidth / 2} y={12} textAnchor="middle">{hoverMonthLabel}</text>
+          </g>
         )}
         {dragBand && dragBand.start !== dragBand.end && (
           <rect className="curvas-brush" x={Math.min(x(dragBand.start), x(dragBand.end))} width={Math.abs(x(dragBand.end) - x(dragBand.start))} y={margin.top} height={chartHeight} />
@@ -651,14 +684,34 @@ function CurveChart({
             const pointIndex = hoverIndex || 0
             const point = curve.points[range.start + pointIndex]
             const repeated = isRepeatedActualValue(curve, range.start, pointIndex)
+            const delta = curve.kind === 'planned'
+              ? hoveredDeltas.find((item) => item.perspective === curve.perspective)?.delta ?? null
+              : null
             return (
               <div key={curve.id} className="curvas-tooltip-row">
                 <i style={{ backgroundColor: curve.color }} />
                 <span>{curve.displayLabel}</span>
-                {!repeated && <b>{formatPercent(point?.value ?? null)}</b>}
+                {!repeated && (
+                  <b>
+                    {formatPercent(point?.value ?? null)}
+                    {delta !== null && <small className={delta < 0 ? 'negative' : 'positive'}>({formatSignedPercent(delta)})</small>}
+                  </b>
+                )}
               </div>
             )
           })}
+          {hoveredDeltas.length > 0 && (
+            <div className="curvas-tooltip-delta">
+              <span>Realizado − previsto</span>
+              <div>
+                {hoveredDeltas.map(({ perspective, delta }) => (
+                  <b key={perspective} className={delta < 0 ? 'negative' : 'positive'}>
+                    {perspective === 'physical' ? 'Físico' : 'Financeiro'} {formatSignedPercent(delta)}
+                  </b>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
       {!visibleSeries.length && <div className="curvas-empty-overlay">Selecione ao menos uma curva com dados para visualizar o gráfico.</div>}
