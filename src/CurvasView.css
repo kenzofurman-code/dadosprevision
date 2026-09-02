@@ -529,6 +529,16 @@
   color: #9e2926;
 }
 
+.curvas-feedback.success {
+  border: 1px solid #b9dfc7;
+  background: #effaf2;
+  color: #23723f;
+}
+
+.curvas-import-input {
+  display: none;
+}
+
 .curvas-saving {
   color: #397267;
   background: #edf8f3;

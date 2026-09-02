@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
+import type { ChangeEvent, CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import {
   ArrowDown,
   ArrowUp,
@@ -12,6 +12,7 @@ import {
   RotateCcw,
   Settings2,
   Table2,
+  Upload,
   X,
 } from 'lucide-react'
 import './CurvasView.css'
@@ -140,6 +141,8 @@ const DEFAULT_CURVES: CurveDefinition[] = [
   },
 ]
 
+const IMPORTED_CURVE_COLORS = ['#7c3aed', '#ea580c', '#0891b2', '#be123c', '#65a30d', '#475569']
+
 function normalizePerspective(value: unknown): CurvePerspective {
   const normalized = String(value || '')
     .normalize('NFD')
@@ -181,6 +184,78 @@ function parseInputValue(value: string) {
   const number = Number(text)
   if (!Number.isFinite(number)) return null
   return Math.max(0, Math.min(1.5, number > 1.5 ? number / 100 : number))
+}
+
+function identityKey(value: unknown) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '')
+}
+
+function importedMonthKey(value: unknown) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const parsed = new Date(Date.UTC(1899, 11, 30) + value * 86400000)
+    if (!Number.isNaN(parsed.getTime())) return `${parsed.getUTCFullYear()}-${String(parsed.getUTCMonth() + 1).padStart(2, '0')}`
+  }
+  const text = String(value || '').trim()
+  const iso = text.match(/^(\d{4})[-/](\d{1,2})/)
+  if (iso) return `${iso[1]}-${String(Number(iso[2])).padStart(2, '0')}`
+  const brazilian = text.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/)
+  if (brazilian) return `${brazilian[3]}-${String(Number(brazilian[2])).padStart(2, '0')}`
+  return ''
+}
+
+async function importedCurveRows(buffer: ArrayBuffer, projectName: string) {
+  const XLSX = await import('xlsx')
+  const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
+  const firstSheet = workbook.SheetNames[0] ? workbook.Sheets[workbook.SheetNames[0]] : null
+  if (!firstSheet) throw new Error('A planilha não possui nenhuma aba para importar.')
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: null, raw: true })
+  if (!rows.length) throw new Error('A planilha está vazia.')
+
+  const keys = Object.keys(rows[0])
+  const findColumn = (expected: string[]) => keys.find((key) => expected.includes(identityKey(key)))
+  const projectColumn = findColumn(['empreendimento', 'projeto', 'obra'])
+  const dateColumn = findColumn(['data', 'mes', 'mesreferencia'])
+  const versionColumn = findColumn(['versao', 'curva', 'nomecurva', 'cenario'])
+  const valueColumn = findColumn(['obrareal', 'obrarealpercent', 'realizado', 'realizadofisico', 'fisico'])
+  if (!projectColumn || !dateColumn || !versionColumn || !valueColumn) {
+    throw new Error('Colunas não identificadas. Use: Empreendimento, Data, Versão e Obra Real%.')
+  }
+
+  const projectKey = identityKey(projectName)
+  const grouped = new Map<string, CurvePoint[]>()
+  let matchingRows = 0
+  let invalidRows = 0
+  rows.forEach((row) => {
+    if (identityKey(row[projectColumn]) !== projectKey) return
+    matchingRows += 1
+    const date = importedMonthKey(row[dateColumn])
+    const label = String(row[versionColumn] || '').trim()
+    if (!date || !label) {
+      invalidRows += 1
+      return
+    }
+    const points = grouped.get(label) || []
+    points.push({ date, value: normalizeValue(row[valueColumn]) })
+    grouped.set(label, points)
+  })
+  if (!matchingRows) throw new Error(`Nenhuma linha de ${projectName || 'do projeto selecionado'} foi encontrada na planilha.`)
+  if (!grouped.size) throw new Error('As linhas do projeto não possuem versão e data válidas.')
+
+  return {
+    curves: [...grouped.entries()].map(([label, points]) => ({
+      label,
+      points: [...new Map(points.map((point) => [point.date, point])).values()].sort((left, right) => left.date.localeCompare(right.date)),
+    })),
+    matchingRows,
+    invalidRows,
+  }
 }
 
 function ManualCurveCell({
@@ -693,15 +768,18 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
   const [selectedBaselineId, setSelectedBaselineId] = useState<string | null>(null)
   const [configState, setConfigState] = useState<'idle' | 'loading' | 'ready'>('idle')
   const [configError, setConfigError] = useState('')
+  const [importMessage, setImportMessage] = useState('')
   const [saving, setSaving] = useState(false)
   const [showMarkers, setShowMarkers] = useState(true)
   const [showValues, setShowValues] = useState(false)
   const [tableOpen, setTableOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [manualOpen, setManualOpen] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [focusedId, setFocusedId] = useState<string | null>(null)
   const [range, setRange] = useState<Range>({ start: 0, end: 0 })
   const saveTimerRef = useRef<number | null>(null)
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -860,6 +938,50 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
     setTableOpen(true)
   }
 
+  async function handleImportFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!projectId) {
+      setConfigError('Selecione um projeto antes de importar curvas.')
+      return
+    }
+    setImporting(true)
+    setConfigError('')
+    setImportMessage('')
+    try {
+      const imported = await importedCurveRows(await file.arrayBuffer(), projectName)
+      const existingById = new Map(definitions.map((curve) => [curve.id, curve]))
+      const importedDefinitions = imported.curves.map(({ label, points }, index) => {
+        const id = `manual-import-${identityKey(projectId)}-${identityKey(label) || index + 1}`
+        const previous = existingById.get(id)
+        return {
+          id,
+          label: `Importada · ${label}`,
+          perspective: 'physical' as const,
+          kind: 'manual' as const,
+          color: previous?.color || IMPORTED_CURVE_COLORS[index % IMPORTED_CURVE_COLORS.length],
+          style: previous?.style || 'dotted',
+          visible: previous?.visible !== false,
+          origin: 'manual' as const,
+          points,
+        }
+      })
+      const importedById = new Map(importedDefinitions.map((curve) => [curve.id, curve]))
+      const nextDefinitions = definitions.map((curve) => importedById.get(curve.id) || curve)
+      importedDefinitions.forEach((curve) => {
+        if (!nextDefinitions.some((item) => item.id === curve.id)) nextDefinitions.push(curve)
+      })
+      updateDefinitions(nextDefinitions)
+      setTableOpen(true)
+      setImportMessage(`${importedDefinitions.length} curva(s) importada(s) de ${file.name}${imported.invalidRows ? ` · ${imported.invalidRows} linha(s) ignorada(s)` : ''}.`)
+    } catch (error) {
+      setConfigError(error instanceof Error ? error.message : 'Não foi possível importar as curvas.')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   function updateManualPoint(curveId: string, date: string, value: number | null) {
     updateDefinitions(definitions.map((curve) => {
       if (curve.id !== curveId || curve.origin !== 'manual') return curve
@@ -895,13 +1017,16 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
             </select>
           </label>
           <button type="button" className={showMarkers ? 'curvas-toggle active' : 'curvas-toggle'} onClick={() => setShowMarkers((value) => !value)}><span className="curvas-toggle-dot" /> Marcadores</button>
-          <button type="button" className={showValues ? 'curvas-toggle active' : 'curvas-toggle'} onClick={() => setShowValues((value) => !value)}>Valores</button>
-          <button type="button" className={tableOpen ? 'curvas-toggle active' : 'curvas-toggle'} onClick={() => setTableOpen((value) => !value)}><Table2 size={14} /> {tableOpen ? 'Ocultar tabela' : 'Mostrar tabela'}</button>
-          <button type="button" className="curvas-secondary-button" onClick={() => setSettingsOpen(true)}><Settings2 size={14} /> Configurar</button>
+           <button type="button" className={showValues ? 'curvas-toggle active' : 'curvas-toggle'} onClick={() => setShowValues((value) => !value)}>Valores</button>
+           <button type="button" className={tableOpen ? 'curvas-toggle active' : 'curvas-toggle'} onClick={() => setTableOpen((value) => !value)}><Table2 size={14} /> {tableOpen ? 'Ocultar tabela' : 'Mostrar tabela'}</button>
+           <input ref={importInputRef} className="curvas-import-input" type="file" accept=".xlsx,.xls,.csv,text/csv" onChange={handleImportFile} />
+           <button type="button" className="curvas-secondary-button" disabled={!projectId || importing} onClick={() => importInputRef.current?.click()}><Upload size={14} /> {importing ? 'Importando...' : 'Importar curvas'}</button>
+           <button type="button" className="curvas-secondary-button" onClick={() => setSettingsOpen(true)}><Settings2 size={14} /> Configurar</button>
         </div>
       </div>
 
       {configError && <div className="curvas-feedback error"><CircleHelp size={15} /> {configError}</div>}
+      {importMessage && <div className="curvas-feedback success"><Check size={15} /> {importMessage}</div>}
       {saving && <div className="curvas-saving"><span /> Salvando configuração compartilhada...</div>}
 
       {!projectId ? (
