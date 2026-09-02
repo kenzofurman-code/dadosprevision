@@ -2777,9 +2777,24 @@ function App() {
       return
     }
 
-    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-      .map((node) => node.outerHTML)
-      .join('')
+    const stylesheetRules: string[] = []
+    const fallbackStylesheets: string[] = []
+    Array.from(document.styleSheets).forEach((sheet) => {
+      try {
+        const rules = Array.from(sheet.cssRules).map((rule) => rule.cssText).join('\n')
+        if (rules) stylesheetRules.push(rules)
+      } catch {
+        if (sheet.href) fallbackStylesheets.push(`<link rel="stylesheet" href="${new URL(sheet.href, document.baseURI).href}" />`)
+      }
+    })
+    const styles = stylesheetRules.length > 0
+      ? `<style id="app-print-styles">${stylesheetRules.join('\n')}</style>${fallbackStylesheets.join('')}`
+      : Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+        .map((node) => node.tagName === 'LINK'
+          ? `<link rel="stylesheet" href="${new URL((node as HTMLLinkElement).href, document.baseURI).href}" />`
+          : node.outerHTML)
+        .join('')
+    const baseHref = document.baseURI
     const defaultPrintOrientation = gestaoPanelTab === 'matrix' ? 'landscape' : 'portrait'
     printWindow.document.open()
     printWindow.document.write(`<!doctype html>
@@ -2787,6 +2802,7 @@ function App() {
         <head>
           <meta charset="UTF-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <base href="${baseHref}" />
           <title>Gestão à Vista — Visualização de impressão</title>
           ${styles}
           <style id="print-page-style">
@@ -2795,7 +2811,7 @@ function App() {
           <style>
             :root { color-scheme: light; }
             html, body { margin: 0; min-height: 100%; background: #f1f5f3; }
-            body { font-family: Arial, sans-serif; color: #173f38; }
+            body { font-family: inherit; color: #173f38; }
             .print-preview-toolbar {
               position: sticky;
               top: 0;
@@ -2825,7 +2841,7 @@ function App() {
             .print-preview-actions button { border: 1px solid #b8ccc6; border-radius: 6px; padding: 7px 11px; background: #ffffff; color: #173f38; font-size: 11px; font-weight: 700; cursor: pointer; }
             .print-preview-actions button.primary { border-color: #173f38; background: #173f38; color: #ffffff; }
             .print-preview-content { padding: 20px; overflow: auto; }
-            .print-preview-content .gestao-print-source { width: max-content; min-width: 0; max-width: none; margin: 0 auto; overflow: visible; }
+            .print-preview-content .gestao-print-source { width: 100%; min-width: 0; margin: 0 auto; overflow: visible; }
             .gestao-print-source .gestao-panel-data-filter,
             .gestao-print-source .gestao-service-drag svg,
             .gestao-print-source .panel5-service-column,
@@ -2894,7 +2910,7 @@ function App() {
               .print-preview-toolbar { display: none !important; }
               .print-column-resizer { display: none !important; }
               .print-preview-content { padding: 0 !important; overflow: visible !important; }
-              .print-preview-content .gestao-print-source { width: max-content !important; min-width: 0 !important; box-shadow: none !important; border: 1px solid #888888 !important; }
+              .print-preview-content .gestao-print-source { width: 100% !important; min-width: 0 !important; box-shadow: none !important; border: 1px solid #888888 !important; }
               .gestao-print-source .gestao-table,
               .gestao-print-source .panel5-export-table { width: max-content !important; min-width: 0 !important; }
               .matrix-print-source .gestao-matrix-container { overflow: visible !important; max-height: none !important; }
