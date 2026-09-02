@@ -330,6 +330,10 @@ function curveDash(style: CurveStyle) {
   return CURVE_STYLES.find((item) => item.value === style)?.dash || 'none'
 }
 
+function curveStyleLabel(style: CurveStyle) {
+  return CURVE_STYLES.find((item) => item.value === style)?.label || 'Sólido'
+}
+
 function isRepeatedActualValue(curve: CurveSeries, rangeStart: number, pointIndex: number) {
   if (curve.kind !== 'actual') return false
   const absoluteIndex = rangeStart + pointIndex
@@ -598,6 +602,28 @@ function CurveChart({
       if (plannedValue === null || actualValue === null) return []
       return [{ perspective, delta: actualValue - plannedValue }]
     })
+  const labelStackIndexes = new Map<string, number>()
+  for (let index = 0; index < windowMonths.length; index += 1) {
+    const stacks: Array<{ anchorY: number; nextIndex: number }> = []
+    visibleSeries.forEach((curve) => {
+      const point = curve.points[range.start + index]
+      if (
+        point?.value === null ||
+        point?.value === undefined ||
+        isRepeatedActualValue(curve, range.start, index) ||
+        (index % labelStride !== 0 && index !== windowMonths.length - 1)
+      ) return
+      const pointY = y(point.value)
+      let stack = stacks.find((candidate) => Math.abs(candidate.anchorY - pointY) < 18)
+      if (!stack) {
+        stack = { anchorY: pointY, nextIndex: 0 }
+        stacks.push(stack)
+      }
+      labelStackIndexes.set(`${curve.id}:${index}`, stack.nextIndex)
+      stack.anchorY = (stack.anchorY * stack.nextIndex + pointY) / (stack.nextIndex + 1)
+      stack.nextIndex += 1
+    })
+  }
 
   return (
     <div ref={wrapRef} className="curvas-chart-wrap">
@@ -651,7 +677,11 @@ function CurveChart({
               {showValues && points.map((point, index) => point.value === null || isRepeatedActualValue(curve, range.start, index) || (index % labelStride !== 0 && index !== points.length - 1) ? null : (() => {
                 const label = formatPercent(point.value)
                 const labelWidth = Math.max(30, label.length * 5.4 + 8)
-                const labelY = Math.max(18, y(point.value) - 20)
+                const stackIndex = labelStackIndexes.get(`${curve.id}:${index}`) || 0
+                const pointY = y(point.value)
+                const stackGap = 17
+                const labelAboveY = pointY - 20 - stackIndex * stackGap
+                const labelY = labelAboveY >= margin.top ? labelAboveY : pointY + 7 + stackIndex * stackGap
                 return (
                   <g key={`${curve.id}-value-${index}`} className="curvas-point-label">
                     <rect x={x(index) - labelWidth / 2} y={labelY} width={labelWidth} height={15} rx={2} fill={curve.color} />
@@ -1116,8 +1146,8 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
                       onDoubleClick={() => setFocusedId((value) => value === curve.id ? null : curve.id)}
                       title={available ? 'Clique para alternar a curva' : 'Sem dados deste tipo para o projeto'}
                     >
-                      <span className="curvas-legend-line" style={{ backgroundColor: curve.color, borderTopStyle: curve.style === 'solid' ? 'solid' : curve.style === 'dashed' ? 'dashed' : 'dotted' }} />
-                      <span className="curvas-legend-copy"><strong>{curve.displayLabel}</strong><small>{curve.origin === 'prevision' ? 'Prevision' : 'Manual'}</small></span>
+                      <span className="curvas-legend-line" style={{ borderTopColor: curve.color, borderTopStyle: curve.style === 'solid' ? 'solid' : curve.style === 'dashed' ? 'dashed' : 'dotted' }} />
+                      <span className="curvas-legend-copy"><strong>{curve.displayLabel}</strong><small>{curve.origin === 'prevision' ? 'Prevision' : 'Manual'} · {curveStyleLabel(curve.style)}</small></span>
                       {curve.visible ? <Eye size={14} /> : <EyeOff size={14} />}
                     </button>
                   )

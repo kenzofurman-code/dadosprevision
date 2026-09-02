@@ -209,10 +209,11 @@
 }
 
 .curvas-legend-line {
-  width: 28px;
+  width: 34px;
   height: 0;
-  flex: 0 0 28px;
-  border-top-width: 3px;
+  flex: 0 0 34px;
+  border-top-width: 5px;
+  border-radius: 999px;
 }
 
 .curvas-legend-copy {
