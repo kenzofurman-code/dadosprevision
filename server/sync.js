@@ -275,3 +275,39 @@ export async function syncProjects(apiKeyValue, restTokenValue = '', requestedPr
   if (!totals.projects) throw new Error(totals.failures[0]?.error || 'Nenhum projeto foi sincronizado.')
   return totals
 }
+
+export async function syncRestrictions(apiKeyValue, requestedProjectId = '') {
+  const apiKey = sanitizePrevisionApiKey(apiKeyValue)
+  if (!apiKey || apiKey === '...') throw new Error('PREVISION_API_KEY nao configurada com o valor real.')
+
+  const [allProjects, kanban] = await Promise.all([
+    fetchAllProjectIds(apiKey),
+    fetchKanbanData(apiKey),
+  ])
+  const projects = requestedProjectId
+    ? allProjects.filter((project) => String(project.id) === String(requestedProjectId))
+    : allProjects
+  if (!projects.length) throw new Error('Projeto nao encontrado na Prevision.')
+
+  let restrictions = 0
+  for (const project of projects) {
+    const normalized = kanban.tasks
+      .filter((task) => String(task.project?.id) === String(project.id))
+      .map(normalizeRestriction)
+
+    await query(
+      `UPDATE projetos
+       SET restricoes = $1::jsonb, total_restricoes = $2, updated_at = NOW()
+       WHERE id_prevision = $3`,
+      [JSON.stringify(normalized), normalized.length, String(project.id)],
+    )
+    restrictions += normalized.length
+  }
+
+  return {
+    projects: projects.length,
+    restrictions,
+    summary: kanban.summary,
+    steps: kanban.steps.length,
+  }
+}

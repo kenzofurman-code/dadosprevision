@@ -17,7 +17,7 @@ import {
   saveCurveConfig,
   getRestrictions,
 } from './db.js'
-import { syncProjects } from './sync.js'
+import { syncProjects, syncRestrictions } from './sync.js'
 
 dotenv.config()
 
@@ -174,7 +174,9 @@ app.post('/api/sync-prevision', async (req, res) => {
       return res.status(400).json({ error: 'PREVISION_API_KEY nao configurada no servidor.' })
     }
 
-    const totals = await syncProjects(apiKey, restToken, projectId)
+    const totals = req.body?.scope === 'restrictions'
+      ? await syncRestrictions(apiKey, projectId)
+      : await syncProjects(apiKey, restToken, projectId)
     return res.json({ ok: true, imported: totals.projects, totals })
   } catch (err) {
     console.error('Erro em /api/sync-prevision:', err)
