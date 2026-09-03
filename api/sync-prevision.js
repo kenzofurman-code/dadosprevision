@@ -290,6 +290,22 @@ function normalizeResponsible(item, project, projectName) {
 
 function normalizeRestriction(task) {
   const checklist = task.taskChecklists || []
+  const checklistItems = checklist
+    .map((item) => ({
+      id_prevision: String(item.id),
+      descricao: item.description || '-',
+      status: Boolean(item.status),
+      vencimento_em: item.dueAt || null,
+      concluido_em: item.doneAt || null,
+      posicao: item.position ?? null,
+      antecedencia_dias: item.time ?? null,
+      responsavel_id: item.user?.id ? String(item.user.id) : null,
+      responsavel_nome: item.user?.profile?.name || item.user?.profile?.email || null,
+      responsavel_email: item.user?.profile?.email || null,
+      responsavel_departamento: item.user?.profile?.department || null,
+      responsavel_cargo: item.user?.profile?.job || null,
+    }))
+    .sort((left, right) => (left.posicao ?? Number.MAX_SAFE_INTEGER) - (right.posicao ?? Number.MAX_SAFE_INTEGER))
 
   return clean({
     projeto_id: String(task.project.id),
@@ -331,8 +347,14 @@ function normalizeRestriction(task) {
         .map((user) => user.profile?.name || user.profile?.email)
         .filter(Boolean)
         .join(', ') || null,
-    checklist_total: checklist.length,
-    checklist_concluido: checklist.filter((item) => item.status).length,
+    checklist_total: checklistItems.length,
+    checklist_concluido: checklistItems.filter((item) => item.status).length,
+    checklist_pendente: checklistItems.filter((item) => !item.status).length,
+    checklist_itens: checklistItems,
+    checklist_texto: checklistItems
+      .flatMap((item) => [item.descricao, item.responsavel_nome, item.responsavel_email])
+      .filter(Boolean)
+      .join(' '),
   })
 }
 

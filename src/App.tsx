@@ -320,6 +320,73 @@ function StatusBadge({ status }: { status: { label: string; className: string } 
   return <span className={`status-badge status-${status.className}`}>{status.label}</span>
 }
 
+function RestrictionChecklist({ record }: { record: DataRecord }) {
+  let items: DataRecord[] = []
+  const rawItems = record.checklist_itens
+  if (typeof rawItems === 'string') {
+    try {
+      const parsed = JSON.parse(rawItems)
+      items = Array.isArray(parsed) ? parsed : []
+    } catch {
+      items = []
+    }
+  } else if (Array.isArray(rawItems)) {
+    items = rawItems
+  }
+
+  const completed = Number(record.checklist_concluido) || items.filter((item) => item.status).length
+  const total = Number(record.checklist_total) || items.length
+  if (total === 0) return <span className="restriction-checklist-empty">Sem itens</span>
+
+  const today = new Date().toISOString().slice(0, 10)
+
+  return (
+    <details className="restriction-checklist">
+      <summary>
+        <strong>{completed}/{total} concluídos</strong>
+        <span>{total - completed} pendente{total - completed === 1 ? '' : 's'}</span>
+      </summary>
+      <div className="restriction-checklist-list">
+        {items.length === 0 && (
+          <span className="restriction-checklist-empty">
+            Sincronize as restrições para carregar os detalhes dos itens.
+          </span>
+        )}
+        {items.map((item, index) => {
+          const dueDate = String(item.vencimento_em || '').slice(0, 10)
+          const isOverdue = !item.status && Boolean(dueDate && dueDate < today)
+          const status = item.status
+            ? { label: 'Concluído', className: 'success' }
+            : isOverdue
+              ? { label: 'Atrasado', className: 'danger' }
+              : { label: 'Pendente', className: 'warning' }
+          const responsible = String(item.responsavel_nome || item.responsavel_email || '').trim()
+          const advance = Number(item.antecedencia_dias)
+
+          return (
+            <article
+              className={`restriction-checklist-item${item.status ? ' is-complete' : ''}`}
+              key={String(item.id_prevision || index)}
+            >
+              <div className="restriction-checklist-item-heading">
+                <StatusBadge status={status} />
+                <strong>{String(item.descricao || '-')}</strong>
+              </div>
+              <div className="restriction-checklist-metadata">
+                {dueDate && <span>Prazo: {formatDate(dueDate)}</span>}
+                {item.concluido_em && <span>Concluído em: {formatDate(item.concluido_em)}</span>}
+                {responsible && <span>Responsável: {responsible}</span>}
+                {Number.isFinite(advance) && <span>Antecedência: {advance} {advance === 1 ? 'dia útil' : 'dias úteis'}</span>}
+                {item.posicao !== null && item.posicao !== undefined && <span>Ordem: {Number(item.posicao) + 1}</span>}
+              </div>
+            </article>
+          )
+        })}
+      </div>
+    </details>
+  )
+}
+
 const columns: Record<DataView, Column[]> = {
   projects: [
     {
@@ -474,10 +541,8 @@ const columns: Record<DataView, Column[]> = {
     { label: 'Etiquetas', render: (record) => String(record.etiquetas_nomes || '-') },
     { label: 'Responsáveis', render: (record) => String(record.usuarios_nomes || '-') },
     {
-      label: 'Checklist',
-      render: (record) =>
-        `${integerFormatter.format(Number(record.checklist_concluido) || 0)}/${integerFormatter.format(Number(record.checklist_total) || 0)}`,
-      align: 'right',
+      label: 'Itens do checklist',
+      render: (record) => <RestrictionChecklist record={record} />,
     },
   ],
   budgets: [
