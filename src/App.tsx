@@ -320,71 +320,57 @@ function StatusBadge({ status }: { status: { label: string; className: string } 
   return <span className={`status-badge status-${status.className}`}>{status.label}</span>
 }
 
-function RestrictionChecklist({ record }: { record: DataRecord }) {
-  let items: DataRecord[] = []
+function restrictionChecklistRows(record: DataRecord): DataRecord[] {
+  let checklistItems: DataRecord[] = []
   const rawItems = record.checklist_itens
   if (typeof rawItems === 'string') {
     try {
       const parsed = JSON.parse(rawItems)
-      items = Array.isArray(parsed) ? parsed : []
+      checklistItems = Array.isArray(parsed) ? parsed : []
     } catch {
-      items = []
+      checklistItems = []
     }
   } else if (Array.isArray(rawItems)) {
-    items = rawItems
+    checklistItems = rawItems
   }
 
-  const completed = Number(record.checklist_concluido) || items.filter((item) => item.status).length
-  const total = Number(record.checklist_total) || items.length
-  if (total === 0) return <span className="restriction-checklist-empty">Sem itens</span>
+  if (checklistItems.length === 0) {
+    return [{
+      ...record,
+      checklist_item_id: null,
+      checklist_item_descricao: null,
+      checklist_item_status: null,
+      checklist_item_vencimento: null,
+      checklist_item_concluido_em: null,
+      checklist_item_responsavel: null,
+      checklist_item_antecedencia: null,
+      checklist_item_posicao: null,
+    }]
+  }
 
+  return checklistItems.map((item, index) => ({
+    ...record,
+    firestore_id: `${record.firestore_id || record.id_prevision}_checklist_${item.id_prevision || index}`,
+    checklist_item_id: item.id_prevision || null,
+    checklist_item_descricao: item.descricao || '-',
+    checklist_item_status: Boolean(item.status),
+    checklist_item_vencimento: item.vencimento_em || null,
+    checklist_item_concluido_em: item.concluido_em || null,
+    checklist_item_responsavel: item.responsavel_nome || item.responsavel_email || null,
+    checklist_item_antecedencia: item.antecedencia_dias ?? null,
+    checklist_item_posicao: item.posicao ?? null,
+  }))
+}
+
+function checklistItemStatus(record: DataRecord) {
+  if (!record.checklist_item_id) return { label: 'Sem item', className: 'neutral' }
+  if (record.checklist_item_status) return { label: 'Concluído', className: 'success' }
+
+  const dueDate = String(record.checklist_item_vencimento || '').slice(0, 10)
   const today = new Date().toISOString().slice(0, 10)
-
-  return (
-    <details className="restriction-checklist">
-      <summary>
-        <strong>{completed}/{total} concluídos</strong>
-        <span>{total - completed} pendente{total - completed === 1 ? '' : 's'}</span>
-      </summary>
-      <div className="restriction-checklist-list">
-        {items.length === 0 && (
-          <span className="restriction-checklist-empty">
-            Sincronize as restrições para carregar os detalhes dos itens.
-          </span>
-        )}
-        {items.map((item, index) => {
-          const dueDate = String(item.vencimento_em || '').slice(0, 10)
-          const isOverdue = !item.status && Boolean(dueDate && dueDate < today)
-          const status = item.status
-            ? { label: 'Concluído', className: 'success' }
-            : isOverdue
-              ? { label: 'Atrasado', className: 'danger' }
-              : { label: 'Pendente', className: 'warning' }
-          const responsible = String(item.responsavel_nome || item.responsavel_email || '').trim()
-          const advance = Number(item.antecedencia_dias)
-
-          return (
-            <article
-              className={`restriction-checklist-item${item.status ? ' is-complete' : ''}`}
-              key={String(item.id_prevision || index)}
-            >
-              <div className="restriction-checklist-item-heading">
-                <StatusBadge status={status} />
-                <strong>{String(item.descricao || '-')}</strong>
-              </div>
-              <div className="restriction-checklist-metadata">
-                {dueDate && <span>Prazo: {formatDate(dueDate)}</span>}
-                {item.concluido_em && <span>Concluído em: {formatDate(item.concluido_em)}</span>}
-                {responsible && <span>Responsável: {responsible}</span>}
-                {Number.isFinite(advance) && <span>Antecedência: {advance} {advance === 1 ? 'dia útil' : 'dias úteis'}</span>}
-                {item.posicao !== null && item.posicao !== undefined && <span>Ordem: {Number(item.posicao) + 1}</span>}
-              </div>
-            </article>
-          )
-        })}
-      </div>
-    </details>
-  )
+  return dueDate && dueDate < today
+    ? { label: 'Atrasado', className: 'danger' }
+    : { label: 'Pendente', className: 'warning' }
 }
 
 const columns: Record<DataView, Column[]> = {
@@ -541,8 +527,26 @@ const columns: Record<DataView, Column[]> = {
     { label: 'Etiquetas', render: (record) => String(record.etiquetas_nomes || '-') },
     { label: 'Responsáveis', render: (record) => String(record.usuarios_nomes || '-') },
     {
-      label: 'Itens do checklist',
-      render: (record) => <RestrictionChecklist record={record} />,
+      label: 'Item do checklist',
+      render: (record) => String(record.checklist_item_descricao || '-'),
+    },
+    { label: 'Situação do item', render: (record) => <StatusBadge status={checklistItemStatus(record)} /> },
+    { label: 'Prazo do item', render: (record) => formatDate(record.checklist_item_vencimento) },
+    { label: 'Conclusão do item', render: (record) => formatDate(record.checklist_item_concluido_em) },
+    { label: 'Responsável pelo item', render: (record) => String(record.checklist_item_responsavel || '-') },
+    {
+      label: 'Antecedência',
+      render: (record) => {
+        const days = Number(record.checklist_item_antecedencia)
+        return Number.isFinite(days) ? `${integerFormatter.format(days)} ${days === 1 ? 'dia útil' : 'dias úteis'}` : '-'
+      },
+    },
+    {
+      label: 'Ordem do item',
+      render: (record) => record.checklist_item_posicao === null || record.checklist_item_posicao === undefined
+        ? '-'
+        : integerFormatter.format(Number(record.checklist_item_posicao) + 1),
+      align: 'right',
     },
   ],
   budgets: [
@@ -1259,6 +1263,8 @@ function App() {
         ? projects.filter(
             (project) => !selectedProject || project.id_prevision === selectedProject,
           )
+        : activeView === 'restrictions'
+          ? records.flatMap(restrictionChecklistRows)
         : records
     const term = search.trim().toLocaleLowerCase('pt-BR')
     if (!term) return source
