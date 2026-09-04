@@ -21,6 +21,7 @@ type CurvePerspective = 'physical' | 'monetary'
 type CurveKind = 'base' | 'planned' | 'actual' | 'manual'
 type CurveStyle = 'solid' | 'dashed' | 'dotted' | 'dottedWide'
 type CurveComparisonRole = 'reference' | 'comparison'
+type CurveCalculation = 'sfhProjection'
 
 type CurvePoint = {
   date: string
@@ -38,6 +39,7 @@ export type CurveDefinition = {
   origin: 'prevision' | 'manual'
   comparisonGroupId?: string
   comparisonRole?: CurveComparisonRole
+  calculation?: CurveCalculation
   points?: CurvePoint[]
 }
 
@@ -379,6 +381,7 @@ function sanitizeCurves(value: unknown): CurveDefinition[] {
       origin,
       ...(origin === 'manual' && raw.comparisonGroupId ? { comparisonGroupId: String(raw.comparisonGroupId) } : {}),
       ...(origin === 'manual' && raw.comparisonRole === 'reference' ? { comparisonRole: 'reference' as const } : origin === 'manual' ? { comparisonRole: 'comparison' as const } : {}),
+      ...(origin === 'manual' && raw.calculation === 'sfhProjection' ? { calculation: 'sfhProjection' as const } : {}),
       ...(points ? { points } : {}),
     }]
   })
@@ -417,6 +420,97 @@ function migrateImportedComparisonGroups(curves: CurveDefinition[]) {
     }
   })
   return { curves: nextCurves, groups }
+}
+
+function ensureSfhProjection(curves: CurveDefinition[], groups: CurveComparisonGroup[]): CurveDefinition[] {
+  const sfhGroup = groups.find((group) => identityKey(group.label).includes('sfh'))
+  if (!sfhGroup) return curves
+  const reference = curves.find((curve) => (
+    curve.origin === 'manual' &&
+    curve.comparisonGroupId === sfhGroup.id &&
+    curve.comparisonRole === 'reference'
+  ))
+  if (!reference) return curves
+
+  const existing = curves.find((curve) => (
+    curve.calculation === 'sfhProjection' ||
+    (
+      curve.origin === 'manual' &&
+      curve.comparisonGroupId === sfhGroup.id &&
+      identityKey(curve.label).includes('sfh') &&
+      identityKey(curve.label).includes('projec')
+    )
+  ))
+  if (existing) {
+    return curves.map((curve) => curve.id === existing.id ? {
+      ...curve,
+      label: 'Projetada SFH',
+      comparisonGroupId: sfhGroup.id,
+      comparisonRole: 'comparison' as const,
+      calculation: 'sfhProjection' as const,
+    } : curve)
+  }
+
+  return [...curves, {
+    id: 'calculated-sfh-projection',
+    label: 'Projetada SFH',
+    perspective: 'physical',
+    kind: 'manual',
+    color: '#65a30d',
+    style: 'dotted',
+    visible: true,
+    origin: 'manual',
+    comparisonGroupId: sfhGroup.id,
+    comparisonRole: 'comparison',
+    calculation: 'sfhProjection',
+    points: [],
+  }]
+}
+
+function projectedSfhPoints(
+  months: string[],
+  actualPoints: CurvePoint[],
+  plannedPoints: CurvePoint[],
+  currentMonth: string,
+) {
+  let lastActualIndex = -1
+  for (let index = 0; index < months.length; index += 1) {
+    if (months[index] <= currentMonth && actualPoints[index]?.value !== null && actualPoints[index]?.value !== undefined) {
+      lastActualIndex = index
+    }
+  }
+  const result = months.map((date) => ({ date, value: null as number | null }))
+  if (lastActualIndex < 0) return result
+
+  const lastActual = actualPoints[lastActualIndex].value
+  if (lastActual === null) return result
+  result[lastActualIndex].value = lastActual
+
+  let previousPlanned: number | null = null
+  for (let index = lastActualIndex; index >= 0; index -= 1) {
+    const value = plannedPoints[index]?.value
+    if (value !== null && value !== undefined) {
+      previousPlanned = value
+      break
+    }
+  }
+  const increments = months.map(() => 0)
+  for (let index = lastActualIndex + 1; index < months.length; index += 1) {
+    const currentPlanned = plannedPoints[index]?.value
+    if (currentPlanned === null || currentPlanned === undefined) continue
+    if (previousPlanned !== null) increments[index] = Math.max(0, currentPlanned - previousPlanned)
+    previousPlanned = currentPlanned
+  }
+  const totalRemainingPlanned = increments.reduce((total, value) => total + value, 0)
+  if (totalRemainingPlanned <= 0) return result
+
+  const balance = Math.max(0, 1 - lastActual)
+  let accumulatedProjection = lastActual
+  for (let index = lastActualIndex + 1; index < months.length; index += 1) {
+    accumulatedProjection += balance * (increments[index] / totalRemainingPlanned)
+    result[index].value = Math.min(1, accumulatedProjection)
+  }
+  return result
 }
 
 function sanitizeBaselineCurves(value: unknown): BaselineCurve[] {
@@ -912,7 +1006,7 @@ function CurveSettingsModal({
               <span className="curvas-setting-swatch" style={{ backgroundColor: curve.color }} />
               <div className="curvas-setting-name">
                 <strong>{curve.label}</strong>
-                <small>{curve.origin === 'prevision' ? 'Prevision · somente leitura' : 'Curva manual · editável'}</small>
+                <small>{curve.origin === 'prevision' ? 'Prevision · somente leitura' : curve.calculation ? 'Calculada automaticamente · somente leitura' : 'Curva manual · editável'}</small>
               </div>
               <label className="curvas-color-input" title="Escolher cor">
                 <Palette size={14} />
@@ -925,6 +1019,7 @@ function CurveSettingsModal({
                 <>
                   <select
                     value={curve.comparisonGroupId || ''}
+                    disabled={Boolean(curve.calculation)}
                     onChange={(event) => update(curve.id, {
                       comparisonGroupId: event.target.value || undefined,
                       comparisonRole: event.target.value ? curve.comparisonRole || 'comparison' : 'comparison',
@@ -936,11 +1031,11 @@ function CurveSettingsModal({
                   </select>
                   <select
                     value={curve.comparisonRole || 'comparison'}
-                    disabled={!curve.comparisonGroupId}
+                    disabled={!curve.comparisonGroupId || Boolean(curve.calculation)}
                     onChange={(event) => update(curve.id, { comparisonRole: event.target.value as CurveComparisonRole })}
                     aria-label={`Papel de ${curve.label} no grupo`}
                   >
-                    <option value="comparison">Curva comparada</option>
+                    <option value="comparison">{curve.calculation ? 'Curva projetada' : 'Curva comparada'}</option>
                     <option value="reference">Realizado do grupo</option>
                   </select>
                 </>
@@ -954,7 +1049,7 @@ function CurveSettingsModal({
                 <button type="button" className="curvas-icon-button" disabled={index === 0} onClick={() => move(curve.id, -1)} aria-label="Mover curva para cima"><ArrowUp size={14} /></button>
                 <button type="button" className="curvas-icon-button" disabled={index === curves.length - 1} onClick={() => move(curve.id, 1)} aria-label="Mover curva para baixo"><ArrowDown size={14} /></button>
               </div>
-              {curve.origin === 'manual' && <button type="button" className="curvas-remove-button" onClick={() => onChange(curves.filter((item) => item.id !== curve.id))}>Excluir</button>}
+              {curve.origin === 'manual' && !curve.calculation && <button type="button" className="curvas-remove-button" onClick={() => onChange(curves.filter((item) => item.id !== curve.id))}>Excluir</button>}
             </div>
           ))}
         </div>
@@ -1034,11 +1129,12 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
         if (!cancelled) {
           const sanitizedCurves = sanitizeCurves(payload?.config?.curves)
           if (Array.isArray(payload?.config?.comparisonGroups)) {
-            setStoredCurves(sanitizedCurves)
-            setComparisonGroups(sanitizeComparisonGroups(payload.config.comparisonGroups))
+            const sanitizedGroups = sanitizeComparisonGroups(payload.config.comparisonGroups)
+            setStoredCurves(ensureSfhProjection(sanitizedCurves, sanitizedGroups))
+            setComparisonGroups(sanitizedGroups)
           } else {
             const migrated = migrateImportedComparisonGroups(sanitizedCurves)
-            setStoredCurves(migrated.curves)
+            setStoredCurves(ensureSfhProjection(migrated.curves, migrated.groups))
             setComparisonGroups(migrated.groups)
           }
           setStoredBaselineId(payload?.config?.linha_base_id ? String(payload.config.linha_base_id) : null)
@@ -1115,23 +1211,41 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
   )
   const currentMonth = currentMonthKey()
 
-  const series = useMemo<CurveSeries[]>(() => definitions.map((curve) => {
-    const manualMap = new Map((curve.points || []).map((point) => [point.date, point.value]))
-    const points = months.map((date) => ({
-      date,
-      value: curve.origin === 'manual'
-        ? (manualMap.get(date) ?? null)
-        : curve.kind === 'actual' && date >= currentMonth
-          ? null
-          : curve.kind === 'base'
-            ? (selectedBaselinePoints.get(date)?.[curve.perspective === 'physical' ? 'fisico' : 'financeiro'] ?? getPrevisionValue(recordByPerspective[curve.perspective].get(date), curve.kind))
-            : getPrevisionValue(recordByPerspective[curve.perspective].get(date), curve.kind),
-    }))
-    const displayLabel = curve.kind === 'base'
-      ? `${curve.perspective === 'physical' ? 'Físico' : 'Financeiro'} · ${baselineDisplayName(selectedBaseline)}`
-      : curve.label
-    return { ...curve, points, displayLabel }
-  }), [currentMonth, definitions, months, recordByPerspective, selectedBaseline, selectedBaselinePoints])
+  const series = useMemo<CurveSeries[]>(() => {
+    const sourceSeries = definitions.map((curve) => {
+      const manualMap = new Map((curve.points || []).map((point) => [point.date, point.value]))
+      const points = months.map((date) => ({
+        date,
+        value: curve.origin === 'manual'
+          ? (manualMap.get(date) ?? null)
+          : curve.kind === 'actual' && date >= currentMonth
+            ? null
+            : curve.kind === 'base'
+              ? (selectedBaselinePoints.get(date)?.[curve.perspective === 'physical' ? 'fisico' : 'financeiro'] ?? getPrevisionValue(recordByPerspective[curve.perspective].get(date), curve.kind))
+              : getPrevisionValue(recordByPerspective[curve.perspective].get(date), curve.kind),
+      }))
+      const displayLabel = curve.kind === 'base'
+        ? `${curve.perspective === 'physical' ? 'Físico' : 'Financeiro'} · ${baselineDisplayName(selectedBaseline)}`
+        : curve.label
+      return { ...curve, points, displayLabel }
+    })
+    return sourceSeries.map((curve) => {
+      if (curve.calculation !== 'sfhProjection' || !curve.comparisonGroupId) return curve
+      const actualCurve = sourceSeries.find((item) => (
+        item.origin === 'manual' &&
+        item.comparisonGroupId === curve.comparisonGroupId &&
+        item.comparisonRole === 'reference'
+      ))
+      const plannedCurve = sourceSeries.find((item) => item.kind === 'planned' && item.perspective === 'physical')
+      if (!actualCurve || !plannedCurve) {
+        return { ...curve, points: months.map((date) => ({ date, value: null })) }
+      }
+      return {
+        ...curve,
+        points: projectedSfhPoints(months, actualCurve.points, plannedCurve.points, currentMonth),
+      }
+    })
+  }, [currentMonth, definitions, months, recordByPerspective, selectedBaseline, selectedBaselinePoints])
 
   useEffect(() => {
     setRange({ start: 0, end: Math.max(0, months.length - 1) })
@@ -1168,7 +1282,7 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
   }, [comparisonGroups, configState, projectId, selectedBaselineId, storedCurves])
 
   function updateDefinitions(next: CurveDefinition[]) {
-    setStoredCurves(persistableCurves(next))
+    setStoredCurves(persistableCurves(ensureSfhProjection(next, comparisonGroups)))
   }
 
   function createManualCurve(label: string, perspective: CurvePerspective, color: string, style: CurveStyle) {
@@ -1216,6 +1330,7 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
           origin: 'manual' as const,
           comparisonGroupId: previous?.comparisonGroupId,
           comparisonRole: previous?.comparisonRole || 'comparison' as const,
+          calculation: previous?.calculation,
           points,
         }
       })
@@ -1303,7 +1418,7 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
                       title={available ? 'Clique para alternar a curva' : 'Sem dados deste tipo para o projeto'}
                     >
                       <span className="curvas-legend-line" style={{ borderTopColor: curve.color, borderTopStyle: curve.style === 'solid' ? 'solid' : curve.style === 'dashed' ? 'dashed' : 'dotted' }} />
-                      <span className="curvas-legend-copy"><strong>{curve.displayLabel}</strong><small>{curve.origin === 'prevision' ? 'Prevision' : 'Manual'} · {curveStyleLabel(curve.style)}</small></span>
+                      <span className="curvas-legend-copy"><strong>{curve.displayLabel}</strong><small>{curve.origin === 'prevision' ? 'Prevision' : curve.calculation ? 'Calculada' : 'Manual'} · {curveStyleLabel(curve.style)}</small></span>
                       {curve.visible ? <Eye size={14} /> : <EyeOff size={14} />}
                     </button>
                   )
@@ -1322,11 +1437,11 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
 
           {tableOpen && (
             <div className="curvas-table-card">
-              <div className="curvas-table-heading"><div><strong>Dados mensais das curvas</strong><span>Curvas do Prevision ficam bloqueadas; curvas manuais podem ser preenchidas e copiadas para o Excel.</span></div><span className="curvas-table-project">{projectName}</span></div>
+              <div className="curvas-table-heading"><div><strong>Dados mensais das curvas</strong><span>Curvas do Prevision e calculadas ficam bloqueadas; curvas manuais podem ser preenchidas e copiadas para o Excel.</span></div><span className="curvas-table-project">{projectName}</span></div>
               <div className="curvas-table-scroll">
                 <table className="curvas-data-table">
                   <thead><tr><th>Mês</th>{series.filter((curve) => curve.points.some((point) => point.value !== null) || curve.origin === 'manual').map((curve) => <th key={curve.id}><span className="curvas-table-title"><i style={{ backgroundColor: curve.color }} />{curve.displayLabel}</span></th>)}</tr></thead>
-                  <tbody>{months.map((month, monthIndex) => <tr key={month}><td>{formatMonth(month)}</td>{series.filter((curve) => curve.points.some((point) => point.value !== null) || curve.origin === 'manual').map((curve) => { const value = curve.points[monthIndex]?.value ?? null; const repeated = isRepeatedActualValue(curve, 0, monthIndex); return <td key={curve.id} className={curve.origin === 'manual' ? 'editable-cell' : 'locked-cell'}>{curve.origin === 'manual' ? <ManualCurveCell label={`${curve.displayLabel} em ${formatMonth(month)}`} value={value} onCommit={(nextValue) => updateManualPoint(curve.id, month, nextValue)} /> : repeated ? <span className="curvas-unchanged-value" title="Sem alteração em relação ao mês anterior" /> : <span title="Valor fornecido pelo Prevision">{formatPercent(value)}</span>}</td> })}</tr>)}</tbody>
+                  <tbody>{months.map((month, monthIndex) => <tr key={month}><td>{formatMonth(month)}</td>{series.filter((curve) => curve.points.some((point) => point.value !== null) || curve.origin === 'manual').map((curve) => { const value = curve.points[monthIndex]?.value ?? null; const repeated = isRepeatedActualValue(curve, 0, monthIndex); const editable = curve.origin === 'manual' && !curve.calculation; return <td key={curve.id} className={editable ? 'editable-cell' : 'locked-cell'}>{editable ? <ManualCurveCell label={`${curve.displayLabel} em ${formatMonth(month)}`} value={value} onCommit={(nextValue) => updateManualPoint(curve.id, month, nextValue)} /> : repeated ? <span className="curvas-unchanged-value" title="Sem alteração em relação ao mês anterior" /> : <span title={curve.calculation ? 'Calculada pelo saldo SFH e pelo previsto físico da obra' : 'Valor fornecido pelo Prevision'}>{formatPercent(value)}</span>}</td> })}</tr>)}</tbody>
                 </table>
               </div>
             </div>
