@@ -20,6 +20,7 @@ import './CurvasView.css'
 type CurvePerspective = 'physical' | 'monetary'
 type CurveKind = 'base' | 'planned' | 'actual' | 'manual'
 type CurveStyle = 'solid' | 'dashed' | 'dotted' | 'dottedWide'
+type CurveComparisonRole = 'reference' | 'comparison'
 
 type CurvePoint = {
   date: string
@@ -35,7 +36,14 @@ export type CurveDefinition = {
   style: CurveStyle
   visible: boolean
   origin: 'prevision' | 'manual'
+  comparisonGroupId?: string
+  comparisonRole?: CurveComparisonRole
   points?: CurvePoint[]
+}
+
+type CurveComparisonGroup = {
+  id: string
+  label: string
 }
 
 type CurveSeries = CurveDefinition & {
@@ -369,9 +377,46 @@ function sanitizeCurves(value: unknown): CurveDefinition[] {
       style: CURVE_STYLES.some((item) => item.value === raw.style) ? raw.style as CurveStyle : 'solid',
       visible: raw.visible !== false,
       origin,
+      ...(origin === 'manual' && raw.comparisonGroupId ? { comparisonGroupId: String(raw.comparisonGroupId) } : {}),
+      ...(origin === 'manual' && raw.comparisonRole === 'reference' ? { comparisonRole: 'reference' as const } : origin === 'manual' ? { comparisonRole: 'comparison' as const } : {}),
       ...(points ? { points } : {}),
     }]
   })
+}
+
+function sanitizeComparisonGroups(value: unknown): CurveComparisonGroup[] {
+  if (!Array.isArray(value)) return []
+  const groups = value.flatMap((item): CurveComparisonGroup[] => {
+    if (!item || typeof item !== 'object') return []
+    const raw = item as Partial<CurveComparisonGroup>
+    const id = String(raw.id || '').trim()
+    const label = String(raw.label || '').trim()
+    return id && label ? [{ id, label }] : []
+  })
+  return [...new Map(groups.map((group) => [group.id, group])).values()]
+}
+
+function migrateImportedComparisonGroups(curves: CurveDefinition[]) {
+  const imported = curves.filter((curve) => curve.origin === 'manual' && curve.id.startsWith('manual-import-'))
+  if (!imported.length) return { curves, groups: [] as CurveComparisonGroup[] }
+
+  const groupSpecs = [
+    { id: 'comparison-import-engineering', label: 'Engenharia', matches: (curve: CurveDefinition) => !identityKey(curve.label).includes('sfh') },
+    { id: 'comparison-import-sfh', label: 'SFH', matches: (curve: CurveDefinition) => identityKey(curve.label).includes('sfh') },
+  ]
+  const groups = groupSpecs.filter((group) => imported.some(group.matches)).map(({ id, label }) => ({ id, label }))
+  const importedIds = new Set(imported.map((curve) => curve.id))
+  const nextCurves = curves.map((curve) => {
+    if (!importedIds.has(curve.id)) return curve
+    const group = groupSpecs.find((item) => item.matches(curve))
+    if (!group) return curve
+    return {
+      ...curve,
+      comparisonGroupId: group.id,
+      comparisonRole: identityKey(curve.label).includes('realizado') ? 'reference' as const : 'comparison' as const,
+    }
+  })
+  return { curves: nextCurves, groups }
 }
 
 function sanitizeBaselineCurves(value: unknown): BaselineCurve[] {
@@ -719,11 +764,18 @@ function CurveChart({
             const pointIndex = hoverIndex || 0
             const point = curve.points[range.start + pointIndex]
             const repeated = isRepeatedActualValue(curve, range.start, pointIndex)
-            const actualCurve = series.find(
-              (item) => item.kind === 'actual' && item.perspective === curve.perspective,
-            )
+            const actualCurve = curve.kind === 'planned'
+              ? series.find((item) => item.kind === 'actual' && item.perspective === curve.perspective)
+              : curve.kind === 'manual' && curve.comparisonRole !== 'reference' && curve.comparisonGroupId
+                ? series.find((item) => (
+                    item.origin === 'manual' &&
+                    item.comparisonGroupId === curve.comparisonGroupId &&
+                    item.comparisonRole === 'reference'
+                  ))
+                : undefined
             const actualValue = actualCurve?.points[range.start + pointIndex]?.value ?? null
             const delta = (curve.kind === 'planned' || curve.kind === 'manual')
+              && curve.comparisonRole !== 'reference'
               && point?.value !== null
               && point?.value !== undefined
               && actualValue !== null
@@ -763,17 +815,44 @@ function CurveChart({
 
 function CurveSettingsModal({
   curves,
+  comparisonGroups,
   onChange,
+  onComparisonGroupsChange,
   onClose,
   onNewManual,
 }: {
   curves: CurveDefinition[]
+  comparisonGroups: CurveComparisonGroup[]
   onChange: (next: CurveDefinition[]) => void
+  onComparisonGroupsChange: (next: CurveComparisonGroup[]) => void
   onClose: () => void
   onNewManual: () => void
 }) {
+  const [newGroupName, setNewGroupName] = useState('')
+
   function update(id: string, patch: Partial<CurveDefinition>) {
-    onChange(curves.map((curve) => curve.id === id ? { ...curve, ...patch } : curve))
+    const current = curves.find((curve) => curve.id === id)
+    const targetGroupId = patch.comparisonGroupId ?? current?.comparisonGroupId
+    const nextRole = patch.comparisonRole ?? current?.comparisonRole
+    onChange(curves.map((curve) => {
+      if (curve.id === id) return { ...curve, ...patch }
+      if (
+        nextRole === 'reference' &&
+        targetGroupId &&
+        curve.origin === 'manual' &&
+        curve.comparisonGroupId === targetGroupId &&
+        curve.comparisonRole === 'reference'
+      ) return { ...curve, comparisonRole: 'comparison' }
+      return curve
+    }))
+  }
+
+  function addComparisonGroup() {
+    const label = newGroupName.trim()
+    if (!label) return
+    const id = `comparison-group-${Date.now()}`
+    onComparisonGroupsChange([...comparisonGroups, { id, label }])
+    setNewGroupName('')
   }
 
   function move(id: string, direction: -1 | 1) {
@@ -788,13 +867,40 @@ function CurveSettingsModal({
 
   return (
     <div className="curvas-modal-backdrop" role="presentation" onClick={onClose}>
-      <div className="curvas-modal" role="dialog" aria-modal="true" aria-label="Configurar curvas" onClick={(event) => event.stopPropagation()}>
+      <div className="curvas-modal curvas-settings-modal" role="dialog" aria-modal="true" aria-label="Configurar curvas" onClick={(event) => event.stopPropagation()}>
         <div className="curvas-modal-header">
           <div>
             <h3>Configurar curvas</h3>
             <p>As alterações ficam disponíveis para todos os usuários deste projeto.</p>
           </div>
           <button type="button" className="curvas-icon-button" onClick={onClose} aria-label="Fechar configurações"><X size={18} /></button>
+        </div>
+        <div className="curvas-comparison-groups">
+          <div>
+            <strong>Grupos de comparação</strong>
+            <span>As curvas de cada grupo são comparadas somente com o seu “Realizado do grupo”.</span>
+          </div>
+          <label>
+            <input
+              aria-label="Nome do novo grupo"
+              value={newGroupName}
+              onChange={(event) => setNewGroupName(event.target.value)}
+              onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addComparisonGroup() } }}
+              placeholder="Ex.: Caixa, SFH, Engenharia"
+            />
+          </label>
+          <button type="button" className="curvas-secondary-button" disabled={!newGroupName.trim()} onClick={addComparisonGroup}><Plus size={14} /> Novo grupo</button>
+        </div>
+        <div className="curvas-settings-columns" aria-hidden="true">
+          <span />
+          <span />
+          <span>Curva</span>
+          <span>Cor</span>
+          <span>Traço</span>
+          <span>Grupo</span>
+          <span>Papel no grupo</span>
+          <span>Ordem</span>
+          <span />
         </div>
         <div className="curvas-settings-list">
           {curves.map((curve, index) => (
@@ -815,6 +921,35 @@ function CurveSettingsModal({
               <select value={curve.style} onChange={(event) => update(curve.id, { style: event.target.value as CurveStyle })} aria-label={`Traço de ${curve.label}`}>
                 {CURVE_STYLES.map((style) => <option key={style.value} value={style.value}>{style.label}</option>)}
               </select>
+              {curve.origin === 'manual' ? (
+                <>
+                  <select
+                    value={curve.comparisonGroupId || ''}
+                    onChange={(event) => update(curve.id, {
+                      comparisonGroupId: event.target.value || undefined,
+                      comparisonRole: event.target.value ? curve.comparisonRole || 'comparison' : 'comparison',
+                    })}
+                    aria-label={`Grupo de comparação de ${curve.label}`}
+                  >
+                    <option value="">Sem grupo</option>
+                    {comparisonGroups.map((group) => <option key={group.id} value={group.id}>{group.label}</option>)}
+                  </select>
+                  <select
+                    value={curve.comparisonRole || 'comparison'}
+                    disabled={!curve.comparisonGroupId}
+                    onChange={(event) => update(curve.id, { comparisonRole: event.target.value as CurveComparisonRole })}
+                    aria-label={`Papel de ${curve.label} no grupo`}
+                  >
+                    <option value="comparison">Curva comparada</option>
+                    <option value="reference">Realizado do grupo</option>
+                  </select>
+                </>
+              ) : (
+                <>
+                  <span className="curvas-setting-auto">Prevision</span>
+                  <span className="curvas-setting-auto">Automático</span>
+                </>
+              )}
               <div className="curvas-setting-order">
                 <button type="button" className="curvas-icon-button" disabled={index === 0} onClick={() => move(curve.id, -1)} aria-label="Mover curva para cima"><ArrowUp size={14} /></button>
                 <button type="button" className="curvas-icon-button" disabled={index === curves.length - 1} onClick={() => move(curve.id, 1)} aria-label="Mover curva para baixo"><ArrowDown size={14} /></button>
@@ -864,6 +999,7 @@ function ManualCurveModal({
 
 export function CurvasView({ projectId, projectName, records, baselineCurves = [], loading = false }: Props) {
   const [storedCurves, setStoredCurves] = useState<CurveDefinition[] | null>(null)
+  const [comparisonGroups, setComparisonGroups] = useState<CurveComparisonGroup[]>([])
   const [storedBaselineId, setStoredBaselineId] = useState<string | null>(null)
   const [selectedBaselineId, setSelectedBaselineId] = useState<string | null>(null)
   const [configState, setConfigState] = useState<'idle' | 'loading' | 'ready'>('idle')
@@ -884,6 +1020,7 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
   useEffect(() => {
     let cancelled = false
     setStoredCurves(null)
+    setComparisonGroups([])
     setConfigError('')
     if (!projectId) {
       setConfigState('ready')
@@ -895,7 +1032,15 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
       .then(({ response, payload }) => {
         if (!response.ok) throw new Error(payload?.error || 'Não foi possível carregar a configuração.')
         if (!cancelled) {
-          setStoredCurves(sanitizeCurves(payload?.config?.curves))
+          const sanitizedCurves = sanitizeCurves(payload?.config?.curves)
+          if (Array.isArray(payload?.config?.comparisonGroups)) {
+            setStoredCurves(sanitizedCurves)
+            setComparisonGroups(sanitizeComparisonGroups(payload.config.comparisonGroups))
+          } else {
+            const migrated = migrateImportedComparisonGroups(sanitizedCurves)
+            setStoredCurves(migrated.curves)
+            setComparisonGroups(migrated.groups)
+          }
           setStoredBaselineId(payload?.config?.linha_base_id ? String(payload.config.linha_base_id) : null)
           setConfigState('ready')
         }
@@ -903,6 +1048,7 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
       .catch((error) => {
         if (!cancelled) {
           setStoredCurves([])
+          setComparisonGroups([])
           setStoredBaselineId(null)
           setConfigState('ready')
           setConfigError(error instanceof Error ? error.message : 'Não foi possível carregar a configuração.')
@@ -1004,6 +1150,7 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
             projectId,
             config: {
               curves: persistableCurves(storedCurves),
+              comparisonGroups,
               linha_base_id: selectedBaselineId,
             },
           }),
@@ -1018,7 +1165,7 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
       }
     }, 450)
     return () => { if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current) }
-  }, [configState, projectId, selectedBaselineId, storedCurves])
+  }, [comparisonGroups, configState, projectId, selectedBaselineId, storedCurves])
 
   function updateDefinitions(next: CurveDefinition[]) {
     setStoredCurves(persistableCurves(next))
@@ -1067,6 +1214,8 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
           style: previous?.style || 'dotted',
           visible: previous?.visible !== false,
           origin: 'manual' as const,
+          comparisonGroupId: previous?.comparisonGroupId,
+          comparisonRole: previous?.comparisonRole || 'comparison' as const,
           points,
         }
       })
@@ -1185,7 +1334,7 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
         </>
       )}
 
-      {settingsOpen && <CurveSettingsModal curves={definitions} onChange={updateDefinitions} onClose={() => setSettingsOpen(false)} onNewManual={() => { setSettingsOpen(false); setManualOpen(true) }} />}
+      {settingsOpen && <CurveSettingsModal curves={definitions} comparisonGroups={comparisonGroups} onChange={updateDefinitions} onComparisonGroupsChange={setComparisonGroups} onClose={() => setSettingsOpen(false)} onNewManual={() => { setSettingsOpen(false); setManualOpen(true) }} />}
       {manualOpen && <ManualCurveModal onClose={() => setManualOpen(false)} onCreate={createManualCurve} />}
     </div>
   )

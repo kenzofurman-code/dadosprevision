@@ -64,7 +64,15 @@ app.put('/api/curve-config', async (req, res) => {
     if (!projectId) return res.status(400).json({ error: 'projectId Ã© obrigatÃ³rio.' })
     const incoming = req.body?.config
     const curves = Array.isArray(incoming?.curves) ? incoming.curves.slice(0, 100) : []
-    const config = { curves }
+    const comparisonGroups = Array.isArray(incoming?.comparisonGroups)
+      ? incoming.comparisonGroups.slice(0, 50).flatMap((group) => {
+          const id = String(group?.id || '').trim()
+          const label = String(group?.label || '').trim()
+          return id && label ? [{ id, label }] : []
+        })
+      : []
+    const linhaBaseId = incoming?.linha_base_id ? String(incoming.linha_base_id) : null
+    const config = { curves, comparisonGroups, linha_base_id: linhaBaseId }
     await saveCurveConfig(projectId, config)
     return res.json({ ok: true, config })
   } catch (err) {

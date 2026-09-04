@@ -653,6 +653,10 @@
   box-shadow: 0 18px 55px rgba(11, 32, 28, 0.28);
 }
 
+.curvas-settings-modal {
+  width: min(100%, 1280px);
+}
+
 .curvas-manual-modal {
   width: min(100%, 520px);
 }
@@ -698,9 +702,56 @@
   padding: 12px 14px;
 }
 
+.curvas-comparison-groups {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(220px, 330px) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e0e9e6;
+  background: #fbfdfc;
+}
+
+.curvas-comparison-groups > div {
+  display: grid;
+  gap: 2px;
+}
+
+.curvas-comparison-groups strong {
+  color: #173f38;
+  font-size: 12px;
+}
+
+.curvas-comparison-groups span {
+  color: #6d7d79;
+  font-size: 10px;
+}
+
+.curvas-comparison-groups label,
+.curvas-comparison-groups input {
+  width: 100%;
+}
+
+.curvas-comparison-groups input {
+  height: 34px;
+  padding: 0 9px;
+  font-size: 11px;
+}
+
+.curvas-settings-columns {
+  display: grid;
+  grid-template-columns: 28px 13px minmax(180px, 1fr) 34px 120px 145px 150px 66px 50px;
+  gap: 8px;
+  padding: 8px 21px 0;
+  color: #7a8985;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .curvas-setting-row {
   display: grid;
-  grid-template-columns: 28px 13px minmax(180px, 1fr) 34px 145px auto auto;
+  grid-template-columns: 28px 13px minmax(180px, 1fr) 34px 120px 145px 150px 66px 50px;
   align-items: center;
   gap: 8px;
   min-height: 45px;
@@ -708,6 +759,12 @@
   border-radius: 7px;
   background: #fbfdfc;
   padding: 5px 7px;
+}
+
+.curvas-setting-auto {
+  color: #8a9995;
+  font-size: 9px;
+  text-align: center;
 }
 
 .curvas-setting-visible {
@@ -859,13 +916,23 @@
   }
 
   .curvas-setting-row {
-    grid-template-columns: 28px 13px minmax(0, 1fr) 34px auto;
+    grid-template-columns: 28px 13px minmax(0, 1fr) 34px;
   }
 
   .curvas-setting-row select,
+  .curvas-setting-auto,
   .curvas-setting-order,
   .curvas-remove-button {
-    grid-column: span 1;
+    grid-column: 3 / -1;
+  }
+
+  .curvas-comparison-groups {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .curvas-settings-columns {
+    display: none;
   }
 }
 
@@ -902,6 +969,7 @@
   }
 
   .curvas-setting-row select,
+  .curvas-setting-auto,
   .curvas-setting-order,
   .curvas-remove-button {
     grid-column: 3 / -1;
