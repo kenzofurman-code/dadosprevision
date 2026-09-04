@@ -719,8 +719,15 @@ function CurveChart({
             const pointIndex = hoverIndex || 0
             const point = curve.points[range.start + pointIndex]
             const repeated = isRepeatedActualValue(curve, range.start, pointIndex)
-            const delta = curve.kind === 'planned'
-              ? hoveredDeltas.find((item) => item.perspective === curve.perspective)?.delta ?? null
+            const actualCurve = series.find(
+              (item) => item.kind === 'actual' && item.perspective === curve.perspective,
+            )
+            const actualValue = actualCurve?.points[range.start + pointIndex]?.value ?? null
+            const delta = (curve.kind === 'planned' || curve.kind === 'manual')
+              && point?.value !== null
+              && point?.value !== undefined
+              && actualValue !== null
+              ? actualValue - point.value
               : null
             return (
               <div key={curve.id} className="curvas-tooltip-row">
