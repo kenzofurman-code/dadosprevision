@@ -18,6 +18,7 @@ import {
   Layers3,
   ListChecks,
   Maximize2,
+  Moon,
   Percent,
   Plus,
   Presentation,
@@ -29,6 +30,7 @@ import {
   Settings2,
   Trash2,
   TrendingUp,
+  Sun,
   Users,
   WalletCards,
   Wrench,
@@ -1002,6 +1004,11 @@ function calculateItemWeeklyProgress(item: CffRecord, weekStartStr: string, week
 }
 
 function App() {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const savedTheme = window.localStorage.getItem('piemonte-theme')
+    if (savedTheme === 'light' || savedTheme === 'dark') return savedTheme
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  })
   const [projects, setProjects] = useState<Project[]>([])
   const [records, setRecords] = useState<DataRecord[]>([])
   const [curveBaselines, setCurveBaselines] = useState<DataRecord[]>([])
@@ -1020,6 +1027,11 @@ function App() {
   const [cffDisplayMode, setCffDisplayMode] = useState<'percentual' | 'acumulada'>('percentual')
   const [cffDenseMode, setCffDenseMode] = useState(false)
   const [gestaoMonth, setGestaoMonth] = useState<string>('')
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    window.localStorage.setItem('piemonte-theme', theme)
+  }, [theme])
   const [gestaoGroup, setGestaoGroup] = useState<string>('all')
   const [gestaoPanelTab, setGestaoPanelTab] = useState<GestaoPanelTab>('panel1')
   const [panel5Service, setPanel5Service] = useState('')
@@ -3284,6 +3296,15 @@ function App() {
           </div>
         </div>
         <div className="header-actions">
+          <button
+            className="secondary-button theme-toggle"
+            type="button"
+            onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')}
+            aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
+            title={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
+          >
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
           <button className="secondary-button" type="button" onClick={reload} disabled={loading}>
             <RefreshCw size={16} className={loading ? 'spin' : ''} />
             Recarregar
