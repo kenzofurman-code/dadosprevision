@@ -298,6 +298,12 @@ CREATE TABLE IF NOT EXISTS curvas_config (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS curvas_config_global (
+  id BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (id = TRUE),
+  config JSONB NOT NULL DEFAULT '{"curvas": []}'::jsonb,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Migra volumes criados pelas primeiras versoes da stack VPS.
 ALTER TABLE projetos
   ADD COLUMN IF NOT EXISTS area NUMERIC,

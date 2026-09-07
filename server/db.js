@@ -266,6 +266,22 @@ export async function saveCurveConfig(projectId, config) {
   return config
 }
 
+export async function getGlobalCurveConfig() {
+  const { rows } = await query('SELECT config FROM curvas_config_global WHERE id = TRUE LIMIT 1')
+  return rows[0]?.config || null
+}
+
+export async function saveGlobalCurveConfig(config) {
+  await query(
+    `INSERT INTO curvas_config_global (id, config, updated_at)
+     VALUES (TRUE, $1::jsonb, NOW())
+     ON CONFLICT (id)
+     DO UPDATE SET config = EXCLUDED.config, updated_at = NOW()`,
+    [JSON.stringify(config)],
+  )
+  return config
+}
+
 export async function getRestrictions({ projectId = '', page = 0, pageSize = 100 } = {}) {
   const { rows } = await query(
     projectId

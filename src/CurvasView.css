@@ -100,6 +100,30 @@
   outline-offset: 1px;
 }
 
+.curvas-enterprise-selector {
+  display: grid;
+  min-width: 190px;
+  max-width: 250px;
+  gap: 3px;
+  color: #397267;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.curvas-enterprise-selector select {
+  min-height: 34px;
+  width: 100%;
+  border: 1px solid #cbdcd7;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #2e4d45;
+  padding: 0 9px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
 .curvas-toggle,
 .curvas-secondary-button,
 .curvas-primary-button,

@@ -37,6 +37,8 @@ export type CurveDefinition = {
   style: CurveStyle
   visible: boolean
   origin: 'prevision' | 'manual'
+  sourceProjectName?: string
+  metricLabel?: string
   comparisonGroupId?: string
   comparisonRole?: CurveComparisonRole
   calculation?: CurveCalculation
@@ -231,7 +233,7 @@ function importedMonthKey(value: unknown) {
   return ''
 }
 
-async function importedCurveRows(buffer: ArrayBuffer, projectName: string) {
+async function importedCurveRows(buffer: ArrayBuffer) {
   const XLSX = await import('xlsx')
   const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
   const firstSheet = workbook.SheetNames[0] ? workbook.Sheets[workbook.SheetNames[0]] : null
@@ -241,37 +243,44 @@ async function importedCurveRows(buffer: ArrayBuffer, projectName: string) {
 
   const keys = Object.keys(rows[0])
   const findColumn = (expected: string[]) => keys.find((key) => expected.includes(identityKey(key)))
-  const projectColumn = findColumn(['empreendimento', 'projeto', 'obra'])
+  const projectColumn = findColumn(['empreendimento', 'projeto', 'obra', 'empresa', 'cliente'])
   const dateColumn = findColumn(['data', 'mes', 'mesreferencia'])
   const versionColumn = findColumn(['versao', 'curva', 'nomecurva', 'cenario'])
-  const valueColumn = findColumn(['obrareal', 'obrarealpercent', 'realizado', 'realizadofisico', 'fisico'])
-  if (!projectColumn || !dateColumn || !versionColumn || !valueColumn) {
-    throw new Error('Colunas não identificadas. Use: Empreendimento, Data, Versão e Obra Real%.')
+  const valueColumn = findColumn(['obrareal', 'obrarealpercent', 'realizado', 'realizadofisico', 'fisico', 'financeiro', 'financeiropercent', 'valor', 'valorpercentual', 'percentual', 'percentualrealizado', 'percentualprevisto'])
+  const perspectiveColumn = findColumn(['perspectiva', 'tipo', 'natureza', 'indicador'])
+  if (!dateColumn || !versionColumn || !valueColumn) {
+    throw new Error('Colunas não identificadas. Use: Empreendimento (opcional), Data, Versão e Valor/Percentual.')
   }
 
-  const projectKey = identityKey(projectName)
-  const grouped = new Map<string, CurvePoint[]>()
+  const grouped = new Map<string, { enterprise: string; label: string; perspective: CurvePerspective; metricLabel: string; points: CurvePoint[] }>()
   let matchingRows = 0
   let invalidRows = 0
   rows.forEach((row) => {
-    if (identityKey(row[projectColumn]) !== projectKey) return
     matchingRows += 1
     const date = importedMonthKey(row[dateColumn])
     const label = String(row[versionColumn] || '').trim()
+    const enterprise = String(projectColumn ? row[projectColumn] || '' : '').trim() || 'Empreendimento importado'
+    const perspectiveText = String(perspectiveColumn ? row[perspectiveColumn] || '' : `${valueColumn}`).trim()
+    const perspective = normalizePerspective(perspectiveText)
+    const metricLabel = perspectiveText || (perspective === 'monetary' ? 'Financeiro' : 'Físico')
     if (!date || !label) {
       invalidRows += 1
       return
     }
-    const points = grouped.get(label) || []
-    points.push({ date, value: normalizeValue(row[valueColumn]) })
-    grouped.set(label, points)
+    const key = `${identityKey(enterprise)}::${identityKey(label)}::${perspective}`
+    const current = grouped.get(key) || { enterprise, label, perspective, metricLabel, points: [] }
+    current.points.push({ date, value: normalizeValue(row[valueColumn]) })
+    grouped.set(key, current)
   })
-  if (!matchingRows) throw new Error(`Nenhuma linha de ${projectName || 'do projeto selecionado'} foi encontrada na planilha.`)
-  if (!grouped.size) throw new Error('As linhas do projeto não possuem versão e data válidas.')
+  if (!matchingRows) throw new Error('Nenhuma linha válida foi encontrada na planilha.')
+  if (!grouped.size) throw new Error('As linhas importadas não possuem versão e data válidas.')
 
   return {
-    curves: [...grouped.entries()].map(([label, points]) => ({
+    curves: [...grouped.values()].map(({ enterprise, label, perspective, metricLabel, points }) => ({
+      enterprise,
       label,
+      perspective,
+      metricLabel,
       points: [...new Map(points.map((point) => [point.date, point])).values()].sort((left, right) => left.date.localeCompare(right.date)),
     })),
     matchingRows,
@@ -379,6 +388,8 @@ function sanitizeCurves(value: unknown): CurveDefinition[] {
       style: CURVE_STYLES.some((item) => item.value === raw.style) ? raw.style as CurveStyle : 'solid',
       visible: raw.visible !== false,
       origin,
+      ...(origin === 'manual' && raw.sourceProjectName ? { sourceProjectName: String(raw.sourceProjectName) } : {}),
+      ...(origin === 'manual' && raw.metricLabel ? { metricLabel: String(raw.metricLabel) } : {}),
       ...(origin === 'manual' && raw.comparisonGroupId ? { comparisonGroupId: String(raw.comparisonGroupId) } : {}),
       ...(origin === 'manual' && raw.comparisonRole === 'reference' ? { comparisonRole: 'reference' as const } : origin === 'manual' ? { comparisonRole: 'comparison' as const } : {}),
       ...(origin === 'manual' && raw.calculation === 'sfhProjection' ? { calculation: 'sfhProjection' as const } : {}),
@@ -1094,6 +1105,9 @@ function ManualCurveModal({
 
 export function CurvasView({ projectId, projectName, records, baselineCurves = [], loading = false }: Props) {
   const [storedCurves, setStoredCurves] = useState<CurveDefinition[] | null>(null)
+  const [globalCurves, setGlobalCurves] = useState<CurveDefinition[]>([])
+  const [globalConfigState, setGlobalConfigState] = useState<'loading' | 'ready'>('loading')
+  const [importedEnterpriseFilter, setImportedEnterpriseFilter] = useState('all')
   const [comparisonGroups, setComparisonGroups] = useState<CurveComparisonGroup[]>([])
   const [storedBaselineId, setStoredBaselineId] = useState<string | null>(null)
   const [selectedBaselineId, setSelectedBaselineId] = useState<string | null>(null)
@@ -1110,6 +1124,7 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
   const [focusedId, setFocusedId] = useState<string | null>(null)
   const [range, setRange] = useState<Range>({ start: 0, end: 0 })
   const saveTimerRef = useRef<number | null>(null)
+  const globalSaveTimerRef = useRef<number | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -1153,6 +1168,26 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
     return () => { cancelled = true }
   }, [projectId])
 
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/curve-config?scope=global', { cache: 'no-store' })
+      .then((response) => response.json().then((payload) => ({ response, payload })))
+      .then(({ response, payload }) => {
+        if (!response.ok) throw new Error(payload?.error || 'Não foi possível carregar as curvas importadas.')
+        if (!cancelled) {
+          setGlobalCurves(sanitizeCurves(payload?.config?.curves).filter((curve) => curve.id.startsWith('global-import-')))
+          setGlobalConfigState('ready')
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGlobalCurves([])
+          setGlobalConfigState('ready')
+        }
+      })
+    return () => { cancelled = true }
+  }, [])
+
   const availableBaselines = useMemo(() => sanitizeBaselineCurves(baselineCurves).sort((left, right) => {
     if (left.ativa !== right.ativa) return left.ativa ? -1 : 1
     return String(right.criada_em || '').localeCompare(String(left.criada_em || ''))
@@ -1184,10 +1219,25 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
     const defaults = DEFAULT_CURVES.map((curve) => ({ ...curve, ...storedById.get(curve.id) }))
     const defaultIds = new Set(DEFAULT_CURVES.map((curve) => curve.id))
     const custom = stored.filter((curve) => !defaultIds.has(curve.id))
-    const ordered = [...stored.map((curve) => curve.id), ...defaults.map((curve) => curve.id), ...custom.map((curve) => curve.id)]
-    const all = new Map([...defaults, ...custom].map((curve) => [curve.id, curve]))
+    const ordered = [...stored.map((curve) => curve.id), ...globalCurves.map((curve) => curve.id), ...defaults.map((curve) => curve.id), ...custom.map((curve) => curve.id)]
+    const all = new Map([...defaults, ...custom, ...globalCurves].map((curve) => [curve.id, curve]))
     return [...new Set(ordered)].flatMap((id) => all.get(id) ? [all.get(id)!] : [])
-  }, [storedCurves])
+  }, [globalCurves, storedCurves])
+
+  const importedEnterprises = useMemo(() => [...new Set(
+    globalCurves.map((curve) => curve.sourceProjectName).filter((name): name is string => Boolean(name)),
+  )].sort((left, right) => left.localeCompare(right)), [globalCurves])
+
+  useEffect(() => {
+    if (importedEnterpriseFilter !== 'all' && !importedEnterprises.includes(importedEnterpriseFilter)) {
+      setImportedEnterpriseFilter('all')
+    }
+  }, [importedEnterpriseFilter, importedEnterprises])
+
+  const filteredDefinitions = useMemo(() => {
+    if (importedEnterpriseFilter === 'all') return definitions
+    return definitions.filter((curve) => curve.origin !== 'manual' || !curve.id.startsWith('global-import-') || curve.sourceProjectName === importedEnterpriseFilter)
+  }, [definitions, importedEnterpriseFilter])
 
   const recordByPerspective = useMemo(() => {
     const result: Record<CurvePerspective, Map<string, Record<string, any>>> = { physical: new Map(), monetary: new Map() }
@@ -1201,9 +1251,9 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
 
   const months = useMemo(() => {
     const all = new Set<string>([...recordByPerspective.physical.keys(), ...recordByPerspective.monetary.keys()])
-    definitions.forEach((curve) => (curve.points || []).forEach((point) => all.add(point.date)))
+    filteredDefinitions.forEach((curve) => (curve.points || []).forEach((point) => all.add(point.date)))
     return [...all].sort()
-  }, [definitions, recordByPerspective])
+  }, [filteredDefinitions, recordByPerspective])
 
   const selectedBaselinePoints = useMemo(
     () => new Map((selectedBaseline?.pontos || []).map((point) => [point.data, point])),
@@ -1212,7 +1262,7 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
   const currentMonth = currentMonthKey()
 
   const series = useMemo<CurveSeries[]>(() => {
-    const sourceSeries = definitions.map((curve) => {
+    const sourceSeries = filteredDefinitions.map((curve) => {
       const manualMap = new Map((curve.points || []).map((point) => [point.date, point.value]))
       const points = months.map((date) => ({
         date,
@@ -1226,7 +1276,9 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
       }))
       const displayLabel = curve.kind === 'base'
         ? `${curve.perspective === 'physical' ? 'Físico' : 'Financeiro'} · ${baselineDisplayName(selectedBaseline)}`
-        : curve.label
+        : curve.sourceProjectName
+          ? `${curve.sourceProjectName} · ${curve.label}`
+          : curve.label
       return { ...curve, points, displayLabel }
     })
     return sourceSeries.map((curve) => {
@@ -1245,7 +1297,7 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
         points: projectedSfhPoints(months, actualCurve.points, plannedCurve.points, currentMonth),
       }
     })
-  }, [currentMonth, definitions, months, recordByPerspective, selectedBaseline, selectedBaselinePoints])
+  }, [currentMonth, filteredDefinitions, months, recordByPerspective, selectedBaseline, selectedBaselinePoints])
 
   useEffect(() => {
     setRange({ start: 0, end: Math.max(0, months.length - 1) })
@@ -1281,8 +1333,27 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
     return () => { if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current) }
   }, [comparisonGroups, configState, projectId, selectedBaselineId, storedCurves])
 
+  useEffect(() => {
+    if (globalConfigState !== 'ready') return
+    if (globalSaveTimerRef.current !== null) window.clearTimeout(globalSaveTimerRef.current)
+    globalSaveTimerRef.current = window.setTimeout(async () => {
+      try {
+        await fetch('/api/curve-config?scope=global', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ config: { curves: persistableCurves(globalCurves) } }),
+        })
+      } catch {
+        // A failed background save is retried on the next edit or reload.
+      }
+    }, 450)
+    return () => { if (globalSaveTimerRef.current !== null) window.clearTimeout(globalSaveTimerRef.current) }
+  }, [globalConfigState, globalCurves])
+
   function updateDefinitions(next: CurveDefinition[]) {
-    setStoredCurves(persistableCurves(ensureSfhProjection(next, comparisonGroups)))
+    const nextWithProjection = persistableCurves(ensureSfhProjection(next, comparisonGroups))
+    setGlobalCurves(nextWithProjection.filter((curve) => curve.id.startsWith('global-import-')))
+    setStoredCurves(nextWithProjection.filter((curve) => !curve.id.startsWith('global-import-')))
   }
 
   function createManualCurve(label: string, perspective: CurvePerspective, color: string, style: CurveStyle) {
@@ -1306,28 +1377,26 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
-    if (!projectId) {
-      setConfigError('Selecione um projeto antes de importar curvas.')
-      return
-    }
     setImporting(true)
     setConfigError('')
     setImportMessage('')
     try {
-      const imported = await importedCurveRows(await file.arrayBuffer(), projectName)
+      const imported = await importedCurveRows(await file.arrayBuffer())
       const existingById = new Map(definitions.map((curve) => [curve.id, curve]))
-      const importedDefinitions = imported.curves.map(({ label, points }, index) => {
-        const id = `manual-import-${identityKey(projectId)}-${identityKey(label) || index + 1}`
+      const importedDefinitions = imported.curves.map(({ enterprise, label, perspective, metricLabel, points }, index) => {
+        const id = `global-import-${identityKey(enterprise)}-${identityKey(label)}-${perspective}`
         const previous = existingById.get(id)
         return {
           id,
-          label: `Importada · ${label}`,
-          perspective: 'physical' as const,
+          label,
+          perspective,
           kind: 'manual' as const,
           color: previous?.color || IMPORTED_CURVE_COLORS[index % IMPORTED_CURVE_COLORS.length],
           style: previous?.style || 'dotted',
           visible: previous?.visible !== false,
           origin: 'manual' as const,
+          sourceProjectName: enterprise,
+          metricLabel,
           comparisonGroupId: previous?.comparisonGroupId,
           comparisonRole: previous?.comparisonRole || 'comparison' as const,
           calculation: previous?.calculation,
@@ -1358,6 +1427,7 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
   }
 
   const hasAnyData = series.some((curve) => curve.points.some((point) => point.value !== null))
+  const canRenderCurves = Boolean(projectId || globalCurves.length)
   const settingsStyle = { ['--curve-color' as string]: '#173f38' } as CSSProperties
 
   return (
@@ -1366,7 +1436,7 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
         <div>
           <span className="curvas-eyebrow">Visualizador de curvas</span>
           <h3>Curvas S de andamento</h3>
-          <p>{projectId ? `${projectName || 'Projeto selecionado'} · período completo disponível no Prevision` : 'Selecione um projeto para visualizar as curvas.'}</p>
+          <p>{projectId ? `${projectName || 'Projeto selecionado'} · período completo disponível no Prevision` : globalCurves.length ? 'Curvas importadas independentes dos dados do Prevision' : 'Selecione um projeto ou importe curvas para começar.'}</p>
         </div>
         <div className="curvas-heading-actions">
           <label className="curvas-baseline-selector" title={selectedBaseline?.descricao || 'Selecione a linha de base que será exibida'}>
@@ -1387,7 +1457,14 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
            <button type="button" className={showValues ? 'curvas-toggle active' : 'curvas-toggle'} onClick={() => setShowValues((value) => !value)}>Valores</button>
            <button type="button" className={tableOpen ? 'curvas-toggle active' : 'curvas-toggle'} onClick={() => setTableOpen((value) => !value)}><Table2 size={14} /> {tableOpen ? 'Ocultar tabela' : 'Mostrar tabela'}</button>
            <input ref={importInputRef} className="curvas-import-input" type="file" accept=".xlsx,.xls,.csv,text/csv" onChange={handleImportFile} />
-           <button type="button" className="curvas-secondary-button" disabled={!projectId || importing} onClick={() => importInputRef.current?.click()}><Upload size={14} /> {importing ? 'Importando...' : 'Importar curvas'}</button>
+           <button type="button" className="curvas-secondary-button" disabled={importing} onClick={() => importInputRef.current?.click()}><Upload size={14} /> {importing ? 'Importando...' : 'Importar curvas'}</button>
+           {importedEnterprises.length > 0 && <label className="curvas-enterprise-selector">
+             <span>Empreendimento importado</span>
+             <select value={importedEnterpriseFilter} onChange={(event) => setImportedEnterpriseFilter(event.target.value)} aria-label="Filtrar empreendimentos importados">
+               <option value="all">Todos os importados</option>
+               {importedEnterprises.map((enterprise) => <option key={enterprise} value={enterprise}>{enterprise}</option>)}
+             </select>
+           </label>}
            <button type="button" className="curvas-secondary-button" onClick={() => setSettingsOpen(true)}><Settings2 size={14} /> Configurar</button>
         </div>
       </div>
@@ -1396,8 +1473,8 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
       {importMessage && <div className="curvas-feedback success"><Check size={15} /> {importMessage}</div>}
       {saving && <div className="curvas-saving"><span /> Salvando configuração compartilhada...</div>}
 
-      {!projectId ? (
-        <div className="curvas-empty-card">Escolha um projeto no seletor acima para carregar suas curvas.</div>
+      {!canRenderCurves ? (
+        <div className="curvas-empty-card">{globalConfigState === 'loading' ? 'Carregando biblioteca de curvas importadas...' : 'Escolha um projeto no seletor acima ou importe curvas para começar.'}</div>
       ) : (
         <>
           <div className="curvas-chart-layout">
@@ -1418,7 +1495,7 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
                       title={available ? 'Clique para alternar a curva' : 'Sem dados deste tipo para o projeto'}
                     >
                       <span className="curvas-legend-line" style={{ borderTopColor: curve.color, borderTopStyle: curve.style === 'solid' ? 'solid' : curve.style === 'dashed' ? 'dashed' : 'dotted' }} />
-                      <span className="curvas-legend-copy"><strong>{curve.displayLabel}</strong><small>{curve.origin === 'prevision' ? 'Prevision' : curve.calculation ? 'Calculada' : 'Manual'} · {curveStyleLabel(curve.style)}</small></span>
+                      <span className="curvas-legend-copy"><strong>{curve.displayLabel}</strong><small>{curve.origin === 'prevision' ? 'Prevision' : curve.calculation ? 'Calculada' : curve.sourceProjectName ? `Importada · ${curve.metricLabel || (curve.perspective === 'monetary' ? 'Financeiro' : 'Físico')}` : 'Manual'} · {curveStyleLabel(curve.style)}</small></span>
                       {curve.visible ? <Eye size={14} /> : <EyeOff size={14} />}
                     </button>
                   )

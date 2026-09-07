@@ -15,6 +15,8 @@ import {
   getAnalyticsData,
   getCurveConfig,
   saveCurveConfig,
+  getGlobalCurveConfig,
+  saveGlobalCurveConfig,
   getRestrictions,
 } from './db.js'
 import { syncProjects, syncRestrictions } from './sync.js'
@@ -48,6 +50,10 @@ app.get('/api/projects', async (_req, res) => {
 
 app.get('/api/curve-config', async (req, res) => {
   try {
+    if (String(req.query.scope || '').trim() === 'global') {
+      const config = await getGlobalCurveConfig()
+      return res.json({ ok: true, config: config || { curves: [] } })
+    }
     const projectId = String(req.query.projectId || '').trim()
     if (!projectId) return res.status(400).json({ error: 'projectId Ã© obrigatÃ³rio.' })
     const config = await getCurveConfig(projectId)
@@ -60,6 +66,13 @@ app.get('/api/curve-config', async (req, res) => {
 
 app.put('/api/curve-config', async (req, res) => {
   try {
+    if (String(req.query.scope || '').trim() === 'global') {
+      const incoming = req.body?.config
+      const curves = Array.isArray(incoming?.curves) ? incoming.curves.slice(0, 500) : []
+      const config = { curves }
+      await saveGlobalCurveConfig(config)
+      return res.json({ ok: true, config })
+    }
     const projectId = String(req.body?.projectId || '').trim()
     if (!projectId) return res.status(400).json({ error: 'projectId Ã© obrigatÃ³rio.' })
     const incoming = req.body?.config
