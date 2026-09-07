@@ -17,6 +17,8 @@ import {
   saveCurveConfig,
   getGlobalCurveConfig,
   saveGlobalCurveConfig,
+  getAppPreferences,
+  saveAppPreferences,
   getRestrictions,
 } from './db.js'
 import { syncProjects, syncRestrictions } from './sync.js'
@@ -91,6 +93,35 @@ app.put('/api/curve-config', async (req, res) => {
   } catch (err) {
     console.error('Erro em /api/curve-config PUT:', err)
     return res.status(500).json({ error: err.message || 'Erro ao salvar a configuraÃ§Ã£o das curvas.' })
+  }
+})
+
+app.get('/api/app-preferences', async (_req, res) => {
+  try {
+    const config = await getAppPreferences()
+    return res.json({ ok: true, config: config || { activeProjectIds: null, activeCurveEnterprises: null } })
+  } catch (err) {
+    console.error('Erro em /api/app-preferences GET:', err)
+    return res.status(500).json({ error: err.message || 'Erro ao carregar as preferências.' })
+  }
+})
+
+app.put('/api/app-preferences', async (req, res) => {
+  try {
+    const incoming = req.body?.config || {}
+    const normalizeList = (value) => {
+      if (!Array.isArray(value)) return null
+      return value.slice(0, 500).map((item) => String(item || '').trim()).filter(Boolean)
+    }
+    const config = {
+      activeProjectIds: normalizeList(incoming.activeProjectIds),
+      activeCurveEnterprises: normalizeList(incoming.activeCurveEnterprises),
+    }
+    await saveAppPreferences(config)
+    return res.json({ ok: true, config })
+  } catch (err) {
+    console.error('Erro em /api/app-preferences PUT:', err)
+    return res.status(500).json({ error: err.message || 'Erro ao salvar as preferências.' })
   }
 })
 

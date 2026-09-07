@@ -272,6 +272,10 @@ function activityGroupName(activity: DataRecord) {
   return String(activity.grupo_repeticao || '').trim()
 }
 
+function recordProjectId(record: DataRecord) {
+  return String(record.projeto_id || record.project_id || record.id_projeto || '').trim()
+}
+
 function formatMonthLabel(value?: string | null) {
   if (!value) return '-'
   const match = String(value).match(/^(\d{4})-(\d{2})/)
@@ -1101,6 +1105,12 @@ function App() {
   const [modalServiceSearch, setModalServiceSearch] = useState('')
   const [modalFloorSearch, setModalFloorSearch] = useState('')
   const [selectedProject, setSelectedProject] = useState('')
+  const [activeProjectIds, setActiveProjectIds] = useState<string[] | null>(null)
+  const [activeCurveEnterprises, setActiveCurveEnterprises] = useState<string[] | null>(null)
+  const [importedCurveEnterprises, setImportedCurveEnterprises] = useState<string[]>([])
+  const [isProjectFilterModalOpen, setIsProjectFilterModalOpen] = useState(false)
+  const [projectFilterDraft, setProjectFilterDraft] = useState({ projectIds: [] as string[], enterprises: [] as string[] })
+  const [savingProjectFilter, setSavingProjectFilter] = useState(false)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(PAGE_SIZE)
@@ -1113,12 +1123,82 @@ function App() {
   const cffWeekInitialized = useRef(false)
   const defaultProjectApplied = useRef(false)
 
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      fetchJson('/api/app-preferences'),
+      fetchJson('/api/curve-config?scope=global'),
+    ])
+      .then(([preferencesPayload, curvesPayload]) => {
+        if (cancelled) return
+        const preferences = preferencesPayload?.config || {}
+        const normalize = (value: unknown) =>
+          Array.isArray(value) ? value.map((item) => String(item || '').trim()).filter(Boolean) : null
+        setActiveProjectIds(normalize(preferences.activeProjectIds))
+        setActiveCurveEnterprises(normalize(preferences.activeCurveEnterprises))
+        const enterprises: string[] = Array.from(
+          new Set<string>(
+            (Array.isArray(curvesPayload?.config?.curves) ? curvesPayload.config.curves : [])
+              .map((curve: DataRecord) => String(curve.sourceProjectName || '').trim())
+              .filter(Boolean),
+          ),
+        ).sort((left, right) => compareNatural(left, right))
+        setImportedCurveEnterprises(enterprises)
+      })
+      .catch((preferencesError) => {
+        if (!cancelled) {
+          console.warn('Preferências globais indisponíveis; usando todos os projetos.', preferencesError)
+          setImportedCurveEnterprises([])
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const loadProjects = useCallback(async () => {
     const payload = await fetchJson('/api/projects')
     const loadedProjects = Array.isArray(payload.projects) ? payload.projects : []
     setProjects(loadedProjects)
     return loadedProjects as Project[]
   }, [])
+
+  const selectableProjects = useMemo(
+    () => projects.filter((project) => !project.desativado && project.id_prevision),
+    [projects],
+  )
+  const effectiveActiveProjectIds = useMemo(() => {
+    const knownIds = selectableProjects.map((project) => String(project.id_prevision))
+    return new Set(
+      (activeProjectIds === null ? knownIds : activeProjectIds).filter((id) => knownIds.includes(id)),
+    )
+  }, [activeProjectIds, selectableProjects])
+  const activeProjects = useMemo(
+    () => selectableProjects.filter((project) => effectiveActiveProjectIds.has(String(project.id_prevision))),
+    [effectiveActiveProjectIds, selectableProjects],
+  )
+  const effectiveActiveCurveEnterprises = useMemo(() => {
+    const known = new Set(importedCurveEnterprises)
+    return new Set(
+      (activeCurveEnterprises === null ? importedCurveEnterprises : activeCurveEnterprises).filter((name) =>
+        known.has(name),
+      ),
+    )
+  }, [activeCurveEnterprises, importedCurveEnterprises])
+
+  const activeRecords = useMemo(() => {
+    if (selectedProject) return records
+    return records.filter((record) => effectiveActiveProjectIds.has(recordProjectId(record)))
+  }, [effectiveActiveProjectIds, records, selectedProject])
+
+  const activeMilestones = useMemo(() => {
+    if (selectedProject) return gestaoMilestones
+    return gestaoMilestones.filter((milestone) => effectiveActiveProjectIds.has(recordProjectId(milestone)))
+  }, [effectiveActiveProjectIds, gestaoMilestones, selectedProject])
+
+  useEffect(() => {
+    if (selectedProject && !effectiveActiveProjectIds.has(selectedProject)) setSelectedProject('')
+  }, [effectiveActiveProjectIds, selectedProject])
 
   const loadCurrentView = useCallback(async () => {
     if (!dataViews.has(activeView)) return
@@ -1183,7 +1263,8 @@ function App() {
       ) {
         defaultProjectApplied.current = true
         const qoya = loadedProjects.find(
-          (project) => String(project.nome_projeto || '').trim().toLocaleUpperCase('pt-BR') === 'QOYA',
+          (project) => String(project.nome_projeto || '').trim().toLocaleUpperCase('pt-BR') === 'QOYA' &&
+            (activeProjectIds === null || activeProjectIds.includes(String(project.id_prevision))),
         )
         if (qoya?.id_prevision) {
           setSelectedProject(String(qoya.id_prevision))
@@ -1196,7 +1277,7 @@ function App() {
     } finally {
       setLoading(false)
     }
-  }, [activeView, loadCurrentView, loadProjects, selectedProject])
+  }, [activeProjectIds, activeView, loadCurrentView, loadProjects, selectedProject])
 
   useEffect(() => {
     reload()
@@ -1246,15 +1327,15 @@ function App() {
 
   const totals = useMemo(() => {
     const sum = (field: string) =>
-      projects.reduce((total, project) => total + (Number(project[field]) || 0), 0)
+      activeProjects.reduce((total, project) => total + (Number(project[field]) || 0), 0)
 
     return {
-      projects: projects.length,
+      projects: activeProjects.length,
       activities: sum('total_atividades'),
       area: sum('area'),
       budget: sum('custo_orcado'),
     }
-  }, [projects])
+  }, [activeProjects])
 
   const tabTotals = useMemo(
     () =>
@@ -1262,22 +1343,23 @@ function App() {
         tabs.map((tab) => [
           tab.key,
           tab.totalField
-            ? projects.reduce((total, project) => total + (Number(project[tab.totalField!]) || 0), 0)
-            : projects.length,
+            ? activeProjects.reduce((total, project) => total + (Number(project[tab.totalField!]) || 0), 0)
+            : activeProjects.length,
         ]),
       ),
-    [projects],
+    [activeProjects],
   )
 
   const visibleRecords = useMemo(() => {
     const source: DataRecord[] =
       activeView === 'projects'
-        ? projects.filter(
-            (project) => !selectedProject || project.id_prevision === selectedProject,
+        ? selectableProjects.filter(
+            (project) => effectiveActiveProjectIds.has(String(project.id_prevision)) &&
+              (!selectedProject || project.id_prevision === selectedProject),
           )
         : activeView === 'restrictions'
-          ? records.flatMap(restrictionChecklistRows)
-        : records
+          ? activeRecords.flatMap(restrictionChecklistRows)
+        : activeRecords
     const term = search.trim().toLocaleLowerCase('pt-BR')
     if (!term) return source
 
@@ -1288,7 +1370,7 @@ function App() {
           .includes(term),
       ),
     )
-  }, [activeView, projects, records, search, selectedProject])
+  }, [activeRecords, activeView, effectiveActiveProjectIds, search, selectableProjects, selectedProject])
 
   const cffWeekOptions = useMemo(() => {
     const source = visibleRecords as CffRecord[]
@@ -1435,17 +1517,24 @@ function App() {
     [records],
   )
 
+  const visibleCffSummaries = useMemo(
+    () => selectedProject
+      ? cffSummaries
+      : cffSummaries.filter((summary) => effectiveActiveProjectIds.has(String(summary.projeto_id || ''))),
+    [cffSummaries, effectiveActiveProjectIds, selectedProject],
+  )
+
   const cffSummaryBudgetNames = useMemo(
     () =>
-      [...new Set(cffSummaries.map((summary) => String(summary.orcamento_nome || '').trim()).filter(Boolean))],
-    [cffSummaries],
+      [...new Set(visibleCffSummaries.map((summary) => String(summary.orcamento_nome || '').trim()).filter(Boolean))],
+    [visibleCffSummaries],
   )
 
   const cffLevelOptions = useMemo(
     () => {
       const levels = new Set<string>()
 
-      for (const summary of cffSummaries) {
+      for (const summary of visibleCffSummaries) {
         for (const entry of summary.niveis || []) {
           const level = String(entry.nivel || '').trim()
           if (level && level !== 'all') {
@@ -1465,7 +1554,7 @@ function App() {
 
       return [...levels].sort((left, right) => Number(left) - Number(right))
     },
-    [cffSummaries, records],
+    [records, visibleCffSummaries],
   )
 
   useEffect(() => {
@@ -1486,7 +1575,7 @@ function App() {
   const cffMonthlyRows = useMemo(() => {
     if (activeView !== 'dashboard' || dashboardMode !== 'cff') return []
 
-    const selectedSummaries = cffSummaries.filter((summary) =>
+    const selectedSummaries = visibleCffSummaries.filter((summary) =>
       cffBudgetFilter === 'all' ? true : String(summary.orcamento_nome || '') === cffBudgetFilter,
     )
 
@@ -1528,7 +1617,7 @@ function App() {
         realizadoExibido: cffDisplayMode === 'acumulada' ? cumulativeRealizado : row.realizado,
       } satisfies CffMonthlyRow
     })
-  }, [activeView, dashboardMode, cffSummaries, cffBudgetFilter, cffLevelFilter, cffDisplayMode])
+  }, [activeView, dashboardMode, visibleCffSummaries, cffBudgetFilter, cffLevelFilter, cffDisplayMode])
 
   const cffMonthOptions = useMemo(
     () =>
@@ -1591,8 +1680,8 @@ function App() {
   // Gestão à Vista Calculations
   const gestaoActivities = useMemo(() => {
     if (activeView !== 'gestao_a_vista') return []
-    return records
-  }, [activeView, records])
+    return activeRecords
+  }, [activeRecords, activeView])
 
   const gestaoGroupOptions = useMemo(() => {
     const groups = new Set<string>()
@@ -1806,7 +1895,7 @@ function App() {
         .toUpperCase()
         .replace(/[^A-Z0-9]+/g, ' ')
         .trim()
-    const milestones = gestaoMilestones
+    const milestones = activeMilestones
       .filter((milestone) => {
         if (!query) return true
         return (
@@ -1973,7 +2062,7 @@ function App() {
       windowStart,
       windowEnd: new Date(windowEnd.getTime() - 1),
     }
-  }, [gestaoMilestones, search])
+  }, [activeMilestones, search])
 
   const gestaoData = useMemo(() => {
     if (!gestaoMonth) {
@@ -3283,6 +3372,54 @@ function App() {
     setPage(0)
   }
 
+  async function openProjectFilter() {
+    let availableEnterprises = importedCurveEnterprises
+    try {
+      const payload = await fetchJson('/api/curve-config?scope=global')
+      availableEnterprises = Array.from(
+        new Set<string>(
+          (Array.isArray(payload?.config?.curves) ? payload.config.curves : [])
+            .map((curve: DataRecord) => String(curve.sourceProjectName || '').trim())
+            .filter(Boolean),
+        ),
+      ).sort((left, right) => compareNatural(left, right))
+      setImportedCurveEnterprises(availableEnterprises)
+    } catch {
+      // A falha de atualização não impede o uso da última lista carregada.
+    }
+    const selectedEnterprises = activeCurveEnterprises === null
+      ? availableEnterprises
+      : activeCurveEnterprises.filter((name) => availableEnterprises.includes(name))
+    setProjectFilterDraft({
+      projectIds: Array.from(effectiveActiveProjectIds),
+      enterprises: selectedEnterprises,
+    })
+    setIsProjectFilterModalOpen(true)
+  }
+
+  async function saveProjectFilter() {
+    try {
+      setSavingProjectFilter(true)
+      const config = {
+        activeProjectIds: projectFilterDraft.projectIds,
+        activeCurveEnterprises: projectFilterDraft.enterprises,
+      }
+      await fetchJson('/api/app-preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config }),
+      })
+      setActiveProjectIds(config.activeProjectIds)
+      setActiveCurveEnterprises(config.activeCurveEnterprises)
+      setIsProjectFilterModalOpen(false)
+      setMessage('Filtro de projetos aplicado.')
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Erro ao salvar o filtro de projetos.')
+    } finally {
+      setSavingProjectFilter(false)
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="page-header">
@@ -3358,6 +3495,10 @@ function App() {
               : selectedProject
                 ? 'Sincronizar projeto'
                 : 'Sincronizar tudo'}
+          </button>
+          <button className="secondary-button" type="button" onClick={openProjectFilter}>
+            <Settings2 size={16} />
+            Configuração
           </button>
         </div>
       </header>
@@ -3649,7 +3790,7 @@ function App() {
                 <span>Projeto</span>
                 <select value={selectedProject} onChange={(event) => changeProject(event.target.value)}>
                   <option value="">Todos os projetos</option>
-                  {projects.map((project) => (
+                  {selectableProjects.filter((project) => effectiveActiveProjectIds.has(String(project.id_prevision))).map((project) => (
                     <option key={project.id_prevision} value={project.id_prevision}>
                       {project.nome_projeto}
                     </option>
@@ -3714,9 +3855,10 @@ function App() {
             <CurvasView
               projectId={selectedProject}
               projectName={projects.find((project) => project.id_prevision === selectedProject)?.nome_projeto || ''}
-              records={records}
+              records={activeRecords}
               baselineCurves={curveBaselines}
               loading={loading}
+              allowedImportedEnterprises={activeCurveEnterprises === null ? null : Array.from(effectiveActiveCurveEnterprises)}
             />
           ) : activeView === 'gestao_a_vista' ? (
             <div className="gestao-vista-wrapper">
@@ -5492,6 +5634,91 @@ function App() {
           </footer>
         )}
       </section>
+
+      {isProjectFilterModalOpen && (
+        <div className="project-filter-modal-backdrop" onClick={() => setIsProjectFilterModalOpen(false)}>
+          <div className="project-filter-modal" role="dialog" aria-modal="true" aria-labelledby="project-filter-title" onClick={(event) => event.stopPropagation()}>
+            <div className="project-filter-modal-header">
+              <div>
+                <p className="eyebrow">Configuração</p>
+                <h2 id="project-filter-title">Projetos ativos</h2>
+                <p>Escolha o que deve aparecer no Curvas e nos painéis do Prevision.</p>
+              </div>
+              <button type="button" className="icon-button" onClick={() => setIsProjectFilterModalOpen(false)} aria-label="Fechar configuração">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="project-filter-modal-body">
+              <div className="project-filter-section">
+                <div className="project-filter-section-heading">
+                  <h3>Obras do Prevision</h3>
+                  <span>{projectFilterDraft.projectIds.length} de {selectableProjects.length} selecionadas</span>
+                </div>
+                <div className="project-filter-actions">
+                  <button type="button" onClick={() => setProjectFilterDraft((current) => ({ ...current, projectIds: selectableProjects.map((project) => String(project.id_prevision)) }))}>Selecionar todas</button>
+                  <button type="button" onClick={() => setProjectFilterDraft((current) => ({ ...current, projectIds: [] }))}>Limpar</button>
+                </div>
+                <div className="project-filter-list">
+                  {selectableProjects.map((project) => {
+                    const id = String(project.id_prevision)
+                    return (
+                      <label key={id} className="project-filter-item">
+                        <input
+                          type="checkbox"
+                          checked={projectFilterDraft.projectIds.includes(id)}
+                          onChange={() => setProjectFilterDraft((current) => ({
+                            ...current,
+                            projectIds: current.projectIds.includes(id)
+                              ? current.projectIds.filter((item) => item !== id)
+                              : [...current.projectIds, id],
+                          }))}
+                        />
+                        <span>{project.nome_projeto || id}</span>
+                      </label>
+                    )
+                  })}
+                  {selectableProjects.length === 0 && <span className="project-filter-empty">Nenhum projeto sincronizado.</span>}
+                </div>
+              </div>
+
+              <div className="project-filter-section">
+                <div className="project-filter-section-heading">
+                  <h3>Empreendimentos das curvas importadas</h3>
+                  <span>{projectFilterDraft.enterprises.length} de {importedCurveEnterprises.length} selecionados</span>
+                </div>
+                <div className="project-filter-actions">
+                  <button type="button" onClick={() => setProjectFilterDraft((current) => ({ ...current, enterprises: [...importedCurveEnterprises] }))}>Selecionar todos</button>
+                  <button type="button" onClick={() => setProjectFilterDraft((current) => ({ ...current, enterprises: [] }))}>Limpar</button>
+                </div>
+                <div className="project-filter-list">
+                  {importedCurveEnterprises.map((enterprise) => (
+                    <label key={enterprise} className="project-filter-item">
+                      <input
+                        type="checkbox"
+                        checked={projectFilterDraft.enterprises.includes(enterprise)}
+                        onChange={() => setProjectFilterDraft((current) => ({
+                          ...current,
+                          enterprises: current.enterprises.includes(enterprise)
+                            ? current.enterprises.filter((item) => item !== enterprise)
+                            : [...current.enterprises, enterprise],
+                        }))}
+                      />
+                      <span>{enterprise}</span>
+                    </label>
+                  ))}
+                  {importedCurveEnterprises.length === 0 && <span className="project-filter-empty">Nenhuma curva importada ainda.</span>}
+                </div>
+              </div>
+            </div>
+            <div className="project-filter-modal-footer">
+              <button type="button" className="secondary-button" onClick={() => setIsProjectFilterModalOpen(false)}>Cancelar</button>
+              <button type="button" onClick={saveProjectFilter} disabled={savingProjectFilter}>
+                {savingProjectFilter ? 'Salvando...' : 'Aplicar filtro'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

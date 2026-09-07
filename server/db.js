@@ -282,6 +282,22 @@ export async function saveGlobalCurveConfig(config) {
   return config
 }
 
+export async function getAppPreferences() {
+  const { rows } = await query('SELECT config FROM app_preferences WHERE id = TRUE LIMIT 1')
+  return rows[0]?.config || null
+}
+
+export async function saveAppPreferences(config) {
+  await query(
+    `INSERT INTO app_preferences (id, config, updated_at)
+     VALUES (TRUE, $1::jsonb, NOW())
+     ON CONFLICT (id)
+     DO UPDATE SET config = EXCLUDED.config, updated_at = NOW()`,
+    [JSON.stringify(config)],
+  )
+  return config
+}
+
 export async function getRestrictions({ projectId = '', page = 0, pageSize = 100 } = {}) {
   const { rows } = await query(
     projectId

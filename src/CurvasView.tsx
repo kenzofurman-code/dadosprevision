@@ -61,6 +61,7 @@ type Props = {
   records: Array<Record<string, any>>
   baselineCurves?: Array<Record<string, any>>
   loading?: boolean
+  allowedImportedEnterprises?: string[] | null
 }
 
 type BaselineCurvePoint = {
@@ -1103,7 +1104,7 @@ function ManualCurveModal({
   )
 }
 
-export function CurvasView({ projectId, projectName, records, baselineCurves = [], loading = false }: Props) {
+export function CurvasView({ projectId, projectName, records, baselineCurves = [], loading = false, allowedImportedEnterprises = null }: Props) {
   const [storedCurves, setStoredCurves] = useState<CurveDefinition[] | null>(null)
   const [globalCurves, setGlobalCurves] = useState<CurveDefinition[]>([])
   const [globalConfigState, setGlobalConfigState] = useState<'loading' | 'ready'>('loading')
@@ -1225,8 +1226,11 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
   }, [globalCurves, storedCurves])
 
   const importedEnterprises = useMemo(() => [...new Set(
-    globalCurves.map((curve) => curve.sourceProjectName).filter((name): name is string => Boolean(name)),
-  )].sort((left, right) => left.localeCompare(right)), [globalCurves])
+    globalCurves
+      .map((curve) => curve.sourceProjectName)
+      .filter((name): name is string => Boolean(name))
+      .filter((name) => allowedImportedEnterprises === null || allowedImportedEnterprises.includes(name)),
+  )].sort((left, right) => left.localeCompare(right)), [allowedImportedEnterprises, globalCurves])
 
   useEffect(() => {
     if (importedEnterpriseFilter !== 'all' && !importedEnterprises.includes(importedEnterpriseFilter)) {
@@ -1235,9 +1239,15 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
   }, [importedEnterpriseFilter, importedEnterprises])
 
   const filteredDefinitions = useMemo(() => {
-    if (importedEnterpriseFilter === 'all') return definitions
-    return definitions.filter((curve) => curve.origin !== 'manual' || !curve.id.startsWith('global-import-') || curve.sourceProjectName === importedEnterpriseFilter)
-  }, [definitions, importedEnterpriseFilter])
+    const visible = allowedImportedEnterprises === null
+      ? definitions
+      : definitions.filter((curve) =>
+        curve.origin !== 'manual' || !curve.id.startsWith('global-import-') ||
+        (curve.sourceProjectName ? allowedImportedEnterprises.includes(curve.sourceProjectName) : true),
+      )
+    if (importedEnterpriseFilter === 'all') return visible
+    return visible.filter((curve) => curve.origin !== 'manual' || !curve.id.startsWith('global-import-') || curve.sourceProjectName === importedEnterpriseFilter)
+  }, [allowedImportedEnterprises, definitions, importedEnterpriseFilter])
 
   const recordByPerspective = useMemo(() => {
     const result: Record<CurvePerspective, Map<string, Record<string, any>>> = { physical: new Map(), monetary: new Map() }
