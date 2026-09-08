@@ -40,6 +40,32 @@ services:
       retries: 5
       start_period: 15s
 
+  mega:
+    build: ./mega
+    restart: always
+    # OBRIGATORIO: sem init, xvfb-run roda como PID 1 e trava para sempre —
+    # o mecanismo de "Xvfb pronto" dele depende de receber SIGUSR1, entrega
+    # que falha para processos PID 1 sem um init de verdade. Confirmado ao
+    # vivo contra uma VPS Linux real em 2026-09-08.
+    init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-America/Sao_Paulo}
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB:-dadosprevision}
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no Coolify}
+      MEGA_USUARIO: ${MEGA_USUARIO:?defina MEGA_USUARIO no Coolify}
+      MEGA_SENHA: ${MEGA_SENHA:?defina MEGA_SENHA no Coolify}
+      CRON_SCHEDULE_MEGA: ${CRON_SCHEDULE_MEGA:-0 2 * * *}
+    volumes:
+      - mega_dados:/app/dados   # so para BLOQUEADO reter evidencia
+
 volumes:
   pgdata:
+    driver: local
+  mega_dados:
     driver: local
