@@ -35,6 +35,27 @@ services:
     ports:
       - "3000:3000"
 
+  mega:
+    build: ./mega
+    container_name: dadosprevision-mega
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB:-dadosprevision}
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no arquivo .env}
+      MEGA_USUARIO: ${MEGA_USUARIO:?defina MEGA_USUARIO no arquivo .env}
+      MEGA_SENHA: ${MEGA_SENHA:?defina MEGA_SENHA no arquivo .env}
+      CRON_SCHEDULE_MEGA: ${CRON_SCHEDULE_MEGA:-0 2 * * *}
+    volumes:
+      - mega_dados:/app/dados   # so para BLOQUEADO reter evidencia
+
 volumes:
   pgdata:
+    driver: local
+  mega_dados:
     driver: local

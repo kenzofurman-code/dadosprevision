@@ -1,17 +1,19 @@
-# Deploy do robo Mega na VPS (dentro da stack do Dados Prevision)
+# Deploy do robô Mega na VPS (dentro da stack do Dados Prevision)
 
-Pre-requisito: o Dados Prevision ja rodando na VPS via Docker Compose (ver
-`deploy.md` daquele repositorio), com `postgres` saudavel.
+Pré-requisito: o Dados Prevision já rodando na VPS via Docker Compose (ver
+`deploy.md` na raiz do repositório), com `postgres` saudável. O serviço `mega`
+já está integrado ao `docker-compose.yml` da raiz — os comandos abaixo rodam
+a partir da raiz do repositório (`dadosprevision/`), não desta pasta.
 
 ## 1. Aplicar o schema `mega`
 
 Antes de subir o container `mega` pela primeira vez, aplicar o schema
-manualmente (o container tambem tenta aplicar sozinho no boot, via
+manualmente (o container também tenta aplicar sozinho no boot, via
 `banco.aplicar_esquema`, mas confirmar manualmente na primeira vez evita
 depurar dois problemas ao mesmo tempo):
 
     docker compose exec -T postgres psql -U postgres -d dadosprevision \
-      < sql/schema_mega.sql
+      < mega/sql/schema_mega.sql
 
 Conferir: `docker compose exec postgres psql -U postgres -d dadosprevision -c '\dt mega.*'`
 deve listar as 9 tabelas (obra_projeto, itens_solicitados, visualizacao_itens,
@@ -20,8 +22,8 @@ analise_contratos_hist, carga).
 
 ## 2. Preencher a tabela de-para de obras
 
-A correspondencia entre obra do Mega e projeto da Prevision e PARCIAL
-(confirmado com o usuario). Preencher manualmente, uma vez:
+A correspondência entre obra do Mega e projeto da Prevision é PARCIAL
+(confirmado com o usuário). Preencher manualmente, uma vez:
 
     docker compose exec -T postgres psql -U postgres -d dadosprevision <<'SQL'
     INSERT INTO mega.obra_projeto (obra, id_prevision, observacao) VALUES
@@ -38,15 +40,15 @@ A correspondencia entre obra do Mega e projeto da Prevision e PARCIAL
 
 Depois, atualizar `id_prevision` obra por obra com o `id_prevision` real
 (consultar `SELECT id_prevision, nome_projeto FROM public.projetos;` e casar
-manualmente pelo nome — a correspondencia foi confirmada como parcial, então
+manualmente pelo nome — a correspondência foi confirmada como parcial, então
 nem toda obra vai ter um `id_prevision`).
 
-## 3. Merge do serviço no `docker-compose.yml`
+## 3. Variáveis de ambiente
 
-Copiar o conteúdo de `deploy/docker-compose.mega.snippet.yml` para dentro do
-`docker-compose.yml` do Dados Prevision (serviço `mega`, ao lado de `postgres`
-e `app`). Adicionar as variáveis `MEGA_USUARIO`, `MEGA_SENHA` e
-`CRON_SCHEDULE_MEGA` ao `.env` da VPS (nunca commitado).
+`MEGA_USUARIO`, `MEGA_SENHA` e `CRON_SCHEDULE_MEGA` já estão declaradas no
+`.env.example` da raiz do repositório, junto com as demais variáveis da
+stack. Preencher no `.env` real da VPS (nunca commitado) — não existe `.env`
+separado dentro de `mega/`.
 
 ## 4. Subir e verificar
 
@@ -60,35 +62,26 @@ rodar manualmente uma vez:
 
     docker compose exec mega python src/rodar_noite.py
 
-## 5. Verificação manual do banco com Postgres real (pendência da Tarefa 5)
-
-A Tarefa 5 (`src/banco.py`) foi testada nesta fase só contra SQLite, por falta
-de um Postgres real na máquina de desenvolvimento. Antes de confiar na carga em
-produção, rodar manualmente, com o Postgres real da VPS (ou um Postgres local
-via `docker compose up postgres`):
-
-    docker compose exec mega python -c "
-    import sys; sys.path.insert(0, 'src')
-    import banco
-    conn = banco.conectar()
-    banco.aplicar_esquema(conn)
-    banco.substituir_obra(conn, 'itens_solicitados',
-        ['obra', 'codigo_solicitacao'], '340', [('340', 1)])
-    conn.commit()
-    print('ok')
-    "
-
-Conferir especificamente se `registrar_carga` grava corretamente as colunas
-`TEXT[]` (`obras_ok`, `obras_sem_movimento`, `obras_falhou`) — o rascunho da
-Tarefa 5 usa `json.dumps()` para compatibilidade com o teste em SQLite; se o
-psycopg aceitar `list[str]` Python diretamente para uma coluna `TEXT[]` (o
-caminho normal), trocar por atribuição direta em `src/banco.py` antes do
-primeiro deploy real.
-
-## 6. Primeira semana: acompanhar `mega.carga`
+## 5. Primeira semana: acompanhar `mega.carga`
 
     SELECT relatorio, data_extracao, obras_ok, obras_falhou, bloqueado
     FROM mega.carga ORDER BY executado_em DESC LIMIT 20;
 
 Sem notificação ativa (decisão do usuário) — a conferência é manual nesta
 consulta.
+
+## Verificação já feita contra Postgres real (2026-09-08)
+
+O carregador foi testado de ponta a ponta contra um Postgres 16 real (fora
+desta VPS, container descartável) com os dados reais de uma extração
+completa: os 4 relatórios, as 8 obras, a trilha de situação e a checagem de
+contaminação entre obras. Três bugs que só apareciam contra Postgres real
+(não contra SQLite, usado nos testes automatizados) foram encontrados e
+corrigidos nessa verificação — `registrar_carga` com `TEXT[]`, `NaN` do
+pandas em coluna numérica, e a linha de rodapé do grid de Visualização de
+Itens. Detalhes no histórico do repositório original (`mega-relatorios`,
+commit `c8933cb`) ou em `git log -- mega/src/banco.py mega/src/carregar.py`.
+
+O que **não** foi testado ainda: o robô contra o ERP real rodando de dentro
+de um container Linux (Chrome sob Xvfb) — isso só é possível na própria VPS,
+é o primeiro passo real desta seção.

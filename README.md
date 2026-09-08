@@ -7,6 +7,7 @@ Painel React/Vite com backend Node.js/Express, sincronização da API Prevision 
 - `app`: compila o frontend, serve a SPA e expõe `GET /api/projects`, `GET /api/data` e `POST /api/sync-prevision`.
 - `postgres`: mantém projetos, cronograma, medições, restrições e dados analíticos.
 - `node-cron`: sincroniza automaticamente conforme `CRON_SYNC_SCHEDULE`.
+- `mega` (pasta `mega/`): robô Python que extrai relatórios do Mega ERP (Suprimentos) por OCR sobre a tela transmitida e carrega no schema `mega` do mesmo Postgres, numa rotina noturna agendada por `CRON_SCHEDULE_MEGA`. Ver `mega/deploy/DEPLOY_VPS.md`.
 - volume `pgdata`: preserva o banco entre recriações dos containers.
 
 O schema é aplicado na inicialização e pode ser executado novamente. As entidades filhas usam a chave composta `(projeto_id, id_prevision)`, pois IDs da Prevision podem se repetir entre projetos.
@@ -71,7 +72,7 @@ Para executar o servidor Node fora do Docker, disponibilize um PostgreSQL, confi
 
 ## Deploy na VPS
 
-Consulte [deploy.md](deploy.md) para instalação, atualização, proxy Nginx, HTTPS e backup do volume PostgreSQL.
+Consulte [deploy.md](deploy.md) para instalação, atualização, proxy Nginx, HTTPS e backup do volume PostgreSQL. Para o serviço `mega`, consulte [mega/deploy/DEPLOY_VPS.md](mega/deploy/DEPLOY_VPS.md).
 
 ## Firebase e Vercel (legado)
 
