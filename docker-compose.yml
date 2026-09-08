@@ -39,6 +39,12 @@ services:
     build: ./mega
     container_name: dadosprevision-mega
     restart: always
+    # OBRIGATORIO: sem init, xvfb-run roda como PID 1 e trava para sempre —
+    # o mecanismo de "Xvfb pronto" dele depende de receber SIGUSR1, entrega
+    # que falha para processos PID 1 sem um init de verdade. Confirmado ao
+    # vivo: o container ficou parado indefinidamente sem isso, e funcionou na
+    # hora com "docker run --init" (mesmo efeito de "init: true" aqui).
+    init: true
     depends_on:
       postgres:
         condition: service_healthy

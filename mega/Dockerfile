@@ -3,7 +3,7 @@
 FROM python:3.12-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      xvfb tesseract-ocr tesseract-ocr-por wget gnupg \
+      xvfb xauth tesseract-ocr tesseract-ocr-por wget gnupg \
     && wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
     && apt-get install -y /tmp/chrome.deb \
     && rm /tmp/chrome.deb \
