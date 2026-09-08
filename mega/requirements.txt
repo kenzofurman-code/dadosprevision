@@ -1,0 +1,12 @@
+# Automacao de relatorios do Mega ERP
+playwright>=1.40          # dirige o Chrome: cliques, teclado, capturas, downloads
+opencv-python-headless    # localiza elementos por imagem na tela transmitida
+numpy
+pytesseract               # le texto das ancoras (exige o binario tesseract no SO)
+Pillow
+pandas                    # consolidacao
+openpyxl                  # leitura dos .xlsx exportados
+PyYAML
+pyarrow                   # opcional: consolidado em parquet em vez de xlsx
+psycopg[binary]           # escrita no PostgreSQL compartilhado com o Dados Prevision
+croniter                  # calcula a proxima execucao a partir de CRON_SCHEDULE_MEGA

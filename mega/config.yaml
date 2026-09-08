@@ -1,0 +1,202 @@
+# Automação de relatórios do Mega ERP
+#
+# Datas exportam como datetime real, nao texto — nao precisa converter.
+# Tudo que muda vive aqui. Acrescentar obra ou relatório não exige tocar em código.
+
+destino:
+  pasta_erp: '\\tsclient\WebFile'      # onde o ERP salva (referencia; nao lido pelo pipeline)
+  formato_data: 'AAAA-MM-DD'
+
+# ---------------------------------------------------------------------------
+# OBRAS
+# O código é usado na busca por digitação da árvore de empresas.
+# O orçamento é fixo por obra e usado na tela de Análise de Saldo.
+# ---------------------------------------------------------------------------
+obras:
+  - codigo: "340"
+    nome: "BALNEARIO DE GUARATUBA"
+    orcamento: "156"
+  - codigo: "410"
+    nome: "PIEMONTE CROMA"
+    orcamento: "119"
+  - codigo: "430"
+    nome: "PIEMONTE 909"
+    orcamento: "189"
+  - codigo: "480"
+    nome: "PIEMONTE COMPORTA"
+    orcamento: "175"
+  - codigo: "490"
+    nome: "PIEMONTE P70 RUA BUENOS AIRES"
+    orcamento: "163"
+  - codigo: "601"
+    nome: "PIEMONTE P73 RUA GUARATUBA AHU"
+    orcamento: "151"
+  - codigo: "630"
+    nome: "PIEMONTE P74 CARMELO RANGEL"
+    orcamento: "146"
+  - codigo: "650"
+    nome: "PIEMONTE P78 CARNEIRO LOBO"
+    orcamento: "147"
+
+# ---------------------------------------------------------------------------
+# RELATÓRIOS
+#
+# Padrão de nome de arquivo:  <Relatorio>_<obra>_<AAAA-MM-DD>.xlsx
+# Uma tela pode gerar várias exportações (abas distintas).
+# ---------------------------------------------------------------------------
+relatorios:
+
+  - id: itens_solicitados
+    descricao: "Itens das solicitações de compra, nível item"
+    leitura:                       # verificado abrindo os arquivos exportados
+      linha_cabecalho: 1
+      colunas: 28                  # identicas nas 7 obras: empilham sem tratamento
+    busca_tela: "follow-up de solicita"
+    # Há DUAS telas com este nome. Selecionar pelo módulo, nunca pela posição.
+    modulo_obrigatorio: "Materiais | Suprimentos | Visoes"
+    palavra_modulo: "Suprimentos"          # usada para achar o resultado certo
+    ancora_titulo_tela: "ITENS SOLICITADOS"
+    retencao: "atual"
+    chave_natural: ["Código da solicitação", "Nr. RM", "Sequencial do item"]
+    preparo:
+      - tipo: opcao
+        alvo: "Mostrar apenas Itens Solicitados"
+      - tipo: data
+        campo: "Data de emissão (inicial)"
+        valor: "01/01/2025"          # fixa; a final já vem como hoje
+      - tipo: botao
+        alvo: "Filtrar"
+    exportacoes:
+      - aba: null                    # grid único, sem abas
+        caminho_menu: ["Exportar para Excel 2007 (xlsx)"]
+        arquivo: "Itens_Solicitados"
+    grid_vazio_e_valido: true        # obra sem movimento: registrar e seguir
+
+  - id: analise_saldo_solicitacao
+    descricao: "Análise de saldo por orçamento — pedidos, contratos e realizado"
+    leitura:
+      linha_cabecalho: 2           # L1 e agrupamento (Servico / Insumo / Realizado)
+      colunas: "21 a 27, varia por aba"
+    busca_tela: "analise da solici"
+    modulo_obrigatorio: null         # busca retorna resultado único
+    # A busca retorna um resultado so, mas ainda assim escolhemos pela palavra do
+    # modulo: procurar pelo TEXTO DA BUSCA nao funciona, porque o resultado se
+    # chama "Analise de solicitacao" e a busca e "analise da solici".
+    palavra_modulo: "Relatórios"
+    ancora_titulo_tela: "Saldo Resumido"   # aba da tela; texto limpo e estavel
+    confere_filial: false                  # esta tela filtra por orcamento
+    preparo:
+      # O campo Orçamento JA VEM preenchido conforme a empresa ativa (confirmado
+      # na obra 480: veio 175, que e o orcamento dela). Por isso: conferir, nao
+      # selecionar. Se conferir, o dia em que aparecer um orcamento novo o robo
+      # acusa em vez de trocar a base em silencio.
+      - tipo: verificacao
+        alvo: "Orçamento"
+        valor_esperado: "{obra.orcamento}"
+        se_divergir: "abrir reticências e selecionar pelo código"
+      # O radio NAO vem em Nominal por padrao (veio Real Atualizado). Marcar sempre.
+      - tipo: opcao
+        alvo: "Nominal"
+      - tipo: botao
+        alvo: "Executar"
+        espera: "ate o grid da aba ativa popular (~30s observados)"
+      # Trocar de aba NAO exige novo Executar: as tres abas ficam disponiveis
+      # apos uma unica execucao.
+    # A janela "Salvar como" abre com um nome padrao que identifica a aba
+    # exportada (observado: "grdRealizado" na aba Realizado). Serve de ancora:
+    # conferir esse nome antes de sobrescrever garante que a aba certa esta
+    # sendo exportada. Observado apenas para Realizado; presumido grd<Aba> para
+    # as demais, ainda nao verificado.
+    exportacoes:
+      - aba: "Pedidos"
+        caminho_menu: ["Exportar", "Excel"]
+        arquivo: "Analise_Pedidos"
+        ancora_nome_padrao: "grdPedidos"      # presumido
+        retencao: "historico"
+      - aba: "Contratos"
+        caminho_menu: ["Exportar", "Excel"]
+        arquivo: "Analise_Contratos"
+        ancora_nome_padrao: "grdContratos"    # presumido
+        retencao: "historico"
+      - aba: "Realizado"
+        caminho_menu: ["Exportar", "Excel"]
+        arquivo: "Analise_Realizado"
+        ancora_nome_padrao: "grdRealizado"    # confirmado
+        # ~7x maior que as outras abas (218 KB contra 23 e 32 na obra 480).
+        # A demora e volume de dados, nao lentidao da tela.
+        retencao: "atual"
+    grid_vazio_e_valido: true
+
+  - id: visualizacao_itens
+    descricao: "Itens solicitados com status de aprovacao, por orcamento"
+    leitura:
+      linha_cabecalho: 2           # L1 e titulo mesclado "Itens Solicitados"
+      colunas: 50
+      descartar_colunas: [1, 2]    # setinha de expandir e badge de status do grid
+    busca_tela: "follow-up de solicita"
+    # MESMO NOME DE MENU do relatorio itens_solicitados. Esta e a SEGUNDA opcao.
+    # As duas telas homonimas sao usadas de verdade: escolher por posicao estaria
+    # errado metade das vezes.
+    modulo_obrigatorio: "Construção | Administração de obras | Orçamentos | Solicitações"
+    palavra_modulo: "Orçamentos"     # distingue da tela homonima em Suprimentos
+    confere_filial: false            # esta tela nao tem campo Filial
+    # Melhor ancora que o modulo: depois de abrir, o TITULO da tela e diferente
+    # do nome do menu. Verificar o resultado, nao a intencao.
+    ancora_titulo_tela: "Visualização de Itens Solicitados"
+    retencao: "atual_com_trilha"
+    chave_natural: ["Solicitação", "Sequência", "Fornecedor"]
+    preparo:
+      - tipo: campo_numerico
+        alvo: "Orçamento"
+        valor: "{obra.orcamento}"
+        # Aqui o orcamento NAO se autopreenche (diferente da tela de Analise).
+        verificacao: "a descrição ao lado deve preencher; se ficar vazia, código recusado"
+      - tipo: status
+        alvo: "todas as seis caixas"
+        acao: "não mexer — já vêm marcadas"
+      - tipo: botao
+        alvo: "Filtrar"
+        espera: "~40s; concluído quando a aba APROVAÇÕES fica ativa e o grid popula"
+    exportacoes:
+      - aba: "APROVAÇÕES"
+        caminho_menu: ["Exportar", "Excel"]
+        arquivo: "Visualizacao_Itens"
+        ancora_nome_padrao: "grd_Itens"
+    grid_vazio_e_valido: true
+    # O menu de contexto desta tela tem um item a mais no topo ("Exibir Quadro
+    # Informativo"), o que desloca o "Exportar". Terceiro layout de menu distinto
+    # entre as tres telas: navegar por texto, nunca por posicao.
+
+  - id: pedidos_compra
+    descricao: "Pedidos de compra por filial, nivel item"
+    leitura:
+      linha_cabecalho: 1
+      colunas: 129
+    busca_tela: "follow-up de pedidos"
+    # Primeira opcao: "Follow-up de pedidos de compra". Nome unico entre os
+    # resultados, mas conferir o modulo mesmo assim.
+    modulo_obrigatorio: "Materiais | Suprimentos | Visões"
+    palavra_modulo: "Suprimentos"
+    # A ancora e a ABA da tela, texto limpo. O cabecalho tecnico
+    # (R_ADM_Pedido_Compras_Por_DBM.rpt) identifica melhor, mas e cheio de
+    # sublinhados e o OCR nao le de forma confiavel.
+    ancora_titulo_tela: "PEDIDOS DE COMPRA"
+    retencao: "atual"
+    chave_natural: ["Número do pedido", "Item Pedido"]
+    preparo:
+      - tipo: data
+        campo: "Data de emissão (inicial)"
+        valor: "01/01/2025"
+        # ATENCAO: aqui o padrao e o MES CORRENTE (ex: 01/09/2026 a 30/09/2026),
+        # nao hoje-ate-hoje como em itens_solicitados. A data final e deixada
+        # como veio: cobre ate o fim do mes corrente.
+      - tipo: botao
+        alvo: "Filtrar"
+        espera: "grid popula; observado bem abaixo de 30s"
+    exportacoes:
+      - aba: null
+        caminho_menu: ["Exportar para Excel 2007 (xlsx)"]
+        arquivo: "Pedidos_Compra"
+    grid_vazio_e_valido: true
+    # Menu de contexto identico ao de itens_solicitados (opcoes no primeiro
+    # nivel). Dois dos quatro relatorios usam este formato.
