@@ -1,0 +1,31 @@
+# deploy/docker-compose.mega.snippet.yml
+#
+# Este fragmento NAO e aplicado automaticamente. Quando o repositorio
+# mega-relatorios for movido para dentro de dadosprevision/mega (decisao do
+# usuario, fora do escopo deste plano), copiar este servico para dentro do
+# docker-compose.yml do Dados Prevision, ajustando "build: ./mega" se o
+# caminho final for diferente.
+
+services:
+  mega:
+    build: ./mega
+    container_name: dadosprevision-mega
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB:-dadosprevision}
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
+      MEGA_USUARIO: ${MEGA_USUARIO:?defina MEGA_USUARIO}
+      MEGA_SENHA: ${MEGA_SENHA:?defina MEGA_SENHA}
+      CRON_SCHEDULE_MEGA: ${CRON_SCHEDULE_MEGA:-0 2 * * *}
+    volumes:
+      - mega_dados:/app/dados   # so para BLOQUEADO reter evidencia
+
+volumes:
+  mega_dados:
+    driver: local

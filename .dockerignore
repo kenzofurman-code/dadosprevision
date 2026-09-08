@@ -1,0 +1,11 @@
+.env
+.git
+.gitignore
+dados/
+.sessao.json
+__pycache__/
+*.pyc
+.pytest_cache/
+.superpowers/
+docs/
+tests/

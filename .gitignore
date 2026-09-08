@@ -1,0 +1,7 @@
+dados/
+logs/
+templates/*.png
+.env
+__pycache__/
+*.pyc
+.sessao.json
