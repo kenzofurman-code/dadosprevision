@@ -29,6 +29,9 @@ class _SessaoFalsa:
     def __init__(self):
         self.chamadas = []
 
+    def abrir(self):
+        self.chamadas.append("abrir")
+
     def entrar(self):
         self.chamadas.append("entrar")
         return "login efetuado"
@@ -36,6 +39,9 @@ class _SessaoFalsa:
     def abrir_erp(self):
         self.chamadas.append("abrir_erp")
         return "pagina-falsa"
+
+    def fechar(self):
+        self.chamadas.append("fechar")
 
 
 def test_rodar_relatorios_da_noite_roda_os_4_relatorios_em_uma_unica_sessao(monkeypatch):
@@ -77,7 +83,13 @@ def test_rodar_relatorios_da_noite_roda_os_4_relatorios_em_uma_unica_sessao(monk
 
     assert chamadas_executar == ["itens_solicitados", "analise_saldo_solicitacao",
                                  "visualizacao_itens", "pedidos_compra"]
-    assert sessao_falsa.chamadas == ["entrar", "abrir_erp"]
+    # abrir() e o que de fato lanca o Chrome/Playwright e cria a pagina;
+    # sem ele, entrar() explode com 'NoneType' object has no attribute
+    # 'goto' — bug real, confirmado na primeira execucao noturna contra o
+    # ERP de verdade (2026-09-09). fechar() libera o Chrome no final; sem
+    # ele, o processo do navegador vaza a cada noite (agendador.py roda no
+    # mesmo processo, nao reinicia o container).
+    assert sessao_falsa.chamadas == ["abrir", "entrar", "abrir_erp", "fechar"]
     assert set(resultado.keys()) == {"itens_solicitados", "analise_saldo_solicitacao",
                                      "visualizacao_itens", "pedidos_compra"}
     # Esperar o ERP montar a area de trabalho antes do primeiro relatorio, e

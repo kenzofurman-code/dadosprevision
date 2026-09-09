@@ -37,17 +37,25 @@ def rodar_relatorios_da_noite(cfg, conectar_fn, abrir_sessao_fn, data_iso):
     banco.aplicar_esquema(conn)
 
     s = abrir_sessao_fn()
-    _log("login: %s" % s.entrar())
-    erp = s.abrir_erp()
-    v = Visao(erp, binario_tesseract=TESSERACT)
-    op = Operador(erp, visao=v, log=_log)
-
     resultados = {}
+    op = None
     try:
+        # abrir() e o que de fato lanca o Chrome/Playwright e cria a pagina
+        # (self.pagina) — sem ele, entrar() chama .goto() num self.pagina
+        # ainda None. executar.py usa "with Sessao() as s:", que aciona
+        # abrir() sozinho via __enter__; aqui, sem context manager, precisa
+        # ser explicito. BUG REAL, confirmado na primeira execucao noturna
+        # de verdade (2026-09-09): "'NoneType' object has no attribute
+        # 'goto'", capturado pelo try/except do agendador.py sem derrubar o
+        # container, mas sem extrair nada — mega.carga ficou vazia.
+        s.abrir()
+        _log("login: %s" % s.entrar())
+        erp = s.abrir_erp()
+        v = Visao(erp, binario_tesseract=TESSERACT)
+        op = Operador(erp, visao=v, log=_log)
         # O ERP demora a montar a area de trabalho depois do login; sem esta
         # espera o primeiro relatorio da noite comeca a clicar numa tela ainda
-        # vazia. Fica DENTRO do try: se estourar o timeout (justamente o
-        # cenario que ela existe para pegar), o finally ainda libera a sessao.
+        # vazia.
         op.esperar_erp_pronto(timeout=300)
 
         for rel_id in ORDEM_RELATORIOS:
@@ -73,11 +81,22 @@ def rodar_relatorios_da_noite(cfg, conectar_fn, abrir_sessao_fn, data_iso):
         # encerra-la trava a noite seguinte. Guardado: se encerrar_sessao()
         # levantar (ex.: pagina ja fechada por uma queda anterior), a excecao
         # nao pode substituir o "return resultados" e apagar tudo que ja foi
-        # apurado nesta noite.
+        # apurado nesta noite. "op" pode ser None se s.abrir()/entrar()/
+        # abrir_erp() falharem antes de Operador ser criado — nesse caso so
+        # fechar() a sessao do navegador.
+        if op is not None:
+            try:
+                op.encerrar_sessao()
+            except Exception as e:
+                _log("   nao consegui encerrar a sessao: %s" % str(e)[:110])
+        # agendador.py roda no MESMO processo todo dia (nao reinicia o
+        # container a cada noite) — sem fechar(), o Chrome/Playwright desta
+        # execucao vaza e acumula a cada noite. BUG REAL, confirmado junto
+        # com o de s.abrir() acima.
         try:
-            op.encerrar_sessao()
+            s.fechar()
         except Exception as e:
-            _log("   nao consegui encerrar a sessao: %s" % str(e)[:110])
+            _log("   nao consegui fechar o navegador: %s" % str(e)[:110])
 
     return resultados
 
