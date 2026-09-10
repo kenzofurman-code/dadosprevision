@@ -382,12 +382,21 @@ class Operador:
         """
         self.pagina.mouse.click(x, y, button="right")
         time.sleep(2)
-        img = self.tela()
+        # O cutucao (ver Visao.cutucar) cutuca por padrao em (800,450) para forcar
+        # o gateway a repintar antes do OCR. Esse ponto fixo pode cair fora do
+        # menu recem-aberto (ou bem na borda dele) e o simples HOVER ali fecha o
+        # menu antes da leitura -- mesma causa ja documentada para submenus, so
+        # que aqui no proprio menu de primeiro nivel. Ancorar perto do clique
+        # (que e onde o menu sempre abre) mantem o cutucao dentro do menu.
+        # BUG REAL, confirmado ao vivo contra a obra 340 (2026-09-10): o menu
+        # abria normalmente (visivel no screenshot), mas o OCR nunca o achava.
+        ponto_menu = (x + 15, y + 15)
+        img = self.tela(ponto=ponto_menu)
         if not self.v.achar_texto(caminho_menu[0], img=img):
             self.pagina.mouse.click(x, y, button="right")   # 1o clique so deu foco
             time.sleep(2.5)
 
-        pai = None
+        pai = ponto_menu
         for i, item in enumerate(caminho_menu):
             caixa = self.esperar_texto(item, timeout=25, ponto_cutucao=pai)
             # CLICAR NO INICIO DO TEXTO, NAO NO CENTRO DA CAIXA.
