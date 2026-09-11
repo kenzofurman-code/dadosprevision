@@ -359,6 +359,15 @@ class Operador:
                          % (tentativa, tentativas, str(e).splitlines()[0][:70]))
                 for _ in range(3):
                     self.tecla("Escape", pausa=0.8)
+                # Um popup inesperado (ex.: detalhe de um item, aberto por um
+                # clique que caiu numa celula clicavel da grade em vez do menu)
+                # cobre o texto que estamos esperando, e Escape sozinho pode nao
+                # fechar esse tipo de janela. Um clique esquerdo no mesmo ponto
+                # do right-click original (garantido dentro da grade, nunca na
+                # barra lateral) tira o foco do popup antes da proxima tentativa.
+                # BUG REAL: travou ~2h sem nenhum log, obra 340, relatorio
+                # visualizacao_itens (2026-09-11) -- Escape sozinho nao bastou.
+                self.pagina.mouse.click(x, y)
                 time.sleep(3)
         raise FalhaDeEtapa("exportacao falhou em %d tentativas: %s"
                            % (tentativas, str(ultimo).splitlines()[0][:80]))
@@ -381,7 +390,12 @@ class Operador:
            quisermos. O passo perigoso deixa de existir.
         """
         self.pagina.mouse.click(x, y, button="right")
-        time.sleep(2)
+        # 5s (era 2s): o menu pode ainda estar renderizando no gateway remoto
+        # quando o OCR le a tela. Um frame "no meio do caminho" faz o OCR achar
+        # uma posicao de clique errada -- caindo numa celula clicavel da grade
+        # por baixo em vez do item do menu. BUG REAL: abriu um popup de detalhe
+        # do item (obra 340, relatorio visualizacao_itens, 2026-09-11).
+        time.sleep(5)
         # O cutucao (ver Visao.cutucar) cutuca por padrao em (800,450) para forcar
         # o gateway a repintar antes do OCR. Esse ponto fixo pode cair fora do
         # menu recem-aberto (ou bem na borda dele) e o simples HOVER ali fecha o
@@ -394,7 +408,7 @@ class Operador:
         img = self.tela(ponto=ponto_menu)
         if not self.v.achar_texto(caminho_menu[0], img=img):
             self.pagina.mouse.click(x, y, button="right")   # 1o clique so deu foco
-            time.sleep(2.5)
+            time.sleep(5)
 
         pai = ponto_menu
         for i, item in enumerate(caminho_menu):
@@ -410,7 +424,7 @@ class Operador:
             cy = caixa.y + caixa.altura // 2
             if i < len(caminho_menu) - 1:
                 self.pagina.mouse.move(cx, cy)               # abre o submenu
-                time.sleep(2.5)
+                time.sleep(5)
                 pai = (cx, cy)      # daqui em diante, cutucar sem sair do item
             else:
                 with self.pagina.expect_download(timeout=timeout_download * 1000) as info:
