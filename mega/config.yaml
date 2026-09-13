@@ -107,17 +107,26 @@ relatorios:
     # conferir esse nome antes de sobrescrever garante que a aba certa esta
     # sendo exportada. Observado apenas para Realizado; presumido grd<Aba> para
     # as demais, ainda nao verificado.
+    # As 3 abas de exportacao tem cabecalho de DUAS linhas (grupo "Servico"/
+    # "Insumo" + nomes das colunas), diferente do padrao de uma linha das
+    # outras telas. O right-click padrao (700,300) cai no meio desse cabecalho
+    # e abre o menu de COLUNA (Ordenacao/Agrupar/Largura), nunca o de
+    # exportacao -- "Exportar" nunca aparece porque nem esta nesse menu. BUG
+    # REAL, confirmado ao vivo (obra 340, 2026-09-13) com screenshot: y=340 cai
+    # dentro da primeira linha de dados de verdade (cabecalho termina ~y=317).
     exportacoes:
       - aba: "Pedidos"
         caminho_menu: ["Exportar", "Excel"]
         arquivo: "Analise_Pedidos"
         ancora_nome_padrao: "grdPedidos"      # presumido
         retencao: "historico"
+        y: 340
       - aba: "Contratos"
         caminho_menu: ["Exportar", "Excel"]
         arquivo: "Analise_Contratos"
         ancora_nome_padrao: "grdContratos"    # presumido
         retencao: "historico"
+        y: 340
       - aba: "Realizado"
         caminho_menu: ["Exportar", "Excel"]
         arquivo: "Analise_Realizado"
@@ -125,6 +134,7 @@ relatorios:
         # ~7x maior que as outras abas (218 KB contra 23 e 32 na obra 480).
         # A demora e volume de dados, nao lentidao da tela.
         retencao: "atual"
+        y: 340
     grid_vazio_e_valido: true
 
   - id: visualizacao_itens

@@ -186,7 +186,13 @@ def uma_obra(op, v, rel, obra, data_iso, pasta):
             op.clicar_texto(exp["aba"])
             time.sleep(8)
         destino = pasta / cfgmod.nome_arquivo(exp, obra["codigo"], data_iso)
-        caminhos.append(op.exportar_grid(exp["caminho_menu"], destino))
+        # x/y sao opcionais no config.yaml: o padrao (700,300) de exportar_grid
+        # so funciona em telas com cabecalho de UMA linha. Telas com cabecalho
+        # de duas linhas (ex.: Analise de Saldo) precisam de um y maior, senao
+        # o clique cai no cabecalho e abre o menu de coluna, nao o de exportar.
+        caminhos.append(op.exportar_grid(
+            exp["caminho_menu"], destino,
+            x=exp.get("x", 700), y=exp.get("y", 300)))
     return ("ok", caminhos)
 
 
