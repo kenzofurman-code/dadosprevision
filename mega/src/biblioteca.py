@@ -236,40 +236,52 @@ class Operador:
         """
         # Abre o painel do usuario (icone de pessoa, primeiro da barra lateral).
         # A barra do topo com o nome da empresa costuma vir RECOLHIDA quando a
-        # sessao e nova, entao nao da para depender dela.
+        # sessao e nova, entao nao da para depender dela. Confirma pelo texto
+        # "Trocar Senha do Usuario" (o OCR le com folga), nao por "Trocar de
+        # Empresa" (mesma cor/tamanho, frequentemente ilegivel) -- usar o texto
+        # ilegivel como confirmacao so mascarava um painel que nem tinha aberto.
         for tentativa in (1, 2, 3):
             self.pagina.mouse.click(self.ICONE_PESSOA[0], self.ICONE_PESSOA[1])
             time.sleep(3.0)
             img = self.tela()
-            if self.v.achar_texto("Trocar de Empresa", img=img):
+            if self.v.achar_texto("Trocar Senha do Usuario", img=img):
                 break
             if tentativa == 3:
                 raise FalhaDeEtapa("o painel do usuario nao abriu")
 
-        # Preferencia: clicar no proprio texto. Mas o OCR le "Trocar Senha do
-        # Usuario" com folga e frequentemente NAO le "Trocar de Empresa" (mesma
-        # cor, mesmo tamanho — nao sei por que). Ou seja: o item que eu preciso e
-        # o ilegivel, e o vizinho legivel e o perigoso.
-        #
-        # A alternativa ancora no cabecalho "Menu", que fica ACIMA dos dois. Se o
-        # deslocamento errar, o clique cai no cabecalho (inofensivo) e nao na
-        # troca de senha. Errar para cima aqui e uma decisao de projeto.
+        # NUNCA clicar direto em "Trocar de Empresa": o OCR le o vizinho
+        # "Trocar Senha do Usuario" com folga mas frequentemente NAO le "Trocar
+        # de Empresa" (mesma cor, mesmo tamanho — nao sei por que), e um clique
+        # mal calibrado ali ja abriu a tela de troca de senha em vez da arvore
+        # de empresas. BUG REAL, confirmado ao vivo em 2026-09-13. Em vez de
+        # tentar o texto ilegivel, ancorar sempre no vizinho legivel e clicar no
+        # deslocamento MEDIDO (~35px acima) elimina essa ambiguidade de raiz.
         try:
-            self.clicar_texto("Trocar de Empresa",
-                              ancora="ORGANIZACOES POR USUARIO", timeout=20)
-            return self._digitar_codigo(codigo)
+            self.clicar_relativo("Trocar Senha do Usuario", dy=-35,
+                                 ancora="ORGANIZACOES POR USUARIO", timeout=20)
         except FalhaDeEtapa:
-            self.log("   'Trocar de Empresa' ilegivel; ancorando no cabecalho Menu")
+            self.log("   'Trocar Senha do Usuario' ilegivel; ancorando no cabecalho Menu")
+            self.clicar_relativo("Menu", dx=-90, dy=46,
+                                 ancora="ORGANIZACOES POR USUARIO", timeout=25)
 
-        self.clicar_relativo("Menu", dx=-90, dy=46,
-                             ancora="ORGANIZACOES POR USUARIO", timeout=25)
         img = self.tela()
-        if not self.v.achar_texto("ORGANIZACOES POR USUARIO", img=img):
+        caixa_arvore = self.v.achar_texto("ORGANIZACOES POR USUARIO", img=img)
+        if not caixa_arvore:
             raise FalhaDeEtapa("nao consegui abrir a arvore de empresas")
-        return self._digitar_codigo(codigo)
+        return self._digitar_codigo(codigo, caixa_arvore)
 
-    def _digitar_codigo(self, codigo):
-
+    def _digitar_codigo(self, codigo, caixa_arvore):
+        # A arvore de organizacoes tem um icone de lupa (sem texto, entao o OCR
+        # nunca "ve" ele) ~35px ACIMA do cabecalho "ORGANIZACOES POR USUARIO",
+        # que abre o campo de busca de verdade. Digitar direto sem clicar nele
+        # nao garante foco na busca incremental -- o teclado pode ir para outro
+        # lugar e a arvore fica destacada num item ERRADO (de uma navegacao
+        # anterior), travando aberta e quebrando toda troca de empresa seguinte
+        # na mesma noite. BUG REAL, confirmado ao vivo (obra 340, 2026-09-13):
+        # apos digitar "340", ficou destacada uma empresa completamente
+        # diferente da digitada.
+        self.pagina.mouse.click(caixa_arvore.x + 10, caixa_arvore.y - 35)
+        time.sleep(1.5)
         self.digitar(str(codigo))         # busca incremental da arvore
         time.sleep(1.5)
         self.tecla("Enter")
