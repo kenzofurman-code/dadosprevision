@@ -123,6 +123,7 @@ class Operador:
         efetivamente desenhada (contagem minima de palavras).
         """
         limite = time.time() + timeout
+        ultimo_log = 0
         while time.time() < limite:
             img = self.tela()
             if self.responder_sessao_duplicada(img=img):
@@ -135,7 +136,27 @@ class Operador:
             if len(palavras) >= minimo_palavras and self.v.achar_texto("Mega ERP", img=img):
                 self.log("   ERP pronto (%d palavras na tela)" % len(palavras))
                 return "conteudo"
+            # Log periodico (a cada ~30s): sem isso, uma espera de ate 300s que
+            # acaba estourando nao deixa NENHUM rastro do que estava acontecendo
+            # na tela nesse meio-tempo -- so a mensagem final de timeout. BUG
+            # REAL: em 2026-09-13 o ERP nao ficou pronto em 300s numa execucao
+            # real e nao houve como saber o motivo depois.
+            if time.time() - ultimo_log > 30:
+                ultimo_log = time.time()
+                self.log("   ainda esperando o ERP (%d palavras lidas, 'Mega ERP' achado: %s)"
+                         % (len(palavras), bool(self.v.achar_texto("Mega ERP", img=img))))
             time.sleep(intervalo)
+        # Screenshot da falha: o navegador fecha logo em seguida (finally de
+        # rodar_noite.py), entao sem isso nao sobra nenhuma evidencia visual do
+        # que travou.
+        try:
+            pasta_falhas = Path("dados/falhas")
+            pasta_falhas.mkdir(parents=True, exist_ok=True)
+            caminho = pasta_falhas / ("erp_nao_pronto_%d.png" % int(time.time()))
+            self.pagina.screenshot(path=str(caminho))
+            self.log("   screenshot da falha salvo: %s" % caminho)
+        except Exception as e:
+            self.log("   nao consegui salvar screenshot da falha: %s" % str(e)[:60])
         raise FalhaDeEtapa("o ERP nao ficou pronto em %ds" % timeout)
 
     def clicar_texto(self, alvo, ancora=None, timeout=45, tentativas=2):
