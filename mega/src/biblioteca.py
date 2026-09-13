@@ -236,15 +236,23 @@ class Operador:
         """
         # Abre o painel do usuario (icone de pessoa, primeiro da barra lateral).
         # A barra do topo com o nome da empresa costuma vir RECOLHIDA quando a
-        # sessao e nova, entao nao da para depender dela. Confirma pelo texto
-        # "Trocar Senha do Usuario" (o OCR le com folga), nao por "Trocar de
-        # Empresa" (mesma cor/tamanho, frequentemente ilegivel) -- usar o texto
-        # ilegivel como confirmacao so mascarava um painel que nem tinha aberto.
+        # sessao e nova, entao nao da para depender dela. Confirma por QUALQUER
+        # texto do painel que o OCR costume ler bem -- nao so "Trocar Senha do
+        # Usuario". BUG REAL, confirmado ao vivo em 2026-09-13: numa execucao
+        # real longa, "Trocar Senha do Usuario" ficou ilegivel por quase 20min
+        # seguidos (todas as trocas de empresa falhando com "painel nao abriu"),
+        # mas encerrar_sessao() -- que procura "Sair"/"Encerrar Sessao"/etc no
+        # MESMO painel -- abriu de primeira. Ou seja, o painel provavelmente
+        # estava aberto o tempo todo; so aquele texto especifico e que nao
+        # estava legivel sob uso prolongado. Aceitar varios candidatos reduz
+        # falso negativo.
+        TEXTOS_PAINEL_ABERTO = ("Trocar Senha do Usuario", "Sair",
+                                "Encerrar Sessão", "Desconectar", "Log Off")
         for tentativa in (1, 2, 3):
             self.pagina.mouse.click(self.ICONE_PESSOA[0], self.ICONE_PESSOA[1])
             time.sleep(3.0)
             img = self.tela()
-            if self.v.achar_texto("Trocar Senha do Usuario", img=img):
+            if any(self.v.achar_texto(t, img=img) for t in TEXTOS_PAINEL_ABERTO):
                 break
             if tentativa == 3:
                 raise FalhaDeEtapa("o painel do usuario nao abriu")
@@ -264,9 +272,12 @@ class Operador:
             self.clicar_relativo("Menu", dx=-90, dy=46,
                                  ancora="ORGANIZACOES POR USUARIO", timeout=25)
 
-        img = self.tela()
-        caixa_arvore = self.v.achar_texto("ORGANIZACOES POR USUARIO", img=img)
-        if not caixa_arvore:
+        # esperar_texto() tenta varias vezes (a cada 3s); um unico snapshot
+        # aqui dava falso negativo quando a arvore so demorava um pouco mais a
+        # renderizar sob uso prolongado.
+        try:
+            caixa_arvore = self.esperar_texto("ORGANIZACOES POR USUARIO", timeout=15)
+        except FalhaDeEtapa:
             raise FalhaDeEtapa("nao consegui abrir a arvore de empresas")
         return self._digitar_codigo(codigo, caixa_arvore)
 
