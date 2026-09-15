@@ -98,6 +98,12 @@ class Sessao:
             "viewport": {"width": self.largura, "height": self.altura},
             "accept_downloads": True,
             "locale": "pt-BR",
+            "timezone_id": "America/Sao_Paulo",
+            "user_agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/128.0.0.0 Safari/537.36"
+            ),
         }
         if self.estado.exists():
             ctx_args["storage_state"] = str(self.estado)

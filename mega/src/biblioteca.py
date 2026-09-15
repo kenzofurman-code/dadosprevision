@@ -125,6 +125,7 @@ class Operador:
         limite = time.time() + timeout
         ultimo_log = 0
         segundos_sem_palavras = 0
+        segundos_com_launcher = 0
         while time.time() < limite:
             img = self.tela()
             if self.responder_sessao_duplicada(img=img):
@@ -138,11 +139,42 @@ class Operador:
                 self.log("   ERP pronto (%d palavras na tela)" % len(palavras))
                 return "conteudo"
 
+            # Se o item "Mega ERP" estiver na barra de tarefas (Y >= 840) mas a tela
+            # principal nao estiver desenhada (janela minimizada ou em background):
+            # Clicar no botao da barra de tarefas para restaurar/maximizar a tela.
+            caixa_erp_tb = self.v.achar_texto("Mega ERP", img=img)
+            if caixa_erp_tb and caixa_erp_tb.y >= 840:
+                self.log("   'Mega ERP' detectado na barra de tarefas; clicando para focar/restaurar")
+                cx, cy = centro(caixa_erp_tb)
+                try:
+                    self.pagina.mouse.click(cx, cy)
+                    time.sleep(3)
+                except Exception:
+                    pass
+
+            # Se o splash "Mega ERP Launcher" estiver na tela (card central com barra roxa):
+            # No Linux sob Xvfb ele pode ficar aguardando ativacao de foco para disparar
+            # o executavel principal. Enviamos clique no centro do card e no botao da barra.
+            if self.v.achar_texto("Mega ERP Launcher", img=img):
+                segundos_com_launcher += intervalo
+                if segundos_com_launcher >= 12:
+                    self.log("   'Mega ERP Launcher' ativo ha %ds; ativando foco da janela" % segundos_com_launcher)
+                    try:
+                        self.pagina.bring_to_front()
+                        self.pagina.mouse.click(800, 450)
+                        time.sleep(1)
+                        self.pagina.mouse.click(100, 880)
+                    except Exception:
+                        pass
+                    segundos_com_launcher = 0
+            else:
+                segundos_com_launcher = 0
+
             # Se a tela esta totalmente sem texto (ex.: fundo azul solido do Windows
             # enquanto o app ou logon estao aguardando foco/interacao):
             if len(palavras) == 0:
                 segundos_sem_palavras += intervalo
-                if segundos_sem_palavras >= 30 and segundos_sem_palavras % 30 < intervalo:
+                if segundos_sem_palavras >= 15 and segundos_sem_palavras % 15 < intervalo:
                     self.log("   tela sem texto (%ds): focando canvas e enviando interacao de despertar"
                              % segundos_sem_palavras)
                     try:
