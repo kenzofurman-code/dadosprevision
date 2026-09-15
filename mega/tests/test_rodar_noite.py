@@ -44,13 +44,17 @@ class _SessaoFalsa:
         self.chamadas.append("fechar")
 
 
-def test_rodar_relatorios_da_noite_roda_os_4_relatorios_em_uma_unica_sessao(monkeypatch):
+def test_rodar_relatorios_da_noite_roda_por_obra_numa_unica_sessao(monkeypatch):
+    """rodar_noite chama executar_por_obra() UMA vez (nao um loop por
+    relatorio) -- e a lista de relatorios passada cobre os 4, na ordem."""
     cfg = cfgmod.carregar()
-    chamadas_executar = []
+    relatorios_recebidos = []
 
-    def executar_relatorio_falso(op, v, s, rel, obras, data_iso, pasta, falhas_dir, log):
-        chamadas_executar.append(rel["id"])
-        return {"ok": [], "sem_movimento": [o["codigo"] for o in obras], "falhou": []}
+    def executar_por_obra_falso(op, v, s, relatorios, obras, data_iso, pasta,
+                                falhas_dir, log, tempo_limite=None):
+        relatorios_recebidos.extend(r["id"] for r in relatorios)
+        return {r["id"]: {"ok": [], "sem_movimento": [o["codigo"] for o in obras],
+                          "falhou": []} for r in relatorios}
 
     def carregar_relatorio_falso(cfg, conn, rel_id, data_iso, pasta, resultado, **kw):
         return [{"arquivo": rel_id, "estado": "OK", "obras": 0, "motivo": None}]
@@ -58,7 +62,7 @@ def test_rodar_relatorios_da_noite_roda_os_4_relatorios_em_uma_unica_sessao(monk
     def purgar_arquivos_falso(pasta, relatos, data_iso):
         return []
 
-    monkeypatch.setattr(rodar_noite, "executar_relatorio", executar_relatorio_falso)
+    monkeypatch.setattr(rodar_noite, "executar_por_obra", executar_por_obra_falso)
     monkeypatch.setattr(rodar_noite, "carregar_relatorio", carregar_relatorio_falso)
     monkeypatch.setattr(rodar_noite, "purgar_arquivos", purgar_arquivos_falso)
     class _OperadorFalso:
@@ -81,8 +85,8 @@ def test_rodar_relatorios_da_noite_roda_os_4_relatorios_em_uma_unica_sessao(monk
         cfg, conectar_fn=lambda: _ConexaoFalsa(),
         abrir_sessao_fn=lambda: sessao_falsa, data_iso="2026-09-07")
 
-    assert chamadas_executar == ["itens_solicitados", "analise_saldo_solicitacao",
-                                 "visualizacao_itens", "pedidos_compra"]
+    assert relatorios_recebidos == ["itens_solicitados", "analise_saldo_solicitacao",
+                                    "visualizacao_itens", "pedidos_compra"]
     # abrir() e o que de fato lanca o Chrome/Playwright e cria a pagina;
     # sem ele, entrar() explode com 'NoneType' object has no attribute
     # 'goto' — bug real, confirmado na primeira execucao noturna contra o
@@ -104,15 +108,17 @@ def test_carga_que_explode_nao_derruba_os_demais_relatorios(monkeypatch):
     cfg = cfgmod.carregar()
     conn = _ConexaoFalsa()
 
-    def executar_relatorio_falso(op, v, s, rel, obras, data_iso, pasta, falhas_dir, log):
-        return {"ok": [], "sem_movimento": [], "falhou": []}
+    def executar_por_obra_falso(op, v, s, relatorios, obras, data_iso, pasta,
+                                falhas_dir, log, tempo_limite=None):
+        return {r["id"]: {"ok": [], "sem_movimento": [], "falhou": []}
+               for r in relatorios}
 
     def carregar_relatorio_falso(cfg, conn, rel_id, data_iso, pasta, resultado, **kw):
         if rel_id == "itens_solicitados":
             raise RuntimeError("coluna desconhecida")
         return [{"arquivo": rel_id, "estado": "OK", "obras": 0, "motivo": None}]
 
-    monkeypatch.setattr(rodar_noite, "executar_relatorio", executar_relatorio_falso)
+    monkeypatch.setattr(rodar_noite, "executar_por_obra", executar_por_obra_falso)
     monkeypatch.setattr(rodar_noite, "carregar_relatorio", carregar_relatorio_falso)
     monkeypatch.setattr(rodar_noite, "purgar_arquivos", lambda *a, **k: [])
 
@@ -179,13 +185,15 @@ def test_falha_ao_encerrar_sessao_nao_esconde_o_resultado_da_noite(monkeypatch):
     apagar o que ja foi apurado nesta noite."""
     cfg = cfgmod.carregar()
 
-    def executar_relatorio_falso(op, v, s, rel, obras, data_iso, pasta, falhas_dir, log):
-        return {"ok": [], "sem_movimento": [], "falhou": []}
+    def executar_por_obra_falso(op, v, s, relatorios, obras, data_iso, pasta,
+                                falhas_dir, log, tempo_limite=None):
+        return {r["id"]: {"ok": [], "sem_movimento": [], "falhou": []}
+               for r in relatorios}
 
     def carregar_relatorio_falso(cfg, conn, rel_id, data_iso, pasta, resultado, **kw):
         return [{"arquivo": rel_id, "estado": "OK", "obras": 0, "motivo": None}]
 
-    monkeypatch.setattr(rodar_noite, "executar_relatorio", executar_relatorio_falso)
+    monkeypatch.setattr(rodar_noite, "executar_por_obra", executar_por_obra_falso)
     monkeypatch.setattr(rodar_noite, "carregar_relatorio", carregar_relatorio_falso)
     monkeypatch.setattr(rodar_noite, "purgar_arquivos", lambda *a, **k: [])
 
@@ -205,3 +213,43 @@ def test_falha_ao_encerrar_sessao_nao_esconde_o_resultado_da_noite(monkeypatch):
 
     assert set(resultado.keys()) == set(rodar_noite.ORDEM_RELATORIOS)
     assert resultado["itens_solicitados"]["carga"][0]["estado"] == "OK"
+
+
+def test_tempo_limite_e_repassado_para_executar_por_obra(monkeypatch):
+    """rodar_relatorios_da_noite calcula um tempo_limite (agora +
+    tempo_max_horas) e repassa pra executar_por_obra -- sem isso, a funcao
+    que de fato usa o limite nunca recebe nada e a execucao pode rodar
+    indefinidamente. BUG REAL: 2026-09-14, ~24h presa, consumindo a CPU da
+    VPS inteira."""
+    cfg = cfgmod.carregar()
+    recebido = {}
+
+    def executar_por_obra_falso(op, v, s, relatorios, obras, data_iso, pasta,
+                                falhas_dir, log, tempo_limite=None):
+        recebido["tempo_limite"] = tempo_limite
+        return {r["id"]: {"ok": [], "sem_movimento": [], "falhou": []}
+               for r in relatorios}
+
+    monkeypatch.setattr(rodar_noite, "executar_por_obra", executar_por_obra_falso)
+    monkeypatch.setattr(rodar_noite, "carregar_relatorio",
+                        lambda *a, **k: [{"arquivo": "x", "estado": "OK",
+                                          "obras": 0, "motivo": None}])
+    monkeypatch.setattr(rodar_noite, "purgar_arquivos", lambda *a, **k: [])
+    monkeypatch.setattr(rodar_noite, "Operador",
+                        lambda *a, **k: type("O", (), {
+                            "esperar_erp_pronto": lambda self, timeout=None: None,
+                            "encerrar_sessao": lambda self: None})())
+    monkeypatch.setattr(rodar_noite, "Visao", lambda *a, **k: object())
+
+    import time
+    antes = time.time()
+    rodar_noite.rodar_relatorios_da_noite(
+        cfg, conectar_fn=lambda: _ConexaoFalsa(),
+        abrir_sessao_fn=lambda: _SessaoFalsa(), data_iso="2026-09-07",
+        tempo_max_horas=2)
+    depois = time.time()
+
+    assert recebido["tempo_limite"] is not None
+    # tempo_limite deve estar ~2h no futuro (com folga pro tempo de execucao
+    # do proprio teste)
+    assert antes + 2 * 3600 - 5 <= recebido["tempo_limite"] <= depois + 2 * 3600 + 5

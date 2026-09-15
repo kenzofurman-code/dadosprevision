@@ -7,26 +7,32 @@ dependencias externas (sessao do navegador, conexao com o banco) entram por
 parametro para permitir testar a ORQUESTRACAO sem abrir Chrome nem Postgres.
 """
 import datetime as dt
+import time
 from pathlib import Path
 
 import banco
 import config as cfgmod
 from biblioteca import Operador
 from carregar import carregar_relatorio, purgar_arquivos
-from executar import TESSERACT, executar_relatorio
+from executar import TESSERACT, executar_por_obra
 from sessao import Sessao
 from visao import Visao
 
 RAIZ = Path(__file__).resolve().parent.parent
 ORDEM_RELATORIOS = ["itens_solicitados", "analise_saldo_solicitacao",
                     "visualizacao_itens", "pedidos_compra"]
+# Historico: a noite mais lenta ja observada (todos os relatorios, sem
+# problema nenhum) levou ~3h. 4h da folga sem deixar a execucao rodar por
+# tempo indefinido -- ver executar_por_obra().
+TEMPO_MAX_HORAS_PADRAO = 4
 
 
 def _log(msg):
     print("%s  %s" % (dt.datetime.now().strftime("%H:%M:%S"), msg), flush=True)
 
 
-def rodar_relatorios_da_noite(cfg, conectar_fn, abrir_sessao_fn, data_iso):
+def rodar_relatorios_da_noite(cfg, conectar_fn, abrir_sessao_fn, data_iso,
+                              tempo_max_horas=TEMPO_MAX_HORAS_PADRAO):
     pasta = RAIZ / "dados" / "bruto" / data_iso
     pasta.mkdir(parents=True, exist_ok=True)
     falhas_dir = RAIZ / "dados" / "falhas"
@@ -58,10 +64,17 @@ def rodar_relatorios_da_noite(cfg, conectar_fn, abrir_sessao_fn, data_iso):
         # vazia.
         op.esperar_erp_pronto(timeout=300)
 
+        # Limite de tempo pra noite inteira -- ver TEMPO_MAX_HORAS_PADRAO e o
+        # comentario em executar_por_obra() sobre o incidente de 2026-09-14.
+        tempo_limite = time.time() + tempo_max_horas * 3600
+
+        relatorios = [cfgmod.relatorio(cfg, rel_id) for rel_id in ORDEM_RELATORIOS]
+        resultados_execucao = executar_por_obra(
+            op, v, s, relatorios, obras, data_iso, pasta, falhas_dir, _log,
+            tempo_limite=tempo_limite)
+
         for rel_id in ORDEM_RELATORIOS:
-            rel = cfgmod.relatorio(cfg, rel_id)
-            resultado_execucao = executar_relatorio(op, v, s, rel, obras, data_iso,
-                                                    pasta, falhas_dir, _log)
+            resultado_execucao = resultados_execucao[rel_id]
             # Uma carga que explode no meio deixaria a transacao aberta e
             # meio relatorio gravado; reverter e seguir para o proximo
             # relatorio preserva o que ja carregou nesta noite.

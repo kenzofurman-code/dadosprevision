@@ -166,6 +166,17 @@ PREPARADORES = {
 
 def uma_obra(op, v, rel, obra, data_iso, pasta):
     op.trocar_empresa(obra["codigo"], obra["nome"])
+    return _rodar_relatorio_na_obra_ativa(op, v, rel, obra, data_iso, pasta)
+
+
+def _rodar_relatorio_na_obra_ativa(op, v, rel, obra, data_iso, pasta):
+    """O corpo de uma_obra() sem a troca de empresa.
+
+    Extraido para o modo "por obra" (executar_por_obra): la, a troca de
+    empresa acontece UMA vez por obra, nao uma vez por (obra, relatorio) --
+    esta funcao roda o relatorio pressupondo que a empresa ativa ja e a
+    da obra.
+    """
     op.abrir_tela(rel["busca_tela"], rel["ancora_titulo_tela"],
                   palavra_modulo=rel.get("palavra_modulo"))
     if rel.get("confere_filial", True):
@@ -239,6 +250,89 @@ def executar_relatorio(op, v, s, rel, obras, data_iso, pasta, falhas_dir, log):
                 except Exception:
                     pass
     return resultado
+
+
+def executar_por_obra(op, v, s, relatorios, obras, data_iso, pasta, falhas_dir, log,
+                      tempo_limite=None):
+    """Para cada obra, troca de empresa UMA vez e roda todos os relatorios em
+    seguida, em vez de rodar um relatorio inteiro (todas as obras) por vez
+    como executar_relatorio() faz.
+
+    Reduz as trocas de empresa de uma por (obra, relatorio) para uma por
+    obra -- de 32 para 8 numa noite de 4 relatorios x 8 obras. A troca de
+    empresa e a operacao mais fragil do robo (ver Operador.trocar_empresa);
+    trocar menos vezes reduz a exposicao a ela.
+
+    tempo_limite (um valor de time.time()) interrompe o loop de obras assim
+    que estourado -- sem ele, uma execucao lenta o bastante (ex.: VPS
+    sobrecarregada) pode rodar por tempo indefinido. BUG REAL: sem esse
+    limite, a execucao noturna de 2026-09-14 ficou presa por ~24h, consumindo
+    a CPU da VPS inteira e afetando outros servicos hospedados nela.
+    """
+    resultados = {rel["id"]: {"ok": [], "sem_movimento": [], "falhou": []}
+                 for rel in relatorios}
+    for i, obra in enumerate(obras, 1):
+        if tempo_limite is not None and time.time() > tempo_limite:
+            log("")
+            log("tempo limite da noite estourado -- pulando as %d obras restantes"
+                % (len(obras) - i + 1))
+            break
+        log("")
+        log("[%d/%d] obra %s - %s" % (i, len(obras), obra["codigo"], obra["nome"]))
+        try:
+            if op is not None and op.pagina.is_closed():
+                log("   sessao caida; reconectando")
+                erp = s.abrir_erp()
+                v = Visao(erp, binario_tesseract=TESSERACT)
+                op = Operador(erp, visao=v, log=log)
+                op.esperar_erp_pronto(timeout=300)
+                log("   reconectado")
+            op.trocar_empresa(obra["codigo"], obra["nome"])
+        except Exception as e:
+            log("   FALHOU ao trocar de empresa: %s" % str(e).splitlines()[0][:110])
+            for rel in relatorios:
+                resultados[rel["id"]]["falhou"].append(
+                    {"obra": obra["codigo"], "motivo": "troca de empresa: %s" % str(e)})
+            if op is not None:
+                try:
+                    op.pagina.screenshot(path=str(falhas_dir / (
+                        "%s_%s_trocar.png" % (data_iso, obra["codigo"]))))
+                except Exception:
+                    pass
+            continue
+
+        for rel in relatorios:
+            try:
+                estado, caminhos = _rodar_relatorio_na_obra_ativa(
+                    op, v, rel, obra, data_iso, pasta)
+                if estado == "sem_movimento":
+                    log("   [%s] sem movimento no periodo" % rel["id"])
+                    resultados[rel["id"]]["sem_movimento"].append(obra["codigo"])
+                else:
+                    for c in caminhos:
+                        log("   [%s] OK: %s (%d bytes)"
+                            % (rel["id"], c.name, c.stat().st_size))
+                    resultados[rel["id"]]["ok"].append(obra["codigo"])
+            except Exception as e:
+                log("   [%s] FALHOU: %s" % (rel["id"], str(e).splitlines()[0][:110]))
+                resultados[rel["id"]]["falhou"].append(
+                    {"obra": obra["codigo"], "motivo": str(e)})
+                if op is not None and "closed" in str(e).lower():
+                    try:
+                        erp = s.abrir_erp()
+                        v = Visao(erp, binario_tesseract=TESSERACT)
+                        op = Operador(erp, visao=v, log=log)
+                        op.esperar_erp_pronto(timeout=300)
+                        log("   reconectado apos queda")
+                    except Exception as e2:
+                        log("   reconexao falhou: %s" % str(e2).splitlines()[0][:80])
+                if op is not None:
+                    try:
+                        op.pagina.screenshot(path=str(falhas_dir / (
+                            "%s_%s_%s.png" % (data_iso, obra["codigo"], rel["id"]))))
+                    except Exception:
+                        pass
+    return resultados
 
 
 def main():
