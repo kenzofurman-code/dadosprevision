@@ -124,6 +124,7 @@ class Operador:
         """
         limite = time.time() + timeout
         ultimo_log = 0
+        segundos_sem_palavras = 0
         while time.time() < limite:
             img = self.tela()
             if self.responder_sessao_duplicada(img=img):
@@ -136,6 +137,26 @@ class Operador:
             if len(palavras) >= minimo_palavras and self.v.achar_texto("Mega ERP", img=img):
                 self.log("   ERP pronto (%d palavras na tela)" % len(palavras))
                 return "conteudo"
+
+            # Se a tela esta totalmente sem texto (ex.: fundo azul solido do Windows
+            # enquanto o app ou logon estao aguardando foco/interacao):
+            if len(palavras) == 0:
+                segundos_sem_palavras += intervalo
+                if segundos_sem_palavras >= 30 and segundos_sem_palavras % 30 < intervalo:
+                    self.log("   tela sem texto (%ds): focando canvas e enviando interacao de despertar"
+                             % segundos_sem_palavras)
+                    try:
+                        self.pagina.bring_to_front()
+                        self.pagina.mouse.click(800, 450)
+                        time.sleep(0.5)
+                        self.pagina.keyboard.press("Escape")
+                        time.sleep(0.5)
+                        self.pagina.keyboard.press("Enter")
+                    except Exception:
+                        pass
+            else:
+                segundos_sem_palavras = 0
+
             # Log periodico (a cada ~30s): sem isso, uma espera de ate 300s que
             # acaba estourando nao deixa NENHUM rastro do que estava acontecendo
             # na tela nesse meio-tempo -- so a mensagem final de timeout. BUG

@@ -45,6 +45,7 @@ services:
     # vivo: o container ficou parado indefinidamente sem isso, e funcionou na
     # hora com "docker run --init" (mesmo efeito de "init: true" aqui).
     init: true
+    shm_size: '1gb'
     depends_on:
       postgres:
         condition: service_healthy

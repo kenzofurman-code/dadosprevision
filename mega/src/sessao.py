@@ -83,6 +83,16 @@ class Sessao:
         args = dict(headless=self.headless, slow_mo=self.devagar)
         if self.canal:
             args["channel"] = self.canal
+        args["args"] = [
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-background-timer-throttling",
+            "--disable-backgrounding-occluded-windows",
+            "--disable-renderer-backgrounding",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--window-size=%d,%d" % (self.largura, self.altura),
+        ]
         self._nav = self._pw.chromium.launch(**args)
         ctx_args = {
             "viewport": {"width": self.largura, "height": self.altura},
@@ -96,6 +106,16 @@ class Sessao:
         return self.pagina
 
     def fechar(self):
+        if self._ctx is not None:
+            try:
+                for p in list(self._ctx.pages):
+                    if not p.is_closed():
+                        try:
+                            p.close()
+                        except Exception:
+                            pass
+            except Exception:
+                pass
         for obj, metodo in ((self._ctx, "close"), (self._nav, "close"), (self._pw, "stop")):
             if obj is not None:
                 try:
@@ -139,10 +159,17 @@ class Sessao:
         Navegar direto para .../software/html5.html NAO funciona: sem o token
         que o portal cria, o gateway devolve o portal de volta.
         """
-        # Simples de proposito. Tentar ser esperto aqui (expect_page + escolher a
-        # "mais recente") acabava capturando a aba errada e provocando duas
-        # sessoes que se derrubavam. cplogon abre UMA aba de gateway; basta achar.
         ctx = self.pagina.context
+
+        # Fechar abas antigas do gateway para garantir que nao existam multiplas
+        # conexoes ativas disputando a mesma sessao do Windows remoto.
+        for p in list(ctx.pages):
+            if p != self.pagina and not p.is_closed():
+                try:
+                    p.close()
+                except Exception:
+                    pass
+
         self.pagina.evaluate("() => cplogon()")
         erp = None
         for _ in range(30):
@@ -150,11 +177,18 @@ class Sessao:
             gws = [p for p in ctx.pages
                    if not p.is_closed() and "/software/html5" in (p.url or "")]
             if gws:
-                erp = gws[0]
+                # Pegar a mais recente (a ultima aberta)
+                erp = gws[-1]
                 break
         if erp is None:
             raise RuntimeError("cplogon nao abriu a aba do gateway")
         erp.wait_for_load_state("domcontentloaded", timeout=60000)
+
+        # Focar e trazer para frente explicitamente para evitar throttling do Chrome sob Xvfb
+        try:
+            erp.bring_to_front()
+        except Exception:
+            pass
 
         # A aba abre em about:blank e navega em seguida; a navegacao destroi o
         # contexto de execucao no meio da checagem. Por isso o try/except.
@@ -166,6 +200,12 @@ class Sessao:
                     caixa = c.bounding_box()
                     if caixa and caixa["width"] > 200:
                         self.erp = erp
+                        # Clicar no centro do canvas para ativar foco de teclado/mouse
+                        # e forcar o gateway a iniciar o stream de video contínuo.
+                        try:
+                            c.click()
+                        except Exception:
+                            pass
                         return erp
             except Exception:
                 pass

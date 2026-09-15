@@ -48,6 +48,7 @@ services:
     # que falha para processos PID 1 sem um init de verdade. Confirmado ao
     # vivo contra uma VPS Linux real em 2026-09-08.
     init: true
+    shm_size: '1gb'
     depends_on:
       postgres:
         condition: service_healthy
