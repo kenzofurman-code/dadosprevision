@@ -147,11 +147,7 @@ class Operador:
                              % segundos_sem_palavras)
                     try:
                         self.pagina.bring_to_front()
-                        self.pagina.mouse.click(800, 450)
-                        time.sleep(0.5)
-                        self.pagina.keyboard.press("Escape")
-                        time.sleep(0.5)
-                        self.pagina.keyboard.press("Enter")
+                        self.pagina.mouse.click(20, 20)
                     except Exception:
                         pass
             else:
