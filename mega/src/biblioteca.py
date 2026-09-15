@@ -352,6 +352,17 @@ class Operador:
                 break
             if tentativa == 3:
                 raise FalhaDeEtapa("o painel de busca de telas nao abriu")
+        # Limpar o campo antes de digitar. No modo "por relatorio" isso nunca
+        # importava -- abrir_tela() sempre vinha logo apos trocar_empresa(),
+        # com o campo sempre zerado. No modo "por obra" (executar_por_obra),
+        # varios relatorios abrem buscas em sequencia SEM trocar de empresa
+        # entre eles, e o campo mantinha o texto da busca anterior: o texto
+        # novo so EMENDAVA em cima, virando uma busca sem sentido que nunca
+        # batia com nenhum modulo. BUG REAL, confirmado ao vivo em
+        # 2026-09-15: toda obra passava em itens_solicitados (1o relatorio)
+        # e falhava nos outros 3 com "nao achei nenhum resultado do modulo".
+        self.tecla("Control+a")
+        self.tecla("Delete")
         self.digitar(busca)
         time.sleep(3.5)
         img = self.tela()
