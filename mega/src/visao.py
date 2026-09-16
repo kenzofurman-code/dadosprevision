@@ -158,8 +158,16 @@ class Visao:
         Casa sequencias de palavras dentro da mesma linha, entao funciona tanto
         para "Filtrar" quanto para "Mostrar apenas Itens Solicitados".
         """
-        img = self.capturar(regiao) if img is None else img
-        dx, dy = (regiao[0], regiao[1]) if regiao else (0, 0)
+        if regiao:
+            rx, ry, rw, rh = regiao
+            img = img[ry:ry + rh, rx:rx + rw] if img is not None else self.capturar(regiao)
+            dx, dy = rx, ry
+        elif img is None:
+            img = self.capturar()
+            dx, dy = 0, 0
+        else:
+            dx, dy = 0, 0
+
         alvo_n = _normalizar(alvo)
         for var in self.VARIANTES:
             escala, inverter = var[0], var[1]

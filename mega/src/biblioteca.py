@@ -423,12 +423,15 @@ class Operador:
         # 3. Escolher o resultado pela PALAVRA DO MODULO, nao pela posicao.
         # Ha duas telas chamadas "Follow-up de solicitacoes" e as duas sao usadas:
         # uma em Materiais|Suprimentos|Visoes, outra em Construcao|...|Orcamentos.
+        # A busca e restrita a regiao da gaveta lateral (x=50..290, y=240..840) para
+        # nunca casar texto identico da tela principal por engano (ex: campo Orcamento).
+        REGIAO_GAVETA = (50, 240, 240, 600)
         clicou = False
         if palavra_modulo:
             # Aguarda ate 10s caso a busca do ERP demore para renderizar os resultados
             limite_busca = time.time() + 10
             while time.time() < limite_busca:
-                caixa = self.v.achar_texto(palavra_modulo, img=img)
+                caixa = self.v.achar_texto(palavra_modulo, img=img, regiao=REGIAO_GAVETA)
                 if caixa:
                     # o titulo do resultado fica na linha imediatamente acima do modulo
                     self.pagina.mouse.click(caixa.x + 30, max(0, caixa.y - 18))
@@ -437,11 +440,11 @@ class Operador:
                 time.sleep(1.5)
                 img = self.tela()
             if not clicou:
-                self.log("   aviso: modulo %r nao localizado pelo OCR; tentando fallback" % palavra_modulo)
+                self.log("   aviso: modulo %r nao localizado pelo OCR na gaveta; tentando fallback" % palavra_modulo)
 
         if not clicou:
-            # Fallback 1: tentar achar o texto da busca no painel
-            caixa = self.v.achar_texto(busca, img=img)
+            # Fallback 1: tentar achar o texto da busca na gaveta
+            caixa = self.v.achar_texto(busca, img=img, regiao=REGIAO_GAVETA)
             if caixa:
                 x, y = centro(caixa)
                 self.pagina.mouse.click(x, y)
@@ -452,11 +455,12 @@ class Operador:
             self.log("   aviso: clicando no primeiro resultado da busca por posicao padrao (140, 310)")
             self.pagina.mouse.click(140, 310)
 
+        tempo_espera = max(timeout, 120)
         try:
-            self.esperar_texto(ancora_titulo, timeout=timeout)
+            self.esperar_texto(ancora_titulo, timeout=tempo_espera)
         except FalhaDeEtapa:
-            raise FalhaDeEtapa("abri a busca %r mas a tela %r nao apareceu"
-                               % (busca, ancora_titulo))
+            raise FalhaDeEtapa("abri a busca %r mas a tela %r nao apareceu em %ds"
+                               % (busca, ancora_titulo, tempo_espera))
         self.log("   tela confirmada: %s" % ancora_titulo)
 
     # -------------------------------------------------------------- exportacao
