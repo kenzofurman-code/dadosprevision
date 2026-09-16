@@ -110,12 +110,11 @@ def preparar_visualizacao_itens(op, rel, obra):
     while time.time() < limite:
         img = op.tela()
         if (op.v.achar_texto("Status do Item", img=img)
-                or op.v.achar_texto("Itens Solicitados", img=img)
                 or op.v.achar_texto("Nenhum Registro Encontrado", img=img)):
             op.log("   grid carregado com sucesso")
             time.sleep(5)
             return
-        time.sleep(4)
+        time.sleep(5)
     op.log("   aviso: timeout aguardando conclusao do grid; prosseguindo")
 
 
