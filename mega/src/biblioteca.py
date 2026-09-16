@@ -406,54 +406,67 @@ class Operador:
 
         # 2. Clicar explicitamente dentro do campo de busca (x=140, y=203) para garantir foco.
         # Medido a 1600x900: o campo de busca branco fica entre x=80..219, y=190..217 (centro y=203).
-        # O botao de limpar (X) fica a direita, em x=210, y=203.
         self.pagina.mouse.click(140, 203)
-        time.sleep(0.5)
-        # Clica no botao 'x' limpar (x=210, y=203) caso haja texto residual
-        self.pagina.mouse.click(210, 203)
-        time.sleep(0.5)
-        self.pagina.mouse.click(140, 203)
-        time.sleep(0.3)
-        # Selecionar tudo e apagar para garantir campo 100% limpo
-        self.tecla("Control+a")
-        self.tecla("Delete")
         time.sleep(0.4)
+        # Limpar campo de busca de forma infalivel no canvas RDP (sem depender de Ctrl+A que costuma falhar no canvas)
+        self.tecla("End", pausa=0.1)
+        for _ in range(35):
+            self.pagina.keyboard.press("Backspace")
+            time.sleep(0.015)
+        self.tecla("Home", pausa=0.1)
+        for _ in range(35):
+            self.pagina.keyboard.press("Delete")
+            time.sleep(0.015)
+        time.sleep(0.3)
         self.digitar(busca)
-        time.sleep(3.5)
+        time.sleep(3.0)
         img = self.tela()
 
-        # 3. Escolher o resultado pela PALAVRA DO MODULO, nao pela posicao.
-        # Ha duas telas chamadas "Follow-up de solicitacoes" e as duas sao usadas:
-        # uma em Materiais|Suprimentos|Visoes, outra em Construcao|...|Orcamentos.
-        # A busca e restrita a regiao da gaveta lateral (x=50..290, y=240..840) para
-        # nunca casar texto identico da tela principal por engano (ex: campo Orcamento).
+        # 3. Localizar o card na gaveta de resultados.
+        # REGIAO_GAVETA = (50, 240, 240, 600) para nunca casar texto identico da tela principal.
         REGIAO_GAVETA = (50, 240, 240, 600)
         clicou = False
-        if palavra_modulo:
-            # Aguarda ate 10s caso a busca do ERP demore para renderizar os resultados
-            limite_busca = time.time() + 10
-            while time.time() < limite_busca:
+        limite_busca = time.time() + 15
+
+        # Termos discriminatorios da busca (ex: 'pedidos' em 'follow-up de pedidos')
+        palavras_busca = [p for p in busca.lower().split()
+                          if len(p) >= 4 and p not in ("follow-up", "follow", "visao", "visoes")]
+
+        while time.time() < limite_busca:
+            # 1a prioridade: se a busca tem palavra especifica (ex: 'pedidos'), procurar por ela no titulo
+            for termo in palavras_busca:
+                if termo not in ("solicita", "solicitacao", "solicitacoes"):
+                    caixa = self.v.achar_texto(termo, img=img, regiao=REGIAO_GAVETA)
+                    if caixa:
+                        self.log("   card localizado pelo termo da busca %r em y=%d" % (termo, caixa.y))
+                        self.pagina.mouse.click(110, caixa.y)
+                        clicou = True
+                        break
+            if clicou:
+                break
+
+            # 2a prioridade: desambiguacao por modulo (necessario para telas homonimas como Follow-up de solicitacoes)
+            if palavra_modulo:
                 caixa = self.v.achar_texto(palavra_modulo, img=img, regiao=REGIAO_GAVETA)
                 if caixa:
+                    self.log("   card localizado pelo modulo %r em y=%d" % (palavra_modulo, caixa.y))
                     # o titulo do resultado fica na linha imediatamente acima do modulo (~18px acima).
                     # O clique em x=110 acerta no centro do titulo e nunca na estrela de favoritos a direita.
                     self.pagina.mouse.click(110, max(0, caixa.y - 18))
                     clicou = True
                     break
-                time.sleep(1.5)
-                img = self.tela()
-            if not clicou:
-                self.log("   aviso: modulo %r nao localizado pelo OCR na gaveta; tentando fallback" % palavra_modulo)
+
+            time.sleep(1.5)
+            img = self.tela()
 
         if not clicou:
-            # Fallback 1: tentar achar o texto da busca na gaveta
+            # Fallback: tentar achar o texto da busca na gaveta
             caixa = self.v.achar_texto(busca, img=img, regiao=REGIAO_GAVETA)
             if caixa:
                 self.pagina.mouse.click(110, caixa.y)
                 clicou = True
 
         if not clicou:
-            # Fallback 2: clicar no primeiro card de resultados da lista (~ x=110, y=310)
             self.log("   aviso: clicando no primeiro resultado da busca por posicao padrao (110, 310)")
             self.pagina.mouse.click(110, 310)
 
