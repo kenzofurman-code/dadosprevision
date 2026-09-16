@@ -165,6 +165,7 @@ class Sessao:
         Navegar direto para .../software/html5.html NAO funciona: sem o token
         que o portal cria, o gateway devolve o portal de volta.
         """
+        ctx = self.pagina.context
         # O portal atual da Senior Cloud abre a aba oficial automaticamente
         # apos o login, passando os tokens OAuth Bearer na URL.
         # Reaproveitamos essa aba diretamente se ela ja foi criada.
