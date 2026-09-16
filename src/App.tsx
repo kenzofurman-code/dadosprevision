@@ -39,6 +39,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import './App.css'
 import { CurvasView } from './CurvasView'
+import { MegaView } from './MegaView'
 
 type DataView =
   | 'projects'
@@ -53,6 +54,7 @@ type DataView =
   | 'dashboard'
   | 'curvas'
   | 'gestao_a_vista'
+  | 'dados_mega'
 
 type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix' | 'panel5' | 'milestones'
 type GestaoTablePanel = 'panel1' | 'panel2' | 'panel3'
@@ -597,6 +599,7 @@ const columns: Record<DataView, Column[]> = {
   ],
   curvas: [],
   gestao_a_vista: [],
+  dados_mega: [],
 }
 
 const activityColumns: Record<ActivityMode, Column[]> = {
@@ -1018,7 +1021,7 @@ function App() {
   const [curveBaselines, setCurveBaselines] = useState<DataRecord[]>([])
   const [gestaoMilestones, setGestaoMilestones] = useState<DataRecord[]>([])
   const [activeView, setActiveView] = useState<DataView>('gestao_a_vista')
-  const lastDataView = useRef<Exclude<DataView, 'gestao_a_vista' | 'curvas'>>('projects')
+  const lastDataView = useRef<Exclude<DataView, 'gestao_a_vista' | 'curvas' | 'dados_mega'>>('projects')
   const [activityMode, setActivityMode] = useState<ActivityMode>('planning')
   const [budgetMode, setBudgetMode] = useState<BudgetMode>('reports')
   const [dashboardMode, setDashboardMode] = useState<DashboardMode>('general')
@@ -3343,7 +3346,9 @@ function App() {
     ? { label: 'Dashboard de Marcos', icon: Flag }
     : activeView === 'curvas'
       ? { label: 'Curvas', icon: TrendingUp }
-      : tabs.find((tab) => tab.key === activeView) || tabs[0]
+      : activeView === 'dados_mega'
+        ? { label: 'Dados Mega', icon: Layers3 }
+        : tabs.find((tab) => tab.key === activeView) || tabs[0]
   const currentColumns =
     activeView === 'activities'
       ? activityColumns[activityMode]
@@ -3356,7 +3361,7 @@ function App() {
             : columns[activeView]
 
   function changeView(view: DataView) {
-    if (view !== 'gestao_a_vista' && view !== 'curvas') lastDataView.current = view
+    if (view !== 'gestao_a_vista' && view !== 'curvas' && view !== 'dados_mega') lastDataView.current = view
     setActiveView(view)
     setPage(0)
     setSearch('')
@@ -3477,12 +3482,20 @@ function App() {
             Dashboard de Marcos
           </button>
           <button
-            className={`header-view-button ${activeView !== 'gestao_a_vista' && activeView !== 'curvas' ? 'active' : ''}`}
+            className={`header-view-button ${activeView !== 'gestao_a_vista' && activeView !== 'curvas' && activeView !== 'dados_mega' ? 'active' : ''}`}
             type="button"
             onClick={() => changeView(lastDataView.current)}
           >
             <Database size={16} />
             Dados Prevision
+          </button>
+          <button
+            className={`header-view-button ${activeView === 'dados_mega' ? 'active' : ''}`}
+            type="button"
+            onClick={() => changeView('dados_mega')}
+          >
+            <Layers3 size={16} />
+            Dados Mega
           </button>
           <button type="button" onClick={synchronize} disabled={synchronizing}>
             <Database size={16} />
@@ -3503,7 +3516,7 @@ function App() {
         </div>
       </header>
 
-      {activeView !== 'curvas' && (
+      {activeView !== 'curvas' && activeView !== 'dados_mega' && (
         <section className="summary" aria-label="Resumo da carteira">
           <div>
             <span>{integerFormatter.format(totals.projects)}</span>
@@ -3524,7 +3537,7 @@ function App() {
         </section>
       )}
 
-      {activeView !== 'gestao_a_vista' && activeView !== 'curvas' && (
+      {activeView !== 'gestao_a_vista' && activeView !== 'curvas' && activeView !== 'dados_mega' && (
         <nav className="data-tabs" aria-label="Dados Prevision">
           {tabs
             .filter((tab) => tab.key !== 'gestao_a_vista')
@@ -3547,7 +3560,8 @@ function App() {
       )}
 
       <section className="workspace">
-        <div className="toolbar">
+        {activeView !== 'dados_mega' && (
+          <div className="toolbar">
           <div className="view-title">
             <activeTab.icon size={18} />
             <h2>{activeTab.label}</h2>
@@ -3840,12 +3854,13 @@ function App() {
             </div>
           )}
         </div>
+        )}
 
         {(message || error) && (
           <div className={`feedback ${error ? 'error' : 'success'}`}>{error || message}</div>
         )}
 
-        <div className={`table-panel ${activeView === 'dashboard' && dashboardMode === 'cff' ? 'cff-panel' : activeView === 'gestao_a_vista' ? 'gestao-panel' : ''}`} aria-live="polite">
+        <div className={`table-panel ${activeView === 'dashboard' && dashboardMode === 'cff' ? 'cff-panel' : activeView === 'gestao_a_vista' ? 'gestao-panel' : activeView === 'dados_mega' ? 'mega-panel' : ''}`} aria-live="polite">
           {loading ? (
             <div className="state-message">
               <RefreshCw size={20} className="spin" />
@@ -3860,6 +3875,8 @@ function App() {
               loading={loading}
               allowedImportedEnterprises={activeCurveEnterprises === null ? null : Array.from(effectiveActiveCurveEnterprises)}
             />
+          ) : activeView === 'dados_mega' ? (
+            <MegaView />
           ) : activeView === 'gestao_a_vista' ? (
             <div className="gestao-vista-wrapper">
               {/* PANEL SUB-TABS NAVIGATION & A4 PRINT BAR */}
@@ -5593,7 +5610,7 @@ function App() {
           )}
         </div>
 
-        {activeView !== 'projects' && activeView !== 'gestao_a_vista' && activeView !== 'curvas' && (
+        {activeView !== 'projects' && activeView !== 'gestao_a_vista' && activeView !== 'curvas' && activeView !== 'dados_mega' && (
           <footer className="pagination">
             <span>
               Página {page + 1} · {visibleRecords.length} registros exibidos

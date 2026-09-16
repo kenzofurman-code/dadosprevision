@@ -1,0 +1,384 @@
+/* MegaView.css — Painel de Dados Mega ERP */
+
+.mega-view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Cards de Resumo */
+.mega-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.mega-summary-card {
+  background: var(--surface-bg, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.mega-summary-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(30, 64, 175, 0.08);
+  color: var(--primary-color, #1e40af);
+  flex-shrink: 0;
+}
+
+.mega-summary-icon.success {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+}
+
+.mega-summary-icon.warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+}
+
+.mega-summary-card h4 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #64748b);
+}
+
+.mega-summary-card p {
+  margin: 4px 0 0 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-color, #0f172a);
+}
+
+.mega-summary-card small {
+  font-size: 11px;
+  color: var(--text-muted, #64748b);
+}
+
+/* Barra de Abas e Sub-abas */
+.mega-navigation-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  padding-bottom: 8px;
+}
+
+.mega-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mega-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted, #64748b);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mega-tab-btn:hover {
+  background: var(--surface-hover, #f1f5f9);
+  color: var(--text-color, #0f172a);
+}
+
+.mega-tab-btn.active {
+  background: var(--primary-color, #1e40af);
+  color: #ffffff;
+  border-color: var(--primary-color, #1e40af);
+}
+
+.mega-tab-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.08);
+  font-weight: 700;
+}
+
+.mega-tab-btn.active .mega-tab-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+/* Sub-seletor (ex: abas de Análise de Saldo) */
+.mega-subnav {
+  display: flex;
+  gap: 8px;
+  background: var(--surface-bg-subtle, #f8fafc);
+  padding: 4px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #e2e8f0);
+}
+
+.mega-subnav-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-muted, #64748b);
+}
+
+.mega-subnav-btn.active {
+  background: var(--surface-bg, #ffffff);
+  color: var(--primary-color, #1e40af);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Barra de Filtros e Busca */
+.mega-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface-bg, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.mega-toolbar-left,
+.mega-toolbar-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.mega-filter-select {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #cbd5e1);
+  background: var(--surface-bg, #ffffff);
+  color: var(--text-color, #0f172a);
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+}
+
+.mega-filter-select:focus {
+  border-color: var(--primary-color, #1e40af);
+}
+
+.mega-search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: var(--surface-bg, #ffffff);
+  min-width: 240px;
+}
+
+.mega-search-box input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--text-color, #0f172a);
+  width: 100%;
+}
+
+.mega-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #cbd5e1);
+  background: var(--surface-bg, #ffffff);
+  color: var(--text-color, #0f172a);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mega-btn:hover {
+  background: var(--surface-hover, #f1f5f9);
+}
+
+.mega-btn.primary {
+  background: var(--primary-color, #1e40af);
+  color: #ffffff;
+  border-color: var(--primary-color, #1e40af);
+}
+
+.mega-btn.primary:hover {
+  filter: brightness(1.1);
+}
+
+/* Tabela */
+.mega-table-container {
+  background: var(--surface-bg, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.mega-table-scroll {
+  overflow-x: auto;
+  max-height: 600px;
+  position: relative;
+}
+
+.mega-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+
+.mega-table th {
+  background: var(--table-header-bg, #f8fafc);
+  color: var(--text-muted, #475569);
+  font-weight: 600;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.mega-table td {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-color, #f1f5f9);
+  color: var(--text-color, #1e293b);
+  white-space: nowrap;
+}
+
+.mega-table tr:hover td {
+  background: var(--table-row-hover, #f8fafc);
+}
+
+.mega-table .num-cell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Badges de Situação */
+.mega-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.mega-badge.success {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.mega-badge.warning {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.mega-badge.danger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.mega-badge.info {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.mega-badge.neutral {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* Paginação */
+.mega-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+  background: var(--surface-bg, #ffffff);
+  font-size: 12px;
+  color: var(--text-muted, #64748b);
+}
+
+.mega-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mega-page-btn {
+  padding: 4px 8px;
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: 4px;
+  background: var(--surface-bg, #ffffff);
+  color: var(--text-color, #0f172a);
+  cursor: pointer;
+}
+
+.mega-page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Estado de carregamento e vazio */
+.mega-empty-state,
+.mega-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px;
+  color: var(--text-muted, #64748b);
+  gap: 12px;
+}
+
+.mega-loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

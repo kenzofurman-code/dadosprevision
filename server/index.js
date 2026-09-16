@@ -20,6 +20,9 @@ import {
   getAppPreferences,
   saveAppPreferences,
   getRestrictions,
+  getMegaObras,
+  getMegaSummary,
+  getMegaTable,
 } from './db.js'
 import { syncProjects, syncRestrictions } from './sync.js'
 
@@ -212,6 +215,51 @@ app.get('/api/data', async (req, res) => {
   } catch (err) {
     console.error('Erro em /api/data:', err)
     res.status(500).json({ error: err.message || 'Erro ao consultar dados' })
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Mega ERP Endpoints
+// ---------------------------------------------------------------------------
+
+app.get('/api/mega/obras', async (_req, res) => {
+  try {
+    const obras = await getMegaObras()
+    res.json({ ok: true, obras })
+  } catch (err) {
+    console.error('Erro em /api/mega/obras:', err)
+    res.status(500).json({ error: err.message || 'Erro ao carregar obras do Mega' })
+  }
+})
+
+app.get('/api/mega/summary', async (req, res) => {
+  try {
+    const obra = String(req.query.obra || '').trim()
+    const summary = await getMegaSummary(obra)
+    res.json({ ok: true, summary })
+  } catch (err) {
+    console.error('Erro em /api/mega/summary:', err)
+    res.status(500).json({ error: err.message || 'Erro ao carregar resumo do Mega' })
+  }
+})
+
+app.get('/api/mega/data', async (req, res) => {
+  try {
+    const table = String(req.query.table || '').trim()
+    const obra = String(req.query.obra || '').trim()
+    const page = Math.max(0, Number(req.query.page) || 0)
+    const pageSize = Math.min(200, Math.max(10, Number(req.query.limit) || 50))
+    const search = String(req.query.search || '').trim()
+
+    if (!table) {
+      return res.status(400).json({ error: 'Parâmetro table é obrigatório.' })
+    }
+
+    const result = await getMegaTable(table, { obra, page, pageSize, search })
+    res.json({ ok: true, ...result })
+  } catch (err) {
+    console.error('Erro em /api/mega/data:', err)
+    res.status(500).json({ error: err.message || 'Erro ao consultar tabela do Mega' })
   }
 })
 

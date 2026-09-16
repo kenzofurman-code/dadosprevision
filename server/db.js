@@ -321,4 +321,153 @@ export async function getRestrictions({ projectId = '', page = 0, pageSize = 100
   }
 }
 
+// ---------------------------------------------------------------------------
+// Consultas do Schema Mega (Mega ERP)
+// ---------------------------------------------------------------------------
+
+export async function getMegaObras() {
+  const sql = `
+    SELECT DISTINCT obra, COALESCE(NULLIF(obra_nome, ''), obra) as obra_nome
+    FROM (
+      SELECT obra, obra_nome FROM mega.pedidos_compra WHERE obra IS NOT NULL
+      UNION
+      SELECT obra, obra_nome FROM mega.visualizacao_itens WHERE obra IS NOT NULL
+      UNION
+      SELECT obra, obra_nome FROM mega.analise_realizado WHERE obra IS NOT NULL
+      UNION
+      SELECT obra, obra_nome FROM mega.itens_solicitados WHERE obra IS NOT NULL
+      UNION
+      SELECT obra, observacao as obra_nome FROM mega.obra_projeto WHERE obra IS NOT NULL
+    ) sub
+    ORDER BY obra ASC;
+  `
+  const { rows } = await query(sql)
+  return rows
+}
+
+export async function getMegaSummary(obra = '') {
+  const params = obra ? [obra] : []
+  const whereObra = obra ? 'WHERE obra = $1' : ''
+
+  const queries = [
+    query(`SELECT COUNT(*) as count FROM mega.pedidos_compra ${whereObra}`, params),
+    query(`SELECT COUNT(*) as count FROM mega.visualizacao_itens ${whereObra}`, params),
+    query(`SELECT COUNT(*) as count FROM mega.analise_pedidos_hist ${whereObra}`, params),
+    query(`SELECT COUNT(*) as count FROM mega.analise_contratos_hist ${whereObra}`, params),
+    query(`SELECT COUNT(*) as count FROM mega.analise_realizado ${whereObra}`, params),
+    query(`SELECT COUNT(*) as count FROM mega.itens_solicitados ${whereObra}`, params),
+    query(`SELECT MAX(data_extracao) as ultima_data FROM mega.carga WHERE bloqueado = FALSE`),
+  ]
+  const [pedidos, visItens, saldoPedidos, saldoContratos, saldoRealizado, itensSolic, carga] =
+    await Promise.all(queries)
+
+  return {
+    totalPedidosCompra: Number(pedidos.rows[0]?.count || 0),
+    totalVisualizacaoItens: Number(visItens.rows[0]?.count || 0),
+    totalSaldoPedidos: Number(saldoPedidos.rows[0]?.count || 0),
+    totalSaldoContratos: Number(saldoContratos.rows[0]?.count || 0),
+    totalSaldoRealizado: Number(saldoRealizado.rows[0]?.count || 0),
+    totalItensSolicitados: Number(itensSolic.rows[0]?.count || 0),
+    ultimaExtracao: carga.rows[0]?.ultima_data || null,
+  }
+}
+
+const MEGA_TABLE_MAP = {
+  pedidos_compra: {
+    table: 'mega.pedidos_compra',
+    hasObra: true,
+    orderBy: 'data_extracao DESC, numero_do_pedido DESC, item_pedido ASC',
+    searchColumns: ['CAST(numero_do_pedido AS TEXT)', 'nome_fantasia', 'descricao_do_item', 'situacao_do_pedido'],
+  },
+  visualizacao_itens: {
+    table: 'mega.visualizacao_itens',
+    hasObra: true,
+    orderBy: 'data_extracao DESC, solicitacao DESC, sequencia ASC',
+    searchColumns: ['CAST(solicitacao AS TEXT)', 'fornecedor', 'descricao', 'situacao_do_item', 'CAST(cod_item AS TEXT)'],
+  },
+  analise_pedidos: {
+    table: 'mega.analise_pedidos_hist',
+    hasObra: true,
+    orderBy: 'data_extracao DESC, codigo_pedido DESC',
+    searchColumns: ['CAST(codigo_pedido AS TEXT)', 'fornecedor'],
+  },
+  analise_contratos: {
+    table: 'mega.analise_contratos_hist',
+    hasObra: true,
+    orderBy: 'data_extracao DESC, codigo_contrato DESC',
+    searchColumns: ['CAST(codigo_contrato AS TEXT)', 'fornecedor', 'status_pre_contrato'],
+  },
+  analise_realizado: {
+    table: 'mega.analise_realizado',
+    hasObra: true,
+    orderBy: 'data_extracao DESC, id DESC',
+    searchColumns: ['CAST(documento AS TEXT)', 'fornecedor'],
+  },
+  itens_solicitados: {
+    table: 'mega.itens_solicitados',
+    hasObra: true,
+    orderBy: 'data_extracao DESC, codigo_solicitacao DESC, sequencial_item ASC',
+    searchColumns: ['CAST(codigo_solicitacao AS TEXT)', 'CAST(numero_rm AS TEXT)', 'descricao_do_item', 'situacao_do_item'],
+  },
+  cargas: {
+    table: 'mega.carga',
+    hasObra: false,
+    orderBy: 'id DESC',
+    searchColumns: ['relatorio', 'arquivo', 'motivo_bloqueio'],
+  },
+}
+
+export async function getMegaTable(tableType, { obra = '', page = 0, pageSize = 50, search = '' } = {}) {
+  const meta = MEGA_TABLE_MAP[tableType]
+  if (!meta) {
+    throw new Error(`Tabela Mega desconhecida: ${tableType}`)
+  }
+
+  const conditions = []
+  const params = []
+
+  if (meta.hasObra && obra) {
+    params.push(obra)
+    conditions.push(`obra = $${params.length}`)
+  }
+
+  if (search && meta.searchColumns.length > 0) {
+    params.push(`%${search.trim().toLowerCase()}%`)
+    const searchParamIdx = params.length
+    const orClauses = meta.searchColumns.map((col) => `LOWER(${col}) LIKE $${searchParamIdx}`)
+    conditions.push(`(${orClauses.join(' OR ')})`)
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+
+  // Contagem total
+  const countSql = `SELECT COUNT(*) as total FROM ${meta.table} ${whereClause}`
+  const countRes = await query(countSql, params)
+  const total = Number(countRes.rows[0]?.total || 0)
+
+  // Consulta paginada
+  const offset = page * pageSize
+  params.push(pageSize)
+  const limitIdx = params.length
+  params.push(offset)
+  const offsetIdx = params.length
+
+  const dataSql = `
+    SELECT * FROM ${meta.table}
+    ${whereClause}
+    ORDER BY ${meta.orderBy}
+    LIMIT $${limitIdx} OFFSET $${offsetIdx}
+  `
+  const { rows } = await query(dataSql, params)
+
+  return {
+    records: rows,
+    total,
+    page,
+    pageSize,
+    hasMore: offset + pageSize < total,
+  }
+}
+
 export default pool
+
