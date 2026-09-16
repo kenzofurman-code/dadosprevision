@@ -104,6 +104,19 @@ def preparar_visualizacao_itens(op, rel, obra):
     # Aqui "Filtrar" e "Limpar filtro" ficam LADO A LADO, nao empilhados como na
     # outra tela: o deslocamento e horizontal.
     op.clicar_relativo("Limpar filtro", dx=-94, dy=0)
+    op.log("   Filtrar clicado; aguardando carregamento do grid de itens...")
+
+    limite = time.time() + 180
+    while time.time() < limite:
+        img = op.tela()
+        if (op.v.achar_texto("Status do Item", img=img)
+                or op.v.achar_texto("Itens Solicitados", img=img)
+                or op.v.achar_texto("Nenhum Registro Encontrado", img=img)):
+            op.log("   grid carregado com sucesso")
+            time.sleep(5)
+            return
+        time.sleep(4)
+    op.log("   aviso: timeout aguardando conclusao do grid; prosseguindo")
 
 
 def preparar_analise_saldo(op, rel, obra):

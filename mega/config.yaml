@@ -168,7 +168,7 @@ relatorios:
         alvo: "Filtrar"
         espera: "~40s; concluído quando a aba APROVAÇÕES fica ativa e o grid popula"
     exportacoes:
-      - aba: "APROVAÇÕES"
+      - aba: null                    # apos Filtrar, o ERP já abre diretamente na aba APROVAÇÕES
         caminho_menu: ["Exportar", "Excel"]
         arquivo: "Visualizacao_Itens"
         ancora_nome_padrao: "grd_Itens"

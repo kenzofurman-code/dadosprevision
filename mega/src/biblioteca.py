@@ -392,6 +392,8 @@ class Operador:
         resultado, nao a intencao.
         """
         # 1. Garantir que o painel de busca lateral esta aberto.
+        # Envia Escape preventivo para fechar qualquer menu de contexto residual que bloqueie a tela.
+        self.tecla("Escape", pausa=0.5)
         # Se ja estiver aberto ("Procurar" visivel), nao clica na lupa para nao recolher.
         for tentativa in (1, 2, 3):
             img = self.tela()
