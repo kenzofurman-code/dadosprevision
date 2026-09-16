@@ -113,9 +113,15 @@ class Visao:
     # o painel lateral (texto branco fino sobre fundo escuro) so e lido na escala
     # 1 — ampliar borra e o resultado vira ruido; ja o texto pequeno do ERP sobre
     # fundo claro so e lido ampliado. Por isso variantes, tentadas em ordem.
-    VARIANTES = ((2.0, False), (1.0, False), (2.0, True), (1.0, True))
+    VARIANTES = (
+        (2.0, False, None),
+        (1.0, False, None),
+        (2.0, True, None),
+        (1.0, True, None),
+        (1.0, False, 70),   # thresholding binario: resgata texto cinza fino / baixo contraste (ex: modulos na busca)
+    )
 
-    def _palavras(self, img, escala=None, inverter=False):
+    def _palavras(self, img, escala=None, inverter=False, limiar=None):
         """Roda OCR numa variante e devolve palavras com posicao na escala original."""
         escala = self.escala if escala is None else escala
         if escala != 1.0:
@@ -124,7 +130,9 @@ class Visao:
         else:
             base = img
         cinza = cv2.cvtColor(base, cv2.COLOR_BGR2GRAY)
-        if inverter:
+        if limiar is not None:
+            _, cinza = cv2.threshold(cinza, limiar, 255, cv2.THRESH_BINARY)
+        elif inverter:
             cinza = cv2.bitwise_not(cinza)
         dados = self._ocr(cinza)
         saida = []
@@ -153,16 +161,18 @@ class Visao:
         img = self.capturar(regiao) if img is None else img
         dx, dy = (regiao[0], regiao[1]) if regiao else (0, 0)
         alvo_n = _normalizar(alvo)
-        for escala, inverter in self.VARIANTES:
+        for var in self.VARIANTES:
+            escala, inverter = var[0], var[1]
+            limiar = var[2] if len(var) > 2 else None
             achado = self._achar_numa_variante(
-                img, alvo_n, escala, inverter, min_conf, similaridade, dx, dy)
+                img, alvo_n, escala, inverter, min_conf, similaridade, dx, dy, limiar=limiar)
             if achado:
                 return achado
         return None
 
     def _achar_numa_variante(self, img, alvo_n, escala, inverter,
-                             min_conf, similaridade, dx, dy):
-        palavras = [p for p in self._palavras(img, escala, inverter)
+                             min_conf, similaridade, dx, dy, limiar=None):
+        palavras = [p for p in self._palavras(img, escala, inverter, limiar=limiar)
                     if p["conf"] >= min_conf]
 
         linhas = {}
@@ -200,8 +210,10 @@ class Visao:
     def palavras_todas(self, img):
         """Uniao das variantes. Usado onde interessa varrer a tela inteira."""
         vistas, saida = set(), []
-        for escala, inverter in self.VARIANTES:
-            for p in self._palavras(img, escala, inverter):
+        for var in self.VARIANTES:
+            escala, inverter = var[0], var[1]
+            limiar = var[2] if len(var) > 2 else None
+            for p in self._palavras(img, escala, inverter, limiar=limiar):
                 chave = (p["texto"], p["x"] // 12, p["y"] // 8)
                 if chave in vistas:
                     continue

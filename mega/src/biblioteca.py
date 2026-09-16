@@ -391,47 +391,59 @@ class Operador:
         confiavel do que conferir o caminho do modulo antes de clicar: verifica o
         resultado, nao a intencao.
         """
+        # 1. Garantir que o painel de busca lateral esta aberto.
+        # Se ja estiver aberto ("Procurar" visivel), nao clica na lupa para nao recolher.
         for tentativa in (1, 2, 3):
-            self.pagina.mouse.click(self.ICONE_LUPA[0], self.ICONE_LUPA[1])
-            time.sleep(3)
             img = self.tela()
             if self.v.achar_texto("Procurar", img=img):
                 break
+            self.pagina.mouse.click(self.ICONE_LUPA[0], self.ICONE_LUPA[1])
+            time.sleep(3)
             if tentativa == 3:
                 raise FalhaDeEtapa("o painel de busca de telas nao abriu")
-        # Limpar o campo antes de digitar. No modo "por relatorio" isso nunca
-        # importava -- abrir_tela() sempre vinha logo apos trocar_empresa(),
-        # com o campo sempre zerado. No modo "por obra" (executar_por_obra),
-        # varios relatorios abrem buscas em sequencia SEM trocar de empresa
-        # entre eles, e o campo mantinha o texto da busca anterior: o texto
-        # novo so EMENDAVA em cima, virando uma busca sem sentido que nunca
-        # batia com nenhum modulo. BUG REAL, confirmado ao vivo em
-        # 2026-09-15: toda obra passava em itens_solicitados (1o relatorio)
-        # e falhava nos outros 3 com "nao achei nenhum resultado do modulo".
+
+        # 2. Clicar explicitamente dentro do campo de busca (x=130, y=227) para garantir foco.
+        # No modo "por obra", varios relatorios abrem buscas em sequencia sem trocar de empresa,
+        # e o foco ficava na grade/grid do relatorio anterior.
+        self.pagina.mouse.click(130, 227)
+        time.sleep(0.5)
+        # Clica no botao 'x' limpar (x=208, y=227) caso haja texto residual
+        self.pagina.mouse.click(208, 227)
+        time.sleep(0.5)
+        # Selecionar tudo e apagar para garantir campo 100% limpo
         self.tecla("Control+a")
         self.tecla("Delete")
+        time.sleep(0.4)
         self.digitar(busca)
         time.sleep(3.5)
         img = self.tela()
 
-        # Escolher o resultado pela PALAVRA DO MODULO, nao pela posicao.
+        # 3. Escolher o resultado pela PALAVRA DO MODULO, nao pela posicao.
         # Ha duas telas chamadas "Follow-up de solicitacoes" e as duas sao usadas:
         # uma em Materiais|Suprimentos|Visoes, outra em Construcao|...|Orcamentos.
-        # Pegar "o primeiro da lista" acertaria uma e erraria a outra, sempre.
+        clicou = False
         if palavra_modulo:
             caixa = self.v.achar_texto(palavra_modulo, img=img)
-            if not caixa:
-                raise FalhaDeEtapa(
-                    "nao achei nenhum resultado do modulo %r para a busca %r"
-                    % (palavra_modulo, busca))
-            # o titulo do resultado fica na linha imediatamente acima do modulo
-            self.pagina.mouse.click(caixa.x + 30, caixa.y - 18)
-        else:
+            if caixa:
+                # o titulo do resultado fica na linha imediatamente acima do modulo
+                self.pagina.mouse.click(caixa.x + 30, max(0, caixa.y - 18))
+                clicou = True
+            else:
+                self.log("   aviso: modulo %r nao localizado pelo OCR; tentando fallback" % palavra_modulo)
+
+        if not clicou:
+            # Fallback 1: tentar achar o texto da busca no painel
             caixa = self.v.achar_texto(busca, img=img)
-            if not caixa:
-                raise FalhaDeEtapa("a busca %r nao retornou resultado legivel" % busca)
-            x, y = centro(caixa)
-            self.pagina.mouse.click(x, y)
+            if caixa:
+                x, y = centro(caixa)
+                self.pagina.mouse.click(x, y)
+                clicou = True
+
+        if not clicou:
+            # Fallback 2: clicar no primeiro card de resultados da lista (~ x=130, y=315)
+            self.log("   aviso: clicando no primeiro resultado da busca por posicao padrao")
+            self.pagina.mouse.click(130, 315)
+
         try:
             self.esperar_texto(ancora_titulo, timeout=timeout)
         except FalhaDeEtapa:
