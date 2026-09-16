@@ -435,8 +435,9 @@ class Operador:
             while time.time() < limite_busca:
                 caixa = self.v.achar_texto(palavra_modulo, img=img, regiao=REGIAO_GAVETA)
                 if caixa:
-                    # o titulo do resultado fica na linha imediatamente acima do modulo
-                    self.pagina.mouse.click(caixa.x + 30, max(0, caixa.y - 18))
+                    # o titulo do resultado fica na linha imediatamente acima do modulo (~18px acima).
+                    # O clique em x=110 acerta no centro do titulo e nunca na estrela de favoritos a direita.
+                    self.pagina.mouse.click(110, max(0, caixa.y - 18))
                     clicou = True
                     break
                 time.sleep(1.5)
@@ -448,14 +449,13 @@ class Operador:
             # Fallback 1: tentar achar o texto da busca na gaveta
             caixa = self.v.achar_texto(busca, img=img, regiao=REGIAO_GAVETA)
             if caixa:
-                x, y = centro(caixa)
-                self.pagina.mouse.click(x, y)
+                self.pagina.mouse.click(110, caixa.y)
                 clicou = True
 
         if not clicou:
-            # Fallback 2: clicar no primeiro card de resultados da lista (~ x=140, y=310)
-            self.log("   aviso: clicando no primeiro resultado da busca por posicao padrao (140, 310)")
-            self.pagina.mouse.click(140, 310)
+            # Fallback 2: clicar no primeiro card de resultados da lista (~ x=110, y=310)
+            self.log("   aviso: clicando no primeiro resultado da busca por posicao padrao (110, 310)")
+            self.pagina.mouse.click(110, 310)
 
         tempo_espera = max(timeout, 120)
         try:
