@@ -165,29 +165,31 @@ class Sessao:
         Navegar direto para .../software/html5.html NAO funciona: sem o token
         que o portal cria, o gateway devolve o portal de volta.
         """
-        ctx = self.pagina.context
-
-        # Fechar abas antigas do gateway para garantir que nao existam multiplas
-        # conexoes ativas disputando a mesma sessao do Windows remoto.
-        for p in list(ctx.pages):
-            if p != self.pagina and not p.is_closed():
-                try:
-                    p.close()
-                except Exception:
-                    pass
-
-        self.pagina.evaluate("() => cplogon()")
+        # O portal atual da Senior Cloud abre a aba oficial automaticamente
+        # apos o login, passando os tokens OAuth Bearer na URL.
+        # Reaproveitamos essa aba diretamente se ela ja foi criada.
         erp = None
-        for _ in range(30):
-            self.pagina.wait_for_timeout(2000)
+        for _ in range(15):
             gws = [p for p in ctx.pages
                    if not p.is_closed() and "/software/html5" in (p.url or "")]
             if gws:
-                # Pegar a mais recente (a ultima aberta)
                 erp = gws[-1]
                 break
+            self.pagina.wait_for_timeout(1000)
+
         if erp is None:
-            raise RuntimeError("cplogon nao abriu a aba do gateway")
+            # Fallback para sessoes reaproveitadas onde o portal nao abriu sozinho
+            self.pagina.evaluate("() => cplogon()")
+            for _ in range(30):
+                self.pagina.wait_for_timeout(2000)
+                gws = [p for p in ctx.pages
+                       if not p.is_closed() and "/software/html5" in (p.url or "")]
+                if gws:
+                    erp = gws[-1]
+                    break
+
+        if erp is None:
+            raise RuntimeError("a aba do gateway do ERP nao foi aberta")
         erp.wait_for_load_state("domcontentloaded", timeout=60000)
 
         # Focar e trazer para frente explicitamente para evitar throttling do Chrome sob Xvfb

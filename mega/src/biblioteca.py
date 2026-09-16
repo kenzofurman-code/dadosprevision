@@ -153,17 +153,15 @@ class Operador:
                     pass
 
             # Se o splash "Mega ERP Launcher" estiver na tela (card central com barra roxa):
-            # No Linux sob Xvfb ele pode ficar aguardando ativacao de foco para disparar
-            # o executavel principal. Enviamos clique no centro do card e no botao da barra.
+            # No Linux sob Xvfb ele dura apenas ~5-10s enquanto o Auth Launcher valida o token.
+            # Apenas garantimos foco no canvas se demorar mais que o normal.
             if self.v.achar_texto("Mega ERP Launcher", img=img):
                 segundos_com_launcher += intervalo
-                if segundos_com_launcher >= 12:
-                    self.log("   'Mega ERP Launcher' ativo ha %ds; ativando foco da janela" % segundos_com_launcher)
+                if segundos_com_launcher >= 20:
+                    self.log("   'Mega ERP Launcher' ativo ha %ds; garantindo foco" % segundos_com_launcher)
                     try:
                         self.pagina.bring_to_front()
                         self.pagina.mouse.click(800, 450)
-                        time.sleep(1)
-                        self.pagina.mouse.click(100, 880)
                     except Exception:
                         pass
                     segundos_com_launcher = 0
