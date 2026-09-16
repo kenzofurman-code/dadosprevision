@@ -32,13 +32,17 @@ def _log(msg):
 
 
 def rodar_relatorios_da_noite(cfg, conectar_fn, abrir_sessao_fn, data_iso,
-                              tempo_max_horas=TEMPO_MAX_HORAS_PADRAO):
+                              tempo_max_horas=TEMPO_MAX_HORAS_PADRAO,
+                              obras=None, relatorios_ids=None):
     pasta = RAIZ / "dados" / "bruto" / data_iso
     pasta.mkdir(parents=True, exist_ok=True)
     falhas_dir = RAIZ / "dados" / "falhas"
     falhas_dir.mkdir(parents=True, exist_ok=True)
 
-    obras = cfgmod.obras(cfg)
+    if obras is None:
+        obras = cfgmod.obras(cfg)
+    if relatorios_ids is None:
+        relatorios_ids = ORDEM_RELATORIOS
     conn = conectar_fn()
     banco.aplicar_esquema(conn)
 
@@ -68,12 +72,12 @@ def rodar_relatorios_da_noite(cfg, conectar_fn, abrir_sessao_fn, data_iso,
         # comentario em executar_por_obra() sobre o incidente de 2026-09-14.
         tempo_limite = time.time() + tempo_max_horas * 3600
 
-        relatorios = [cfgmod.relatorio(cfg, rel_id) for rel_id in ORDEM_RELATORIOS]
+        relatorios = [cfgmod.relatorio(cfg, rel_id) for rel_id in relatorios_ids]
         resultados_execucao = executar_por_obra(
             op, v, s, relatorios, obras, data_iso, pasta, falhas_dir, _log,
             tempo_limite=tempo_limite)
 
-        for rel_id in ORDEM_RELATORIOS:
+        for rel_id in relatorios_ids:
             resultado_execucao = resultados_execucao[rel_id]
             # Uma carga que explode no meio deixaria a transacao aberta e
             # meio relatorio gravado; reverter e seguir para o proximo
@@ -115,10 +119,29 @@ def rodar_relatorios_da_noite(cfg, conectar_fn, abrir_sessao_fn, data_iso,
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Executa os relatorios noturnos do Mega ERP.")
+    parser.add_argument("--obras", help="Codigos das obras separados por virgula (ex: 410,430). Padrao: todas.", default="")
+    parser.add_argument("--relatorios", help="IDs dos relatorios separados por virgula. Padrao: todos.", default="")
+    parser.add_argument("--data", default=dt.date.today().isoformat(), help="Data de referencia ISO.")
+    args = parser.parse_args()
+
     cfg = cfgmod.carregar()
-    data_iso = dt.date.today().isoformat()
+    data_iso = args.data
+
+    obras = cfgmod.obras(cfg)
+    if args.obras:
+        querem = [c.strip() for c in args.obras.split(",") if c.strip()]
+        obras = [o for o in obras if o["codigo"] in querem]
+
+    rel_ids = ORDEM_RELATORIOS
+    if args.relatorios:
+        querem_rels = [r.strip() for r in args.relatorios.split(",") if r.strip()]
+        rel_ids = [r for r in ORDEM_RELATORIOS if r in querem_rels]
+
     resultados = rodar_relatorios_da_noite(
-        cfg, conectar_fn=banco.conectar, abrir_sessao_fn=Sessao, data_iso=data_iso)
+        cfg, conectar_fn=banco.conectar, abrir_sessao_fn=Sessao, data_iso=data_iso,
+        obras=obras, relatorios_ids=rel_ids)
     for rel_id, r in resultados.items():
         exec_r = r["execucao"]
         _log("%s: ok=%d sem_movimento=%d falhou=%d" % (
