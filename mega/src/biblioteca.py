@@ -402,14 +402,16 @@ class Operador:
             if tentativa == 3:
                 raise FalhaDeEtapa("o painel de busca de telas nao abriu")
 
-        # 2. Clicar explicitamente dentro do campo de busca (x=130, y=227) para garantir foco.
-        # No modo "por obra", varios relatorios abrem buscas em sequencia sem trocar de empresa,
-        # e o foco ficava na grade/grid do relatorio anterior.
-        self.pagina.mouse.click(130, 227)
+        # 2. Clicar explicitamente dentro do campo de busca (x=140, y=203) para garantir foco.
+        # Medido a 1600x900: o campo de busca branco fica entre x=80..219, y=190..217 (centro y=203).
+        # O botao de limpar (X) fica a direita, em x=210, y=203.
+        self.pagina.mouse.click(140, 203)
         time.sleep(0.5)
-        # Clica no botao 'x' limpar (x=208, y=227) caso haja texto residual
-        self.pagina.mouse.click(208, 227)
+        # Clica no botao 'x' limpar (x=210, y=203) caso haja texto residual
+        self.pagina.mouse.click(210, 203)
         time.sleep(0.5)
+        self.pagina.mouse.click(140, 203)
+        time.sleep(0.3)
         # Selecionar tudo e apagar para garantir campo 100% limpo
         self.tecla("Control+a")
         self.tecla("Delete")
@@ -423,12 +425,18 @@ class Operador:
         # uma em Materiais|Suprimentos|Visoes, outra em Construcao|...|Orcamentos.
         clicou = False
         if palavra_modulo:
-            caixa = self.v.achar_texto(palavra_modulo, img=img)
-            if caixa:
-                # o titulo do resultado fica na linha imediatamente acima do modulo
-                self.pagina.mouse.click(caixa.x + 30, max(0, caixa.y - 18))
-                clicou = True
-            else:
+            # Aguarda ate 10s caso a busca do ERP demore para renderizar os resultados
+            limite_busca = time.time() + 10
+            while time.time() < limite_busca:
+                caixa = self.v.achar_texto(palavra_modulo, img=img)
+                if caixa:
+                    # o titulo do resultado fica na linha imediatamente acima do modulo
+                    self.pagina.mouse.click(caixa.x + 30, max(0, caixa.y - 18))
+                    clicou = True
+                    break
+                time.sleep(1.5)
+                img = self.tela()
+            if not clicou:
                 self.log("   aviso: modulo %r nao localizado pelo OCR; tentando fallback" % palavra_modulo)
 
         if not clicou:
@@ -440,9 +448,9 @@ class Operador:
                 clicou = True
 
         if not clicou:
-            # Fallback 2: clicar no primeiro card de resultados da lista (~ x=130, y=315)
-            self.log("   aviso: clicando no primeiro resultado da busca por posicao padrao")
-            self.pagina.mouse.click(130, 315)
+            # Fallback 2: clicar no primeiro card de resultados da lista (~ x=140, y=310)
+            self.log("   aviso: clicando no primeiro resultado da busca por posicao padrao (140, 310)")
+            self.pagina.mouse.click(140, 310)
 
         try:
             self.esperar_texto(ancora_titulo, timeout=timeout)
