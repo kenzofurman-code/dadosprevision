@@ -194,6 +194,7 @@ def _rodar_relatorio_na_obra_ativa(op, v, rel, obra, data_iso, pasta):
     caminhos = []
     for exp in rel["exportacoes"]:
         if exp.get("aba"):
+            op.log("   clicando na aba: %s" % exp["aba"])
             op.clicar_texto(exp["aba"])
             time.sleep(8)
         destino = pasta / cfgmod.nome_arquivo(exp, obra["codigo"], data_iso)
@@ -201,6 +202,8 @@ def _rodar_relatorio_na_obra_ativa(op, v, rel, obra, data_iso, pasta):
         # so funciona em telas com cabecalho de UMA linha. Telas com cabecalho
         # de duas linhas (ex.: Analise de Saldo) precisam de um y maior, senao
         # o clique cai no cabecalho e abre o menu de coluna, nao o de exportar.
+        op.log("   exportando grid para %s (x=%s, y=%s)..."
+               % (destino.name, exp.get("x", 700), exp.get("y", 300)))
         caminhos.append(op.exportar_grid(
             exp["caminho_menu"], destino,
             x=exp.get("x", 700), y=exp.get("y", 300)))

@@ -511,50 +511,31 @@ class Operador:
            dispara um download que interceptamos e gravamos com o nome que
            quisermos. O passo perigoso deixa de existir.
         """
+        self.log("      clique direito em (%d, %d)" % (x, y))
         self.pagina.mouse.click(x, y, button="right")
-        # 5s (era 2s): o menu pode ainda estar renderizando no gateway remoto
-        # quando o OCR le a tela. Um frame "no meio do caminho" faz o OCR achar
-        # uma posicao de clique errada -- caindo numa celula clicavel da grade
-        # por baixo em vez do item do menu. BUG REAL: abriu um popup de detalhe
-        # do item (obra 340, relatorio visualizacao_itens, 2026-09-11).
         time.sleep(5)
-        # O cutucao (ver Visao.cutucar) cutuca por padrao em (800,450) para forcar
-        # o gateway a repintar antes do OCR. Esse ponto fixo pode cair fora do
-        # menu recem-aberto (ou bem na borda dele) e o simples HOVER ali fecha o
-        # menu antes da leitura -- mesma causa ja documentada para submenus, so
-        # que aqui no proprio menu de primeiro nivel. Ancorar perto do clique
-        # (que e onde o menu sempre abre) mantem o cutucao dentro do menu.
-        # BUG REAL, confirmado ao vivo contra a obra 340 (2026-09-10): o menu
-        # abria normalmente (visivel no screenshot), mas o OCR nunca o achava.
         ponto_menu = (x + 15, y + 15)
         img = self.tela(ponto=ponto_menu)
         if not self.v.achar_texto(caminho_menu[0], img=img):
+            self.log("      item %r nao visivel no 1o clique; repetindo clique direito" % caminho_menu[0])
             self.pagina.mouse.click(x, y, button="right")   # 1o clique so deu foco
             time.sleep(5)
 
         pai = ponto_menu
         for i, item in enumerate(caminho_menu):
+            self.log("      aguardando item do menu: %r" % item)
             caixa = self.esperar_texto(item, timeout=25, ponto_cutucao=pai)
-            # CLICAR NO INICIO DO TEXTO, NAO NO CENTRO DA CAIXA.
-            # O menu de contexto fica sobreposto ao grid, e o OCR agrupa numa
-            # mesma linha o texto do menu e o texto do grid que aparece a direita.
-            # A caixa de "Exportar para Excel 2007 (xlsx)" chegou a 564px de
-            # largura, e o centro caia sobre o GRID, fora do menu. Era por isso
-            # que 410, 630 e 650 falhavam sempre e as demais passavam: depende do
-            # que ha no grid naquela altura, nao do tamanho da obra.
             cx = caixa.x + min(45, max(15, caixa.largura // 4))
             cy = caixa.y + caixa.altura // 2
             if i < len(caminho_menu) - 1:
+                self.log("      movendo mouse para submenu: %r em (%d, %d)" % (item, cx, cy))
                 self.pagina.mouse.move(cx, cy)               # abre o submenu
                 time.sleep(5)
                 pai = (cx, cy)      # daqui em diante, cutucar sem sair do item
             else:
+                self.log("      clicando em %r (%d, %d) e aguardando janela 'Salvar como'..." % (item, cx, cy))
                 with self.pagina.expect_download(timeout=timeout_download * 1000) as info:
                     self.pagina.mouse.click(cx, cy)
-                    # ESPERAR a janela "Salvar como" aparecer, nao dormir um tempo
-                    # fixo: em obras com mais dados ela demora mais, e um Enter
-                    # disparado cedo se perde — foi assim que a obra 410 ficou
-                    # 300s esperando um download que nunca comecou.
                     apareceu = False
                     limite = time.time() + 75    # com retentativa, nao vale esperar mais
                     while time.time() < limite:
@@ -566,15 +547,17 @@ class Operador:
                         time.sleep(3)
                     if not apareceu:
                         raise FalhaDeEtapa("a janela 'Salvar como' nao apareceu")
+                    self.log("      janela 'Salvar como' confirmada; enviando Enter")
                     time.sleep(1.5)
                     self.tecla("Enter")                      # confirma "Salvar como"
+                    self.log("      aguardando recepcao do arquivo baixado...")
                     time.sleep(2)
                 baixado = info.value
                 destino = Path(destino)
                 destino.parent.mkdir(parents=True, exist_ok=True)
                 baixado.save_as(str(destino))
                 self._conferir_formato(destino)
-                self.log("   arquivo salvo: %s" % destino.name)
+                self.log("   arquivo salvo: %s (%d bytes)" % (destino.name, destino.stat().st_size))
                 return destino
         raise FalhaDeEtapa("caminho de menu vazio")
 
