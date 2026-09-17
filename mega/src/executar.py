@@ -34,6 +34,27 @@ def log(msg):
     print("%s  %s" % (agora(), msg), flush=True)
 
 
+def reconectar_sessao(s, log_fn=log):
+    """Reinicia o navegador e refaz o login completo no portal Senior/Mega.
+
+    Usado quando a sessao web do ERP expira (ex.: limite de 2h do gateway HTML5).
+    """
+    log_fn("   reconectando: reiniciando sessao do navegador e refazendo login")
+    try:
+        s.fechar()
+    except Exception:
+        pass
+    s.abrir()
+    login_status = s.entrar(forcar=True)
+    log_fn("   login: %s" % login_status)
+    s.pagina.wait_for_timeout(5000)
+    erp = s.abrir_erp()
+    v = Visao(erp, binario_tesseract=TESSERACT)
+    op = Operador(erp, visao=v, log=log_fn)
+    op.esperar_erp_pronto(timeout=300)
+    return op, v
+
+
 def preparar_itens_solicitados(op, rel, obra):
     """Passos especificos da tela de Itens Solicitados."""
     op.clicar_texto("Mostrar apenas Itens Solicitados")
@@ -231,12 +252,9 @@ def executar_relatorio(op, v, s, rel, obras, data_iso, pasta, falhas_dir, log):
         log("")
         log("[%d/%d] obra %s - %s" % (i, len(obras), obra["codigo"], obra["nome"]))
         try:
-            if op is not None and op.pagina.is_closed():
+            if op is None or (op is not None and op.pagina.is_closed()):
                 log("   sessao caida; reconectando")
-                erp = s.abrir_erp()
-                v = Visao(erp, binario_tesseract=TESSERACT)
-                op = Operador(erp, visao=v, log=log)
-                op.esperar_erp_pronto(timeout=300)
+                op, v = reconectar_sessao(s, log)
                 log("   reconectado")
             estado, caminhos = uma_obra(op, v, rel, obra, data_iso, pasta)
             if estado == "sem_movimento":
@@ -249,12 +267,9 @@ def executar_relatorio(op, v, s, rel, obras, data_iso, pasta, falhas_dir, log):
         except Exception as e:
             log("   FALHOU: %s" % str(e).splitlines()[0][:110])
             resultado["falhou"].append({"obra": obra["codigo"], "motivo": str(e)})
-            if op is not None and "closed" in str(e).lower():
+            if "closed" in str(e).lower() or (op is not None and op.pagina.is_closed()):
                 try:
-                    erp = s.abrir_erp()
-                    v = Visao(erp, binario_tesseract=TESSERACT)
-                    op = Operador(erp, visao=v, log=log)
-                    op.esperar_erp_pronto(timeout=300)
+                    op, v = reconectar_sessao(s, log)
                     log("   reconectado apos queda")
                 except Exception as e2:
                     log("   reconexao falhou: %s" % str(e2).splitlines()[0][:80])
@@ -295,26 +310,35 @@ def executar_por_obra(op, v, s, relatorios, obras, data_iso, pasta, falhas_dir, 
         log("")
         log("[%d/%d] obra %s - %s" % (i, len(obras), obra["codigo"], obra["nome"]))
         try:
-            if op is not None and op.pagina.is_closed():
+            if op is None or (op is not None and op.pagina.is_closed()):
                 log("   sessao caida; reconectando")
-                erp = s.abrir_erp()
-                v = Visao(erp, binario_tesseract=TESSERACT)
-                op = Operador(erp, visao=v, log=log)
-                op.esperar_erp_pronto(timeout=300)
+                op, v = reconectar_sessao(s, log)
                 log("   reconectado")
             op.trocar_empresa(obra["codigo"], obra["nome"])
         except Exception as e:
             log("   FALHOU ao trocar de empresa: %s" % str(e).splitlines()[0][:110])
-            for rel in relatorios:
-                resultados[rel["id"]]["falhou"].append(
-                    {"obra": obra["codigo"], "motivo": "troca de empresa: %s" % str(e)})
-            if op is not None:
+            if "closed" in str(e).lower() or (op is not None and op.pagina.is_closed()):
                 try:
-                    op.pagina.screenshot(path=str(falhas_dir / (
-                        "%s_%s_trocar.png" % (data_iso, obra["codigo"]))))
-                except Exception:
-                    pass
-            continue
+                    op, v = reconectar_sessao(s, log)
+                    log("   reconectado apos queda na troca de empresa")
+                    try:
+                        op.trocar_empresa(obra["codigo"], obra["nome"])
+                        e = None
+                    except Exception as e_retry:
+                        e = e_retry
+                except Exception as e_rec:
+                    log("   reconexao falhou: %s" % str(e_rec).splitlines()[0][:80])
+            if e is not None:
+                for rel in relatorios:
+                    resultados[rel["id"]]["falhou"].append(
+                        {"obra": obra["codigo"], "motivo": "troca de empresa: %s" % str(e)})
+                if op is not None:
+                    try:
+                        op.pagina.screenshot(path=str(falhas_dir / (
+                            "%s_%s_trocar.png" % (data_iso, obra["codigo"]))))
+                    except Exception:
+                        pass
+                continue
 
         for rel in relatorios:
             try:
@@ -332,13 +356,14 @@ def executar_por_obra(op, v, s, relatorios, obras, data_iso, pasta, falhas_dir, 
                 log("   [%s] FALHOU: %s" % (rel["id"], str(e).splitlines()[0][:110]))
                 resultados[rel["id"]]["falhou"].append(
                     {"obra": obra["codigo"], "motivo": str(e)})
-                if op is not None and "closed" in str(e).lower():
+                if "closed" in str(e).lower() or (op is not None and op.pagina.is_closed()):
                     try:
-                        erp = s.abrir_erp()
-                        v = Visao(erp, binario_tesseract=TESSERACT)
-                        op = Operador(erp, visao=v, log=log)
-                        op.esperar_erp_pronto(timeout=300)
+                        op, v = reconectar_sessao(s, log)
                         log("   reconectado apos queda")
+                        try:
+                            op.trocar_empresa(obra["codigo"], obra["nome"])
+                        except Exception:
+                            pass
                     except Exception as e2:
                         log("   reconexao falhou: %s" % str(e2).splitlines()[0][:80])
                 if op is not None:

@@ -174,20 +174,19 @@ def carregar_relatorio(cfg, conn, rel_id, data_iso, pasta, resultado_execucao,
     rel = cfgmod.relatorio(cfg, rel_id)
     pasta = Path(pasta)
 
-    if resultado_execucao.get("falhou"):
-        motivo = "obras com falha registrada: %s" % ",".join(
-            f["obra"] if isinstance(f, dict) else f for f in resultado_execucao["falhou"])
-        # mega.carga e o UNICO registro de falha do projeto (nao ha notificacao
-        # ativa): o bloqueio precisa ficar gravado, nao so devolvido em memoria.
+    obras_a_carregar = resultado_execucao.get("ok", []) + resultado_execucao.get(
+        "sem_movimento", [])
+
+    # Se NENHUMA obra teve sucesso nem sem_movimento (todas falharam), bloqueia a carga
+    if not obras_a_carregar:
+        motivo = "todas as obras falharam: %s" % ",".join(
+            f["obra"] if isinstance(f, dict) else f for f in resultado_execucao.get("falhou", []))
         for exp in rel["exportacoes"]:
             banco.registrar_carga(conn, rel_id, exp["arquivo"], data_iso,
                                   resultado_execucao, bloqueado=True, motivo=motivo,
                                   marcador_parametro=marcador_parametro)
         return [{"arquivo": exp["arquivo"], "estado": "BLOQUEADO", "obras": 0,
                 "motivo": motivo} for exp in rel["exportacoes"]]
-
-    obras_a_carregar = resultado_execucao.get("ok", []) + resultado_execucao.get(
-        "sem_movimento", [])
 
     relatos = []
     for exp in rel["exportacoes"]:
@@ -246,26 +245,36 @@ def carregar_relatorio(cfg, conn, rel_id, data_iso, pasta, resultado_execucao,
             if arquivo_base == "Visualizacao_Itens":
                 _atualizar_trilha_situacao(conn, obra, df, data_iso, marcador_parametro)
 
+        motivo_parcial = None
+        if resultado_execucao.get("falhou"):
+            motivo_parcial = "carga parcial; obras com falha: %s" % ",".join(
+                f["obra"] if isinstance(f, dict) else f for f in resultado_execucao["falhou"])
+
         banco.registrar_carga(conn, rel_id, arquivo_base, data_iso, resultado_execucao,
+                              bloqueado=False, motivo=motivo_parcial,
                               marcador_parametro=marcador_parametro)
         relatos.append({"arquivo": arquivo_base, "estado": "OK", "obras": len(por_obra),
-                        "motivo": None})
+                        "obras_carregadas": list(por_obra.keys()),
+                        "motivo": motivo_parcial})
 
     return relatos
 
 
 def purgar_arquivos(pasta, relatos, data_iso):
-    """Apaga os .xlsx do dia cuja carga NAO ficou BLOQUEADO.
-
-    BLOQUEADO preserva o arquivo bruto como evidencia para investigacao manual
-    — mesma logica conservadora de consolidar.py antes de sobrescrever.
-    """
+    """Apaga os .xlsx das obras cuja carga foi efetuada com sucesso (estado OK)."""
     pasta = Path(pasta)
     apagados = []
     for relato in relatos:
-        if relato["estado"] == "BLOQUEADO":
+        if relato.get("estado") != "OK":
             continue
-        for caminho in pasta.glob("%s_*_%s.xlsx" % (relato["arquivo"], data_iso)):
-            caminho.unlink()
-            apagados.append(caminho)
+        obras_carregadas = relato.get("obras_carregadas")
+        if obras_carregadas is not None:
+            for obra in obras_carregadas:
+                for caminho in pasta.glob("%s_%s_%s.xlsx" % (relato["arquivo"], obra, data_iso)):
+                    caminho.unlink()
+                    apagados.append(caminho)
+        else:
+            for caminho in pasta.glob("%s_*_%s.xlsx" % (relato["arquivo"], data_iso)):
+                caminho.unlink()
+                apagados.append(caminho)
     return apagados
