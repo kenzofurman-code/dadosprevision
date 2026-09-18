@@ -39,6 +39,9 @@ def _razao(texto, alvo_normalizado):
         return 1.0
     if abs(len(t) - len(alvo_normalizado)) > 3:
         return 0.0
+    # Evita falso positivo entre "Exportar para Excel (xls)" e "... 2007 (xlsx)"
+    if "2007" in alvo_normalizado and "2007" not in t and "xlsx" not in t:
+        return 0.0
     return SequenceMatcher(None, t, alvo_normalizado).ratio()
 
 
@@ -53,6 +56,8 @@ def _parecido(texto, alvo_normalizado, minimo):
     if t == alvo_normalizado:
         return True
     if abs(len(t) - len(alvo_normalizado)) > 3:
+        return False
+    if "2007" in alvo_normalizado and "2007" not in t and "xlsx" not in t:
         return False
     return SequenceMatcher(None, t, alvo_normalizado).ratio() >= minimo
 
