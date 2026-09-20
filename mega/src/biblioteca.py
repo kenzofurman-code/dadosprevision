@@ -445,18 +445,7 @@ class Operador:
                           if len(p) >= 4 and _remover_acentos(p) not in ("follow-up", "follow", "visao", "visoes")]
 
         while time.time() < limite_busca:
-            # 1a prioridade: desambiguacao por modulo (ex: 'Compras') quando informado explicitamente
-            if palavra_modulo:
-                caixa = self.v.achar_texto(palavra_modulo, img=img, regiao=REGIAO_GAVETA)
-                if caixa:
-                    self.log("   card localizado pelo modulo %r em y=%d" % (palavra_modulo, caixa.y))
-                    # o titulo do resultado fica na linha imediatamente acima do modulo (~18px acima).
-                    # O clique em x=110 acerta no centro do titulo e nunca na estrela de favoritos a direita.
-                    self.pagina.mouse.click(110, max(0, caixa.y - 18))
-                    clicou = True
-                    break
-
-            # 2a prioridade: se a busca tem palavra especifica (ex: 'pedidos'), procurar por ela no titulo
+            # 1a prioridade: se a busca tem palavra discriminatoria (ex: 'pedidos'), procurar diretamente por ela no titulo
             for termo in palavras_busca:
                 if termo not in ("solicita", "solicitacao", "solicitacoes"):
                     caixa = self.v.achar_texto(termo, img=img, regiao=REGIAO_GAVETA)
@@ -467,6 +456,17 @@ class Operador:
                         break
             if clicou:
                 break
+
+            # 2a prioridade: desambiguacao por modulo (ex: 'Compras') quando informado explicitamente
+            if palavra_modulo:
+                caixa = self.v.achar_texto(palavra_modulo, img=img, regiao=REGIAO_GAVETA)
+                if caixa:
+                    self.log("   card localizado pelo modulo %r em y=%d" % (palavra_modulo, caixa.y))
+                    # o titulo do resultado fica na linha imediatamente acima do modulo (~18px acima).
+                    # O clique em x=110 acerta no centro do titulo e nunca na estrela de favoritos a direita.
+                    self.pagina.mouse.click(110, max(0, caixa.y - 18))
+                    clicou = True
+                    break
 
             time.sleep(1.5)
             img = self.tela()

@@ -205,17 +205,24 @@ def rodar_retry(cfg, conectar_fn=banco.conectar, abrir_sessao_fn=Sessao, data_is
             _log("Processando obra %s (%s) - relatorios: %s" % (cod_obra, obra["nome"], rels_ids))
 
             # Trocar de empresa
+            e_troca_final = None
             try:
                 op.trocar_empresa(obra["codigo"], obra["nome"])
             except Exception as e_troca:
                 _log("   falha ao trocar para empresa %s: %s" % (cod_obra, str(e_troca)[:80]))
+                e_troca_final = e_troca
                 if "closed" in str(e_troca).lower() or (op is not None and op.pagina.is_closed()):
                     try:
                         op, v = reconectar_sessao(s, _log)
                         op.trocar_empresa(obra["codigo"], obra["nome"])
+                        e_troca_final = None
                     except Exception as e_rec:
                         _log("   reconexao falhou: %s" % str(e_rec)[:80])
-                        continue
+                        e_troca_final = e_rec
+                if e_troca_final is not None:
+                    for rel_id in rels_ids:
+                        resultados.setdefault(cod_obra, {})[rel_id] = "FALHOU_TROCA"
+                    continue
 
             for rel_id in rels_ids:
                 if time.time() > tempo_limite:
