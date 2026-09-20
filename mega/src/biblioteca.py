@@ -315,7 +315,16 @@ class Operador:
         # falso negativo.
         TEXTOS_PAINEL_ABERTO = ("Trocar Senha do Usuario", "Sair",
                                 "Encerrar Sessão", "Desconectar", "Log Off")
+        ANCORAS_CRYSTAL = ("Relatório Principal", "Caminho do relatório", "Total de Páginas", "Fator de Zoom")
         for tentativa in (1, 2, 3):
+            # Se o visualizador do Crystal Reports ainda estiver na frente, fecha pelo botao OK em (1554, 850)
+            img_pre = self.tela()
+            if any(self.v.achar_texto(anc, img=img_pre) for anc in ANCORAS_CRYSTAL):
+                self.log("   visualizador Crystal Reports remanescente detectado; fechando em (1554, 850)...")
+                self.pagina.mouse.click(1554, 850)
+                time.sleep(2.0)
+                self.tecla("Escape", pausa=1.0)
+
             self.pagina.mouse.click(self.ICONE_PESSOA[0], self.ICONE_PESSOA[1])
             time.sleep(3.0)
             img = self.tela()
@@ -744,16 +753,23 @@ class Operador:
 
         # 3. Fechar visualizador do Crystal Reports
         time.sleep(2)
-        try:
-            caixa_ok = self.v.achar_texto("OK")
-            if caixa_ok:
-                self.pagina.mouse.click(caixa_ok.x + caixa_ok.largura // 2,
-                                        caixa_ok.y + caixa_ok.altura // 2)
-            else:
-                self.pagina.keyboard.press("Alt+F4")
-        except Exception:
-            pass
-        time.sleep(2)
+        self.log("      fechando visualizador do Crystal Reports...")
+        ANCORAS_CRYSTAL = ("Relatório Principal", "Caminho do relatório", "Total de Páginas", "Fator de Zoom")
+        # O botao OK de fechar fica no rodape inferior direito do visualizador:
+        # x in [1515, 1594], y in [838, 862], centro (1554, 850).
+        # Como e texto branco sobre azul vibrante, o OCR falha em ler confiavelmente.
+        # Clicamos diretamente na coordenada medida e verificamos se a janela fechou.
+        for tentativa in range(1, 4):
+            self.pagina.mouse.click(1554, 850)
+            time.sleep(2.5)
+            img_pos = self.tela()
+            if not any(self.v.achar_texto(anc, img=img_pos) for anc in ANCORAS_CRYSTAL):
+                self.log("      visualizador do Crystal Reports fechado com sucesso.")
+                break
+            self.log("      visualizador ainda presente (tentativa %d); enviando Escape..." % tentativa)
+            self.tecla("Escape", pausa=1.5)
+
+        time.sleep(1)
         return destino
 
     # ------------------------------------------------------------------ saida
