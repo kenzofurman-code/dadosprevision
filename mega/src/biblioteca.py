@@ -740,29 +740,22 @@ class Operador:
 
             # 2. Confirmar Salvar
             self.log("      confirmando salvamento do arquivo...")
-            caixa_salvar = self.v.achar_texto("Salvar")
-            caixa_cancelar = self.v.achar_texto("Cancelar")
-            if caixa_salvar and caixa_salvar.y > 350:
-                self.pagina.mouse.click(caixa_salvar.x + caixa_salvar.largura // 2,
-                                        caixa_salvar.y + caixa_salvar.altura // 2)
-            elif caixa_cancelar and caixa_cancelar.y > 350:
-                self.log("      'Salvar' ancorado a esquerda de 'Cancelar' em (%d, %d)"
-                         % (caixa_cancelar.x - 78, caixa_cancelar.y + caixa_cancelar.altura // 2))
-                self.pagina.mouse.click(caixa_cancelar.x - 78,
-                                        caixa_cancelar.y + caixa_cancelar.altura // 2)
-            else:
-                self.pagina.keyboard.press("Alt+s")
-                time.sleep(0.5)
-                self.tecla("Enter", pausa=1.0)
+            # Na janela 'Exportar Relatório', o botao Salvar fica centralizado em (530, 528).
+            # Clicamos diretamente nas coordenadas e enviamos Alt+S como acelerador nativo do Windows.
+            self.pagina.mouse.click(530, 528)
+            time.sleep(0.5)
+            self.pagina.keyboard.press("Alt+s")
+            time.sleep(0.5)
+            self.tecla("Enter", pausa=1.0)
+            time.sleep(2.0)
 
             # Se o diálogo ainda estiver visível, reenviar clique
-            time.sleep(2.0)
             img_chk = self.tela()
             if self.v.achar_texto("Exportar Relatório", img=img_chk):
-                caixa_c = self.v.achar_texto("Cancelar", img=img_chk)
-                if caixa_c and caixa_c.y > 350:
-                    self.pagina.mouse.click(caixa_c.x - 78, caixa_c.y + caixa_c.altura // 2)
-                    time.sleep(1.0)
+                self.log("      dialogo 'Exportar Relatório' ainda visivel; reenviando clique em (530, 528)...")
+                self.pagina.mouse.click(530, 528)
+                self.pagina.keyboard.press("Alt+s")
+                self.tecla("Enter", pausa=1.0)
 
             self.log("      aguardando recepcao do arquivo baixado...")
 
