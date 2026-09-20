@@ -13,6 +13,7 @@ import {
   ChevronRight,
   CheckCircle2,
   AlertCircle,
+  Layers,
 } from 'lucide-react'
 import './MegaView.css'
 
@@ -21,6 +22,7 @@ export type MegaTabKey =
   | 'visualizacao_itens'
   | 'analise_saldo'
   | 'itens_solicitados'
+  | 'solicitacoes_por_etapa'
   | 'cargas'
 
 export type SaldoSubTab = 'pedidos' | 'contratos' | 'realizado'
@@ -37,6 +39,7 @@ interface MegaSummary {
   totalSaldoContratos: number
   totalSaldoRealizado: number
   totalItensSolicitados: number
+  totalSolicitacoesEtapa?: number
   ultimaExtracao: string | null
 }
 
@@ -333,6 +336,22 @@ export function MegaView() {
             <th>Unidade</th>
           </tr>
         )
+      case 'solicitacoes_por_etapa':
+        return (
+          <tr>
+            <th>Obra</th>
+            <th>Data Extração</th>
+            <th>Cód. Solicitação</th>
+            <th>Seq</th>
+            <th>Código Etapa</th>
+            <th>Insumo</th>
+            <th>Descrição do Insumo</th>
+            <th>Projeto</th>
+            <th>Dt. Emissão</th>
+            <th>Dt. Necessidade</th>
+            <th>Situação</th>
+          </tr>
+        )
       case 'cargas':
         return (
           <tr>
@@ -461,6 +480,22 @@ export function MegaView() {
               <td>{record.unidade || '-'}</td>
             </tr>
           )
+        case 'solicitacoes_por_etapa':
+          return (
+            <tr key={key}>
+              <td><strong>{record.obra}</strong> {record.obra_nome ? <small>{record.obra_nome}</small> : null}</td>
+              <td>{formatDate(record.data_extracao)}</td>
+              <td><strong>{record.codigo_solicitacao}</strong></td>
+              <td>{record.sequencial_item}</td>
+              <td><span className="mega-code-badge">{record.codigo_etapa || '-'}</span></td>
+              <td>{record.numero_insumo || '-'}</td>
+              <td>{record.descricao_insumo || '-'}</td>
+              <td>{record.projeto || '-'}</td>
+              <td>{formatDate(record.data_de_emissao)}</td>
+              <td>{formatDate(record.data_de_necessidade)}</td>
+              <td>{renderBadge(record.situacao_do_item)}</td>
+            </tr>
+          )
         case 'cargas':
           return (
             <tr key={key}>
@@ -534,6 +569,17 @@ export function MegaView() {
         </div>
 
         <div className="mega-summary-card">
+          <div className="mega-summary-icon">
+            <Layers size={20} />
+          </div>
+          <div>
+            <h4>Por Etapa</h4>
+            <p>{integerFormatter.format(summary?.totalSolicitacoesEtapa ?? 0)}</p>
+            <small>Solicitações com etapa</small>
+          </div>
+        </div>
+
+        <div className="mega-summary-card">
           <div className="mega-summary-icon success">
             <CheckCircle2 size={20} />
           </div>
@@ -584,6 +630,18 @@ export function MegaView() {
           >
             <FileCheck2 size={15} />
             <span>Itens Solicitados</span>
+          </button>
+
+          <button
+            type="button"
+            className={`mega-tab-btn ${activeTab === 'solicitacoes_por_etapa' ? 'active' : ''}`}
+            onClick={() => handleTabChange('solicitacoes_por_etapa')}
+          >
+            <Layers size={15} />
+            <span>Solicitações por Etapa</span>
+            {summary && summary.totalSolicitacoesEtapa !== undefined && summary.totalSolicitacoesEtapa > 0 && (
+              <span className="mega-tab-badge">{integerFormatter.format(summary.totalSolicitacoesEtapa)}</span>
+            )}
           </button>
 
           <button
@@ -649,7 +707,7 @@ export function MegaView() {
             <Search size={14} style={{ color: 'var(--text-muted)' }} />
             <input
               type="text"
-              placeholder="Buscar fornecedor, pedido, item..."
+              placeholder="Buscar fornecedor, pedido, etapa, item..."
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value)

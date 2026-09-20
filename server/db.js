@@ -337,6 +337,8 @@ export async function getMegaObras() {
       UNION
       SELECT obra, obra_nome FROM mega.itens_solicitados WHERE obra IS NOT NULL
       UNION
+      SELECT obra, obra_nome FROM mega.solicitacoes_por_etapa WHERE obra IS NOT NULL
+      UNION
       SELECT obra, observacao as obra_nome FROM mega.obra_projeto WHERE obra IS NOT NULL
     ) sub
     ORDER BY obra ASC;
@@ -356,9 +358,10 @@ export async function getMegaSummary(obra = '') {
     query(`SELECT COUNT(*) as count FROM mega.analise_contratos_hist ${whereObra}`, params),
     query(`SELECT COUNT(*) as count FROM mega.analise_realizado ${whereObra}`, params),
     query(`SELECT COUNT(*) as count FROM mega.itens_solicitados ${whereObra}`, params),
+    query(`SELECT COUNT(*) as count FROM mega.solicitacoes_por_etapa ${whereObra}`, params),
     query(`SELECT MAX(data_extracao) as ultima_data FROM mega.carga WHERE bloqueado = FALSE`),
   ]
-  const [pedidos, visItens, saldoPedidos, saldoContratos, saldoRealizado, itensSolic, carga] =
+  const [pedidos, visItens, saldoPedidos, saldoContratos, saldoRealizado, itensSolic, solicitacoesEtapa, carga] =
     await Promise.all(queries)
 
   return {
@@ -368,6 +371,7 @@ export async function getMegaSummary(obra = '') {
     totalSaldoContratos: Number(saldoContratos.rows[0]?.count || 0),
     totalSaldoRealizado: Number(saldoRealizado.rows[0]?.count || 0),
     totalItensSolicitados: Number(itensSolic.rows[0]?.count || 0),
+    totalSolicitacoesEtapa: Number(solicitacoesEtapa.rows[0]?.count || 0),
     ultimaExtracao: carga.rows[0]?.ultima_data || null,
   }
 }
@@ -408,6 +412,19 @@ const MEGA_TABLE_MAP = {
     hasObra: true,
     orderBy: 'data_extracao DESC, codigo_solicitacao DESC, sequencial_item ASC',
     searchColumns: ['CAST(codigo_solicitacao AS TEXT)', 'CAST(numero_rm AS TEXT)', 'descricao_do_item', 'situacao_do_item'],
+  },
+  solicitacoes_por_etapa: {
+    table: 'mega.solicitacoes_por_etapa',
+    hasObra: true,
+    orderBy: 'data_extracao DESC, codigo_solicitacao DESC, sequencial_item ASC',
+    searchColumns: [
+      'CAST(codigo_solicitacao AS TEXT)',
+      'codigo_etapa',
+      'CAST(numero_insumo AS TEXT)',
+      'descricao_insumo',
+      'projeto',
+      'situacao_do_item',
+    ],
   },
   cargas: {
     table: 'mega.carga',

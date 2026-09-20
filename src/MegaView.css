@@ -330,6 +330,18 @@
   color: #475569;
 }
 
+.mega-code-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  background: var(--surface-bg-subtle, #f8fafc);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 4px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: #0369a1;
+}
+
 /* Paginação */
 .mega-pagination {
   display: flex;
