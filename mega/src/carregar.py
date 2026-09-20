@@ -268,6 +268,13 @@ def carregar_relatorio(cfg, conn, rel_id, data_iso, pasta, resultado_execucao,
             por_obra[obra] = _separar_raw_data(df_traduzido, tabela)
 
         if not por_obra:
+            if resultado_execucao.get("sem_movimento"):
+                banco.registrar_carga(conn, rel_id, arquivo_base, data_iso, resultado_execucao,
+                                      bloqueado=False, motivo="sem movimento",
+                                      marcador_parametro=marcador_parametro)
+                relatos.append({"arquivo": arquivo_base, "estado": "SEM_MOVIMENTO", "obras": 0,
+                                "motivo": "sem movimento"})
+                continue
             relatos.append({"arquivo": arquivo_base, "estado": "VAZIO", "obras": 0,
                             "motivo": "nenhum arquivo encontrado"})
             continue

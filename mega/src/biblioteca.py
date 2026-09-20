@@ -317,6 +317,8 @@ class Operador:
                                 "Encerrar Sessão", "Desconectar", "Log Off")
         ANCORAS_CRYSTAL = ("Relatório Principal", "Caminho do relatório", "Total de Páginas", "Fator de Zoom")
         for tentativa in (1, 2, 3):
+            # Envia Escape preventivo para fechar qualquer dialogo modal aberto (ex: Exportar Relatório pendente)
+            self.tecla("Escape", pausa=0.5)
             # Se o visualizador do Crystal Reports ainda estiver na frente, fecha pelo botao OK em (1554, 850)
             img_pre = self.tela()
             if any(self.v.achar_texto(anc, img=img_pre) for anc in ANCORAS_CRYSTAL):
@@ -739,11 +741,29 @@ class Operador:
             # 2. Confirmar Salvar
             self.log("      confirmando salvamento do arquivo...")
             caixa_salvar = self.v.achar_texto("Salvar")
-            if caixa_salvar:
+            caixa_cancelar = self.v.achar_texto("Cancelar")
+            if caixa_salvar and caixa_salvar.y > 350:
                 self.pagina.mouse.click(caixa_salvar.x + caixa_salvar.largura // 2,
                                         caixa_salvar.y + caixa_salvar.altura // 2)
+            elif caixa_cancelar and caixa_cancelar.y > 350:
+                self.log("      'Salvar' ancorado a esquerda de 'Cancelar' em (%d, %d)"
+                         % (caixa_cancelar.x - 78, caixa_cancelar.y + caixa_cancelar.altura // 2))
+                self.pagina.mouse.click(caixa_cancelar.x - 78,
+                                        caixa_cancelar.y + caixa_cancelar.altura // 2)
             else:
+                self.pagina.keyboard.press("Alt+s")
+                time.sleep(0.5)
                 self.tecla("Enter", pausa=1.0)
+
+            # Se o diálogo ainda estiver visível, reenviar clique
+            time.sleep(2.0)
+            img_chk = self.tela()
+            if self.v.achar_texto("Exportar Relatório", img=img_chk):
+                caixa_c = self.v.achar_texto("Cancelar", img=img_chk)
+                if caixa_c and caixa_c.y > 350:
+                    self.pagina.mouse.click(caixa_c.x - 78, caixa_c.y + caixa_c.altura // 2)
+                    time.sleep(1.0)
+
             self.log("      aguardando recepcao do arquivo baixado...")
 
         baixado = info.value

@@ -98,12 +98,18 @@ def identificar_pendencias(cfg, conn, data_iso, pasta=None, marcador_parametro="
             "FROM %scarga WHERE data_extracao = %s ORDER BY id ASC" % (prefixo, m), (data_iso,))
         for row in cur.fetchall():
             rel_id, ok, sem_mov, falhou, bloqueado = row
-            cargas_hoje[rel_id] = {
-                "ok": _para_set(ok),
-                "sem_movimento": _para_set(sem_mov),
-                "falhou": _para_set(falhou),
-                "bloqueado": bloqueado,
-            }
+            if rel_id not in cargas_hoje:
+                cargas_hoje[rel_id] = {
+                    "ok": set(),
+                    "sem_movimento": set(),
+                    "falhou": set(),
+                    "bloqueado": False,
+                }
+            cargas_hoje[rel_id]["ok"].update(_para_set(ok))
+            cargas_hoje[rel_id]["sem_movimento"].update(_para_set(sem_mov))
+            cargas_hoje[rel_id]["falhou"].update(_para_set(falhou))
+            cargas_hoje[rel_id]["falhou"] -= cargas_hoje[rel_id]["ok"]
+            cargas_hoje[rel_id]["falhou"] -= cargas_hoje[rel_id]["sem_movimento"]
     except Exception:
         pass
 
@@ -124,7 +130,9 @@ def identificar_pendencias(cfg, conn, data_iso, pasta=None, marcador_parametro="
                 info_carga = cargas_hoje.get(rel_id)
                 if not info_carga:
                     precisa_rodar = True
-                elif cod_obra in info_carga["falhou"] and cod_obra not in info_carga["ok"]:
+                elif cod_obra in info_carga["falhou"]:
+                    precisa_rodar = True
+                elif cod_obra not in info_carga["ok"] and cod_obra not in info_carga["sem_movimento"]:
                     precisa_rodar = True
 
             if not precisa_rodar:
@@ -283,10 +291,12 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Checagem e retry de relatorios do Mega ERP.")
     parser.add_argument("--data", default=dt.date.today().isoformat(), help="Data de referencia ISO.")
+    parser.add_argument("--tempo", type=int, default=int(os.environ.get("RETRY_TEMPO_MAX_MINUTOS", "60")),
+                        help="Tempo maximo em minutos.")
     args = parser.parse_args()
 
     cfg = cfgmod.carregar()
-    return rodar_retry(cfg, data_iso=args.data)
+    return rodar_retry(cfg, data_iso=args.data, tempo_max_minutos=args.tempo)
 
 
 if __name__ == "__main__":
