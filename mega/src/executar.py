@@ -193,8 +193,12 @@ def preparar_solicitacoes_por_etapa(op, rel, obra):
     """Solicitações por Etapa: seleciona o relatório na lista, clica em Executar,
     preenche a data final de emissão para hoje, e clica em Confirmar."""
     op.log("   selecionando 'SOLICITAÇÕES POR ETAPA'...")
-    op.clicar_texto("SOLICITAÇÕES POR ETAPA")
-    time.sleep(2)
+    caixa_item = op.clicar_texto("SOLICITAÇÕES POR ETAPA")
+    time.sleep(1)
+
+    # Duplo clique na linha selecionada (executa diretamente no Mega ERP)
+    op.pagina.mouse.dblclick(caixa_item.x + 50, caixa_item.y + caixa_item.altura // 2)
+    time.sleep(1)
 
     op.log("   clicando em Executar...")
     caixa_exec = op.v.achar_texto("Executar")
@@ -211,7 +215,7 @@ def preparar_solicitacoes_por_etapa(op, rel, obra):
         op.tecla("Enter")
 
     op.log("   aguardando janela de parâmetros...")
-    limite = time.time() + 60
+    limite = time.time() + 90
     caixa_solic = None
     while time.time() < limite:
         img = op.tela()
@@ -225,7 +229,11 @@ def preparar_solicitacoes_por_etapa(op, rel, obra):
         time.sleep(4)
 
     if not caixa_solic:
-        raise FalhaDeEtapa("a janela de parâmetros de 'Solicitações emitidas' nao apareceu em 60s")
+        try:
+            op.pagina.screenshot(path="dados/falhas/falha_parametros_solic.png")
+        except Exception:
+            pass
+        raise FalhaDeEtapa("a janela de parâmetros de 'Solicitações emitidas' nao apareceu em 90s")
     time.sleep(2)
 
     # Localizar o campo da data final após 'até' na mesma linha de 'Solicitações emitidas'
