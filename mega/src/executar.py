@@ -197,15 +197,35 @@ def preparar_solicitacoes_por_etapa(op, rel, obra):
     time.sleep(2)
 
     op.log("   clicando em Executar...")
-    try:
-        op.clicar_texto("Executar", timeout=5)
-    except FalhaDeEtapa:
-        op.log("   'Executar' ilegivel pelo OCR; ancorando em 'Visualizar'")
-        caixa_vis = op.esperar_texto("Visualizar", timeout=15)
+    caixa_exec = op.v.achar_texto("Executar")
+    caixa_vis = op.v.achar_texto("Visualizar")
+    if caixa_exec and caixa_exec.y > 750:
+        op.pagina.mouse.click(caixa_exec.x + caixa_exec.largura // 2,
+                              caixa_exec.y + caixa_exec.altura // 2)
+    elif caixa_vis and caixa_vis.y > 750:
         op.pagina.mouse.click(caixa_vis.x + 65, caixa_vis.y + caixa_vis.altura // 2)
+    else:
+        op.log("   'Executar'/'Visualizar' nao lidos pelo OCR; clicando no canto inferior direito em (1550, 855)...")
+        op.pagina.mouse.click(1550, 855)
+        time.sleep(0.5)
+        op.tecla("Enter")
 
     op.log("   aguardando janela de parâmetros...")
-    caixa_solic = op.esperar_texto("Solicitações emitidas", timeout=60)
+    limite = time.time() + 60
+    caixa_solic = None
+    while time.time() < limite:
+        img = op.tela()
+        caixa_solic = op.v.achar_texto("Solicitações emitidas", img=img)
+        if caixa_solic:
+            break
+        # Reenvia clique preventivo se demorar
+        op.pagina.mouse.click(1550, 855)
+        time.sleep(0.5)
+        op.tecla("Enter")
+        time.sleep(4)
+
+    if not caixa_solic:
+        raise FalhaDeEtapa("a janela de parâmetros de 'Solicitações emitidas' nao apareceu em 60s")
     time.sleep(2)
 
     # Localizar o campo da data final após 'até' na mesma linha de 'Solicitações emitidas'
