@@ -34,6 +34,7 @@ TABELA_POR_ARQUIVO = {
     "Itens_Solicitados": "itens_solicitados",
     "Visualizacao_Itens": "visualizacao_itens",
     "Pedidos_Compra": "pedidos_compra",
+    "Solicitacoes_Por_Etapa": "solicitacoes_por_etapa",
     "Analise_Pedidos": "analise_pedidos_hist",
     "Analise_Contratos": "analise_contratos_hist",
     "Analise_Realizado": "analise_realizado",
@@ -59,6 +60,11 @@ TABELA_COLUNAS = {
         "numero_do_pedido", "item_pedido", "situacao_do_pedido", "dt_emissao",
         "nome_fantasia", "descricao_do_item", "quantidade", "total_pedido_compra",
     ],
+    "solicitacoes_por_etapa": [
+        "codigo_solicitacao", "data_de_emissao", "projeto", "sequencial_item",
+        "codigo_etapa", "numero_insumo", "descricao_insumo", "data_de_necessidade",
+        "situacao_do_item",
+    ],
     "analise_realizado": [
         "documento", "data_documento", "ap", "fornecedor", "valor_apropriacao",
     ],
@@ -71,6 +77,50 @@ TABELA_COLUNAS = {
         "saldo_qtde_contrato", "valor_unitario", "total",
     ],
 }
+
+
+def _extrair_insumo(texto):
+    """Separa o numero_insumo e a descricao_insumo a partir do texto do Crystal Reports.
+    Ex: '7889 -  07889-CONSUMO DE ÁGUA E ESGOTO' -> (7889, 'CONSUMO DE ÁGUA E ESGOTO')."""
+    if not texto or not isinstance(texto, str):
+        return None, None
+    texto = texto.strip()
+    partes = texto.split(" - ", 1)
+    num_str = partes[0].strip()
+    try:
+        num = int(num_str)
+    except Exception:
+        num = None
+    desc = partes[1].strip() if len(partes) > 1 else texto
+    if "-" in desc:
+        desc = desc.split("-", 1)[1].strip()
+    return num, desc
+
+
+def _ler_crystal_solicitacoes_etapa(caminho):
+    """Le o .xls do Crystal Reports, descarta cabecalhos de impressao e linhas
+    em branco, e extrai as colunas de dados estruturadas."""
+    df_raw = pd.read_excel(caminho, header=None)
+    mask = df_raw[0].notna() & df_raw[0].apply(lambda x: isinstance(x, (int, float)))
+    dados = df_raw[mask].copy()
+    colunas_uteis = [0, 2, 4, 8, 10, 12, 14, 17]
+    dados = dados[colunas_uteis]
+    insumos = dados[12].apply(_extrair_insumo)
+    dados["numero_insumo"] = [i[0] for i in insumos]
+    dados["descricao_insumo"] = [i[1] for i in insumos]
+    renomeio = {
+        0: "codigo_solicitacao",
+        2: "data_de_emissao",
+        4: "projeto",
+        8: "sequencial_item",
+        10: "codigo_etapa",
+        14: "data_de_necessidade",
+        17: "situacao_do_item",
+    }
+    dados = dados.rename(columns=renomeio)
+    dados = dados.drop(columns=[12], errors="ignore")
+    return dados
+
 
 
 def _serializavel(valor):
@@ -203,8 +253,13 @@ def carregar_relatorio(cfg, conn, rel_id, data_iso, pasta, resultado_execucao,
         for obra in obras_a_carregar:
             caminho = pasta / ("%s_%s_%s.xlsx" % (arquivo_base, obra, data_iso))
             if not caminho.exists():
+                caminho = pasta / ("%s_%s_%s.xls" % (arquivo_base, obra, data_iso))
+            if not caminho.exists():
                 continue
-            df = ler_bruto(caminho, rel["leitura"])
+            if arquivo_base == "Solicitacoes_Por_Etapa":
+                df = _ler_crystal_solicitacoes_etapa(caminho)
+            else:
+                df = ler_bruto(caminho, rel["leitura"])
             df.insert(0, "obra", obra)
             df.insert(1, "obra_nome", cfgmod.obra(cfg, obra)["nome"])
             df.insert(2, "data_extracao", data_iso)
@@ -261,20 +316,23 @@ def carregar_relatorio(cfg, conn, rel_id, data_iso, pasta, resultado_execucao,
 
 
 def purgar_arquivos(pasta, relatos, data_iso):
-    """Apaga os .xlsx das obras cuja carga foi efetuada com sucesso (estado OK)."""
+    """Apaga os .xlsx e .xls das obras cuja carga foi efetuada com sucesso (estado OK)."""
     pasta = Path(pasta)
     apagados = []
     for relato in relatos:
         if relato.get("estado") != "OK":
             continue
         obras_carregadas = relato.get("obras_carregadas")
+        extensoes = ("xlsx", "xls")
         if obras_carregadas is not None:
             for obra in obras_carregadas:
-                for caminho in pasta.glob("%s_%s_%s.xlsx" % (relato["arquivo"], obra, data_iso)):
-                    caminho.unlink()
-                    apagados.append(caminho)
+                for ext in extensoes:
+                    for caminho in pasta.glob("%s_%s_%s.%s" % (relato["arquivo"], obra, data_iso, ext)):
+                        caminho.unlink(missing_ok=True)
+                        apagados.append(caminho)
         else:
-            for caminho in pasta.glob("%s_*_%s.xlsx" % (relato["arquivo"], data_iso)):
-                caminho.unlink()
-                apagados.append(caminho)
+            for ext in extensoes:
+                for caminho in pasta.glob("%s_*_%s.%s" % (relato["arquivo"], data_iso, ext)):
+                    caminho.unlink(missing_ok=True)
+                    apagados.append(caminho)
     return apagados

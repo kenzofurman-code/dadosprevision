@@ -100,6 +100,28 @@ CREATE TABLE IF NOT EXISTS mega.pedidos_compra (
 CREATE INDEX IF NOT EXISTS idx_mega_pedidos_compra_obra
   ON mega.pedidos_compra(obra);
 
+CREATE TABLE IF NOT EXISTS mega.solicitacoes_por_etapa (
+  id                  BIGSERIAL PRIMARY KEY,
+  obra                TEXT NOT NULL,
+  obra_nome           TEXT,
+  data_extracao       DATE NOT NULL,
+  codigo_solicitacao  BIGINT NOT NULL,
+  data_de_emissao     DATE,
+  projeto             TEXT,
+  sequencial_item     INTEGER NOT NULL,
+  codigo_etapa        TEXT,
+  numero_insumo       BIGINT,
+  descricao_insumo    TEXT,
+  data_de_necessidade DATE,
+  situacao_do_item    TEXT,
+  raw_data            JSONB DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS idx_mega_solicitacoes_etapa_obra
+  ON mega.solicitacoes_por_etapa(obra);
+CREATE INDEX IF NOT EXISTS idx_mega_solicitacoes_etapa_chave
+  ON mega.solicitacoes_por_etapa(obra, codigo_solicitacao, sequencial_item);
+
+
 CREATE TABLE IF NOT EXISTS mega.analise_realizado (
   id              BIGSERIAL PRIMARY KEY,   -- sintetico: nao ha chave natural limpa
   obra            TEXT NOT NULL,

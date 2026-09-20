@@ -189,11 +189,75 @@ def preparar_analise_saldo(op, rel, obra):
     time.sleep(30)
 
 
+def preparar_solicitacoes_por_etapa(op, rel, obra):
+    """Solicitações por Etapa: seleciona o relatório na lista, clica em Executar,
+    preenche a data final de emissão para hoje, e clica em Confirmar."""
+    op.log("   selecionando 'SOLICITAÇÕES POR ETAPA'...")
+    op.clicar_texto("SOLICITAÇÕES POR ETAPA")
+    time.sleep(2)
+
+    op.log("   clicando em Executar...")
+    try:
+        op.clicar_texto("Executar", timeout=5)
+    except FalhaDeEtapa:
+        op.log("   'Executar' ilegivel pelo OCR; ancorando em 'Visualizar'")
+        caixa_vis = op.esperar_texto("Visualizar", timeout=15)
+        op.pagina.mouse.click(caixa_vis.x + 65, caixa_vis.y + caixa_vis.altura // 2)
+
+    op.log("   aguardando janela de parâmetros...")
+    caixa_solic = op.esperar_texto("Solicitações emitidas", timeout=60)
+    time.sleep(2)
+
+    # Localizar o campo da data final após 'até' na mesma linha de 'Solicitações emitidas'
+    img = op.tela()
+    palavras_linha = [p for p in op.v.palavras_todas(img)
+                      if abs(p["y"] - caixa_solic.y) <= 18]
+    caixa_ate = None
+    for p in palavras_linha:
+        if p["texto"].lower() in ("ate", "até"):
+            caixa_ate = p
+            break
+
+    if caixa_ate:
+        campo_data_x = caixa_ate["x"] + caixa_ate.get("w", 25) + 65
+        campo_data_y = caixa_ate["y"] + caixa_ate.get("h", 16) // 2
+    else:
+        campo_data_x = caixa_solic.x + caixa_solic.largura + 225
+        campo_data_y = caixa_solic.y + caixa_solic.altura // 2
+
+    op.pagina.mouse.click(campo_data_x, campo_data_y)
+    time.sleep(1)
+
+    op.tecla("End")
+    for _ in range(15):
+        op.tecla("Backspace", pausa=0.04)
+
+    hoje_br = dt.date.today().strftime("%d/%m/%Y")
+    op.log("   digitando data final: %s" % hoje_br)
+    op.digitar(hoje_br, pausa=0.1)
+    time.sleep(1)
+
+    op.log("   clicando em Confirmar...")
+    img = op.tela()
+    caixa_conf = op.v.achar_texto("Confirmar", img=img)
+    if caixa_conf:
+        op.pagina.mouse.click(caixa_conf.x + caixa_conf.largura // 2,
+                              caixa_conf.y + caixa_conf.altura // 2)
+    else:
+        caixa_canc = op.v.achar_texto("Cancelar", img=img)
+        if caixa_canc:
+            op.pagina.mouse.click(caixa_canc.x - 70,
+                                  caixa_canc.y + caixa_canc.altura // 2)
+        else:
+            op.tecla("Enter", pausa=1.0)
+
+
 PREPARADORES = {
     "analise_saldo_solicitacao": preparar_analise_saldo,
     "itens_solicitados": preparar_itens_solicitados,
     "pedidos_compra": preparar_pedidos_compra,
     "visualizacao_itens": preparar_visualizacao_itens,
+    "solicitacoes_por_etapa": preparar_solicitacoes_por_etapa,
 }
 
 
@@ -216,6 +280,15 @@ def _rodar_relatorio_na_obra_ativa(op, v, rel, obra, data_iso, pasta):
         op.conferir_filial(obra["codigo"])
 
     PREPARADORES[rel["id"]](op, rel, obra)
+
+    # Se for relatório via Crystal Reports, a exportação é feita pelo visualizador
+    caminhos = []
+    for exp in rel["exportacoes"]:
+        if exp.get("formato") == "crystal_xls":
+            destino = pasta / ("%s_%s_%s.xls" % (exp["arquivo"], obra["codigo"], data_iso))
+            caminhos.append(op.exportar_crystal_relatorio(destino))
+            return ("ok", caminhos)
+
     time.sleep(25)
 
     img = op.tela()
@@ -224,7 +297,6 @@ def _rodar_relatorio_na_obra_ativa(op, v, rel, obra, data_iso, pasta):
 
     # Uma tela pode produzir varias exportacoes (a Analise de Saldo gera tres,
     # uma por aba). Trocar de aba NAO exige reexecutar a consulta.
-    caminhos = []
     for exp in rel["exportacoes"]:
         if exp.get("aba"):
             op.log("   clicando na aba: %s" % exp["aba"])

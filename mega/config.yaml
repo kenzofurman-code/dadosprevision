@@ -210,3 +210,20 @@ relatorios:
     grid_vazio_e_valido: true
     # Menu de contexto identico ao de itens_solicitados (opcoes no primeiro
     # nivel). Dois dos quatro relatorios usam este formato.
+
+  - id: solicitacoes_por_etapa
+    descricao: "Solicitações por Etapa da Obra (Crystal Reports)"
+    leitura:
+      linha_cabecalho: 1
+      colunas: 8
+    busca_tela: "Solicitações"
+    palavra_modulo: "Compras"
+    ancora_titulo_tela: "RELATÓRIOS"
+    confere_filial: false
+    retencao: "atual"
+    chave_natural: ["codigo_solicitacao", "sequencial_item", "codigo_etapa"]
+    exportacoes:
+      - aba: null
+        formato: "crystal_xls"
+        arquivo: "Solicitacoes_Por_Etapa"
+

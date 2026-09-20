@@ -32,21 +32,20 @@ class Operador:
         return self.v.capturar(cutucar=cutucar, ponto=ponto)
 
     def esperar_texto(self, alvo, timeout=60, intervalo=3, ponto_cutucao=None):
-        """Espera um texto aparecer e devolve sua caixa. Ancora de progresso.
-
-        ponto_cutucao existe para menus: ao esperar um submenu, o cutucao precisa
-        acontecer DENTRO do item pai, senao o proprio movimento do mouse fecha o
-        submenu.
+        """Espera um texto (ou qualquer um de uma lista/tupla de textos) aparecer e devolve sua caixa.
+        Ancora de progresso.
         """
         limite = time.time() + timeout
+        alvos = [alvo] if isinstance(alvo, str) else list(alvo)
         while time.time() < limite:
             img = self.tela(ponto=ponto_cutucao)
             erro = self.v.dialogo_de_erro(img=img)
             if erro:
                 raise FalhaDeEtapa("dialogo de erro na tela: %r" % erro)
-            caixa = self.v.achar_texto(alvo, img=img)
-            if caixa:
-                return caixa
+            for a in alvos:
+                caixa = self.v.achar_texto(a, img=img)
+                if caixa:
+                    return caixa
             time.sleep(intervalo)
         raise FalhaDeEtapa("texto %r nao apareceu em %ds" % (alvo, timeout))
 
@@ -428,12 +427,27 @@ class Operador:
         clicou = False
         limite_busca = time.time() + 15
 
+        import unicodedata
+        def _remover_acentos(texto):
+            return unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('ASCII').lower()
+
         # Termos discriminatorios da busca (ex: 'pedidos' em 'follow-up de pedidos')
-        palavras_busca = [p for p in busca.lower().split()
-                          if len(p) >= 4 and p not in ("follow-up", "follow", "visao", "visoes")]
+        palavras_busca = [_remover_acentos(p) for p in busca.split()
+                          if len(p) >= 4 and _remover_acentos(p) not in ("follow-up", "follow", "visao", "visoes")]
 
         while time.time() < limite_busca:
-            # 1a prioridade: se a busca tem palavra especifica (ex: 'pedidos'), procurar por ela no titulo
+            # 1a prioridade: desambiguacao por modulo (ex: 'Compras') quando informado explicitamente
+            if palavra_modulo:
+                caixa = self.v.achar_texto(palavra_modulo, img=img, regiao=REGIAO_GAVETA)
+                if caixa:
+                    self.log("   card localizado pelo modulo %r em y=%d" % (palavra_modulo, caixa.y))
+                    # o titulo do resultado fica na linha imediatamente acima do modulo (~18px acima).
+                    # O clique em x=110 acerta no centro do titulo e nunca na estrela de favoritos a direita.
+                    self.pagina.mouse.click(110, max(0, caixa.y - 18))
+                    clicou = True
+                    break
+
+            # 2a prioridade: se a busca tem palavra especifica (ex: 'pedidos'), procurar por ela no titulo
             for termo in palavras_busca:
                 if termo not in ("solicita", "solicitacao", "solicitacoes"):
                     caixa = self.v.achar_texto(termo, img=img, regiao=REGIAO_GAVETA)
@@ -444,17 +458,6 @@ class Operador:
                         break
             if clicou:
                 break
-
-            # 2a prioridade: desambiguacao por modulo (necessario para telas homonimas como Follow-up de solicitacoes)
-            if palavra_modulo:
-                caixa = self.v.achar_texto(palavra_modulo, img=img, regiao=REGIAO_GAVETA)
-                if caixa:
-                    self.log("   card localizado pelo modulo %r em y=%d" % (palavra_modulo, caixa.y))
-                    # o titulo do resultado fica na linha imediatamente acima do modulo (~18px acima).
-                    # O clique em x=110 acerta no centro do titulo e nunca na estrela de favoritos a direita.
-                    self.pagina.mouse.click(110, max(0, caixa.y - 18))
-                    clicou = True
-                    break
 
             time.sleep(1.5)
             img = self.tela()
@@ -476,7 +479,7 @@ class Operador:
         except FalhaDeEtapa:
             raise FalhaDeEtapa("abri a busca %r mas a tela %r nao apareceu em %ds"
                                % (busca, ancora_titulo, tempo_espera))
-        self.log("   tela confirmada: %s" % ancora_titulo)
+        self.log("   tela confirmada: %s" % (ancora_titulo,))
 
     # -------------------------------------------------------------- exportacao
     def exportar_grid(self, caminho_menu, destino, x=700, y=300,
@@ -585,23 +588,173 @@ class Operador:
                    ".xls": bytes([208, 207, 17, 224])}
 
     def _conferir_formato(self, caminho):
-        """O conteudo tem que corresponder a extensao.
-
-        O menu tem "Exportar para Excel (xls)" e "Exportar para Excel 2007
-        (xlsx)" lado a lado, quase identicos. Um clique no item errado produz um
-        arquivo com o NOME certo, os DADOS certos e o FORMATO errado — e passa
-        despercebido ate alguem tentar abrir. Ja aconteceu uma vez.
-        """
+        """O conteudo tem que corresponder a extensao."""
+        caminho = Path(caminho)
         esperado = self.ASSINATURAS.get(caminho.suffix.lower())
         if not esperado:
             return
         with open(str(caminho), "rb") as arquivo:
-            inicio = arquivo.read(4)
-        if not inicio.startswith(esperado):
+            conteudo = arquivo.read()
+        if not conteudo.startswith(esperado):
             caminho.unlink(missing_ok=True)
             raise FalhaDeEtapa(
                 "o arquivo saiu no formato errado (assinatura %r, esperava %s) — "
-                "provavelmente o item errado do menu" % (inicio, caminho.suffix))
+                "provavelmente o item errado do menu" % (conteudo[:4], caminho.suffix))
+        if caminho.suffix.lower() == ".xls":
+            # Validar que e uma planilha Excel real contendo o stream Workbook (em UTF-16LE).
+            # Evita que um relatorio do Crystal Reports (.rpt) salvo com extensao .xls passe.
+            stream_workbook = "Workbook".encode("utf-16le")
+            if stream_workbook not in conteudo:
+                caminho.unlink(missing_ok=True)
+                raise FalhaDeEtapa(
+                    "o arquivo %s foi salvo como documento OLE2 mas nao contem o stream 'Workbook' "
+                    "(foi exportado como .rpt em vez de .xls)" % caminho.name)
+
+    def exportar_crystal_relatorio(self, destino, timeout_espera_geracao=300,
+                                   timeout_download=300):
+        """Exporta o relatorio aberto no Crystal Reports Viewer como Excel (.xls).
+
+        No visualizador do Crystal Reports:
+        1. Aguarda confirmacao de geracao (Aba 'Relatório Principal', 'Caminho do relatório',
+           ou 'No. Total de Páginas').
+        2. Clica no 1o icone da barra de ferramentas superior (Exportar).
+        3. Aguarda a janela 'Exportar Relatório'.
+        4. Seleciona o formato 'Microsoft Excel (97-2003) (*.xls)' no campo Tipo.
+        5. Confirma Salvar e captura o download disparado pelo gateway Web RDP.
+        6. Salva no arquivo de destino e valida a assinatura binaria OLE2 (.xls).
+        7. Fecha o visualizador do Crystal Reports clicando em 'OK'.
+        """
+        self.log("      aguardando geracao no Crystal Reports (ate %ds)..." % timeout_espera_geracao)
+        ANCORAS_CRYSTAL = ("Relatório Principal", "Principal", "Caminho do relatório",
+                           "Total de Páginas", "Fator de Zoom", "Requisição de Materiais")
+        limite = time.time() + timeout_espera_geracao
+        caixa_aba = None
+        ultimo_snap = 0
+        while time.time() < limite:
+            img = self.tela()
+            for ancora in ANCORAS_CRYSTAL:
+                caixa = self.v.achar_texto(ancora, img=img)
+                if caixa:
+                    caixa_aba = caixa
+                    self.log("      relatorio gerado! Ancora detectada: %r" % ancora)
+                    break
+            if caixa_aba:
+                break
+            if time.time() - ultimo_snap > 30:
+                ultimo_snap = time.time()
+                try:
+                    caminho_snap = Path("dados/falhas") / ("espera_crystal_%d.png" % int(time.time()))
+                    caminho_snap.parent.mkdir(parents=True, exist_ok=True)
+                    self.pagina.screenshot(path=str(caminho_snap))
+                    self.log("      ainda processando relatorio (screenshot: %s)..." % caminho_snap.name)
+                except Exception:
+                    pass
+            time.sleep(4)
+
+        if not caixa_aba:
+            try:
+                caminho_falha = Path("dados/falhas") / ("falha_crystal_%d.png" % int(time.time()))
+                caminho_falha.parent.mkdir(parents=True, exist_ok=True)
+                self.pagina.screenshot(path=str(caminho_falha))
+                self.log("      screenshot salvo: %s" % caminho_falha)
+            except Exception:
+                pass
+            raise FalhaDeEtapa("o visualizador do Crystal Reports nao abriu em %ds" % timeout_espera_geracao)
+
+        time.sleep(3)
+
+        # O icone de exportar fica na barra superior: x ~ 15, y ~ 45
+        x_icone = 15
+        y_icone = 45
+
+        destino = Path(destino)
+        destino.parent.mkdir(parents=True, exist_ok=True)
+
+        with self.pagina.expect_download(timeout=timeout_download * 1000) as info:
+            self.log("      clicando no icone de exportar em (%d, %d)..." % (x_icone, y_icone))
+            self.pagina.mouse.click(x_icone, y_icone)
+            time.sleep(3)
+
+            # Aguardar janela 'Exportar Relatório'
+            self.log("      aguardando dialogo 'Exportar Relatório'...")
+            self.esperar_texto(("Exportar Relatório", "Exportar", "Salvar", "Tipo", "Nome"), timeout=45)
+            time.sleep(2)
+
+            # 1. Ajustar o Tipo para Microsoft Excel (*.xls)
+            # O rotulo "Tipo:" fica na regiao inferior esquerda (x < 150, y > 350)
+            img = self.tela()
+            todas = self.v.palavras_todas(img)
+            candidatos_tipo = [p for p in todas
+                               if "tipo" in p["texto"].lower() and p["x"] < 150 and p["y"] > 350]
+            if candidatos_tipo:
+                c_tipo = candidatos_tipo[0]
+                x_combo = c_tipo["x"] + c_tipo.get("w", 30) + 120
+                y_combo = c_tipo["y"] + c_tipo.get("h", 16) // 2
+            else:
+                caixa_salv = self.v.achar_texto("Salvar", img=img)
+                if caixa_salv:
+                    x_combo = caixa_salv.x - 180
+                    y_combo = caixa_salv.y - 45
+                else:
+                    x_combo, y_combo = 200, 470
+
+            self.log("      clicando na combobox Tipo em (%d, %d)..." % (x_combo, y_combo))
+            self.pagina.mouse.click(x_combo, y_combo)
+            time.sleep(1.5)
+
+            # Ao clicar, a combobox abre. Tentar achar opcao Excel pelo OCR ou navegar pelo teclado
+            img_drop = self.tela()
+            caixa_excel = (self.v.achar_texto("Microsoft Excel", img=img_drop)
+                           or self.v.achar_texto("97-2003", img=img_drop)
+                           or self.v.achar_texto("Excel", img=img_drop))
+            if caixa_excel and caixa_excel.y > 200:
+                self.log("      opcao Excel localizada pelo OCR em (%d, %d); clicando"
+                         % (caixa_excel.x, caixa_excel.y))
+                self.pagina.mouse.click(caixa_excel.x + caixa_excel.largura // 2,
+                                        caixa_excel.y + caixa_excel.altura // 2)
+            else:
+                self.log("      opcao Excel nao lida direto; enviando 3x ArrowDown + Enter")
+                for _ in range(3):
+                    self.tecla("ArrowDown", pausa=0.25)
+                self.tecla("Enter", pausa=1.0)
+
+            time.sleep(1.5)
+
+            # Screenshot de confirmacao da selecao do tipo
+            try:
+                Path("dados/falhas").mkdir(parents=True, exist_ok=True)
+                self.pagina.screenshot(path="dados/falhas/pos_selecao_tipo.png")
+            except Exception:
+                pass
+
+            # 2. Confirmar Salvar
+            self.log("      confirmando salvamento do arquivo...")
+            caixa_salvar = self.v.achar_texto("Salvar")
+            if caixa_salvar:
+                self.pagina.mouse.click(caixa_salvar.x + caixa_salvar.largura // 2,
+                                        caixa_salvar.y + caixa_salvar.altura // 2)
+            else:
+                self.tecla("Enter", pausa=1.0)
+            self.log("      aguardando recepcao do arquivo baixado...")
+
+        baixado = info.value
+        baixado.save_as(str(destino))
+        self._conferir_formato(destino)
+        self.log("   arquivo salvo com sucesso: %s (%d bytes)" % (destino.name, destino.stat().st_size))
+
+        # 3. Fechar visualizador do Crystal Reports
+        time.sleep(2)
+        try:
+            caixa_ok = self.v.achar_texto("OK")
+            if caixa_ok:
+                self.pagina.mouse.click(caixa_ok.x + caixa_ok.largura // 2,
+                                        caixa_ok.y + caixa_ok.altura // 2)
+            else:
+                self.pagina.keyboard.press("Alt+F4")
+        except Exception:
+            pass
+        time.sleep(2)
+        return destino
 
     # ------------------------------------------------------------------ saida
     def encerrar_sessao(self):

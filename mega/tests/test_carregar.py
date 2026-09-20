@@ -384,3 +384,55 @@ def test_linha_de_rodape_sem_solicitacao_e_descartada_de_visualizacao_itens():
     saida = carregar._separar_raw_data(df, "visualizacao_itens")
     assert len(saida) == 1
     assert saida["solicitacao"].iloc[0] == 1.0
+
+
+def test_extrair_insumo_separa_numero_e_descricao():
+    num, desc = carregar._extrair_insumo("7889 -  07889-CONSUMO DE ÁGUA E ESGOTO")
+    assert num == 7889
+    assert desc == "CONSUMO DE ÁGUA E ESGOTO"
+
+    num, desc = carregar._extrair_insumo("287 - 00287-AÇO CA-50 8,0 MM")
+    assert num == 287
+    assert desc == "AÇO CA-50 8,0 MM"
+
+    num, desc = carregar._extrair_insumo("100 - AREIA MEDIA")
+    assert num == 100
+    assert desc == "AREIA MEDIA"
+
+    num, desc = carregar._extrair_insumo("INVALIDO")
+    assert num is None
+    assert desc == "INVALIDO"
+
+
+def test_carga_solicitacoes_por_etapa_sqlite(tmp_path):
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE solicitacoes_por_etapa ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, obra TEXT, obra_nome TEXT, "
+        "data_extracao TEXT, codigo_solicitacao INTEGER, data_de_emissao TEXT, "
+        "projeto TEXT, sequencial_item INTEGER, codigo_etapa TEXT, "
+        "numero_insumo INTEGER, descricao_insumo TEXT, "
+        "data_de_necessidade TEXT, situacao_do_item TEXT, raw_data TEXT)"
+    )
+    df = pd.DataFrame({
+        "codigo_solicitacao": [861],
+        "data_de_emissao": ["2025-01-02"],
+        "projeto": ["POTY"],
+        "sequencial_item": [1],
+        "codigo_etapa": ["01.01.04.03.001"],
+        "numero_insumo": [7889],
+        "descricao_insumo": ["CONSUMO DE ÁGUA E ESGOTO"],
+        "data_de_necessidade": ["2025-01-23"],
+        "situacao_do_item": ["Baixada"],
+    })
+    caminho = tmp_path / "Solicitacoes_Por_Etapa_650_2026-09-19.xls"
+    # Salvar via xlwt ou escrever direto com _carregar_tabela_simples
+    cfg = cfgmod.carregar()
+    df_prep = carregar._preparar_sinteticas(df, "650", "PIEMONTE P78 CARNEIRO LOBO", "2026-09-19")
+    df_final = carregar._separar_raw_data(df_prep, "solicitacoes_por_etapa")
+    carregar._carregar_tabela_simples(conn, "solicitacoes_por_etapa", df_final, "650", marcador_parametro="?")
+    conn.commit()
+
+    linhas = conn.execute("SELECT obra, codigo_solicitacao, numero_insumo, descricao_insumo FROM solicitacoes_por_etapa").fetchall()
+    assert len(linhas) == 1
+    assert linhas[0] == ("650", 861, 7889, "CONSUMO DE ÁGUA E ESGOTO")

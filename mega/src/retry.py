@@ -23,10 +23,10 @@ from visao import Visao
 
 RAIZ = Path(__file__).resolve().parent.parent
 ORDEM_RELATORIOS = ["itens_solicitados", "analise_saldo_solicitacao",
-                    "visualizacao_itens", "pedidos_compra"]
+                    "visualizacao_itens", "pedidos_compra", "solicitacoes_por_etapa"]
 # Por padrao, retry foca nas telas operacionais diarias (evita loop em telas
 # que estejam temporariamente fora do ar como Saldo Resumido). Configuravel por env.
-RELATORIOS_RETRY_PADRAO = ["itens_solicitados", "visualizacao_itens", "pedidos_compra"]
+RELATORIOS_RETRY_PADRAO = ["itens_solicitados", "visualizacao_itens", "pedidos_compra", "solicitacoes_por_etapa"]
 
 
 def _log(msg):
@@ -71,6 +71,13 @@ def identificar_pendencias(cfg, conn, data_iso, pasta=None, marcador_parametro="
         obras_ok_por_tabela["pedidos_compra"] = set(r[0] for r in cur.fetchall())
     except Exception:
         obras_ok_por_tabela["pedidos_compra"] = set()
+
+    # solicitacoes_por_etapa
+    try:
+        cur.execute("SELECT DISTINCT obra FROM %ssolicitacoes_por_etapa WHERE data_extracao = %s" % (prefixo, m), (data_iso,))
+        obras_ok_por_tabela["solicitacoes_por_etapa"] = set(r[0] for r in cur.fetchall())
+    except Exception:
+        obras_ok_por_tabela["solicitacoes_por_etapa"] = set()
 
     def _para_set(val):
         if isinstance(val, (list, set)):
