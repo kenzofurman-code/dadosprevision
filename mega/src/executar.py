@@ -193,26 +193,13 @@ def preparar_solicitacoes_por_etapa(op, rel, obra):
     """Solicitações por Etapa: seleciona o relatório na lista, clica em Executar,
     preenche a data final de emissão para hoje, e clica em Confirmar."""
     op.log("   selecionando 'SOLICITAÇÕES POR ETAPA'...")
-    caixa_item = op.clicar_texto("SOLICITAÇÕES POR ETAPA")
-    time.sleep(1)
+    op.clicar_texto("SOLICITAÇÕES POR ETAPA")
+    time.sleep(2)
 
-    # Duplo clique na linha selecionada (executa diretamente no Mega ERP)
-    op.pagina.mouse.dblclick(caixa_item.x + 50, caixa_item.y + caixa_item.altura // 2)
+    op.log("   clicando em Executar em (1518, 857)...")
+    # Botao azul Executar no canto inferior direito da tela RELATÓRIOS: x in [1441, 1595], y in [850, 865]
+    op.pagina.mouse.click(1518, 857)
     time.sleep(1)
-
-    op.log("   clicando em Executar...")
-    caixa_exec = op.v.achar_texto("Executar")
-    caixa_vis = op.v.achar_texto("Visualizar")
-    if caixa_exec and caixa_exec.y > 750:
-        op.pagina.mouse.click(caixa_exec.x + caixa_exec.largura // 2,
-                              caixa_exec.y + caixa_exec.altura // 2)
-    elif caixa_vis and caixa_vis.y > 750:
-        op.pagina.mouse.click(caixa_vis.x + 65, caixa_vis.y + caixa_vis.altura // 2)
-    else:
-        op.log("   'Executar'/'Visualizar' nao lidos pelo OCR; clicando no canto inferior direito em (1550, 855)...")
-        op.pagina.mouse.click(1550, 855)
-        time.sleep(0.5)
-        op.tecla("Enter")
 
     op.log("   aguardando janela de parâmetros...")
     limite = time.time() + 90
@@ -222,11 +209,9 @@ def preparar_solicitacoes_por_etapa(op, rel, obra):
         caixa_solic = op.v.achar_texto("Solicitações emitidas", img=img)
         if caixa_solic:
             break
-        # Reenvia clique preventivo se demorar
-        op.pagina.mouse.click(1550, 855)
-        time.sleep(0.5)
-        op.tecla("Enter")
-        time.sleep(4)
+        # Reenvia clique preventivo no botao Executar
+        op.pagina.mouse.click(1518, 857)
+        time.sleep(3)
 
     if not caixa_solic:
         try:
