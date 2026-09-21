@@ -204,3 +204,58 @@ def carregar_ocorrencias(conn, caminho_xlsx, data_extracao=None):
     cur.executemany(sql, registros)
     conn.commit()
     return len(registros)
+
+
+def carregar_pasta(conn, pasta):
+    """Varre uma pasta carregando todos os relatorios de Documentos e Ocorrencias encontrados."""
+    p = Path(pasta)
+    if not p.exists():
+        raise FileNotFoundError(f"Pasta nao encontrada: {pasta}")
+
+    docs = sorted(list(p.glob("*Documentos*.xlsx")))
+    ocorr = sorted(list(p.glob("*Ocorr*.xlsx")))
+
+    print(f"[APPROVO_CARGA] Encontrados {len(docs)} arquivos de Documentos e {len(ocorr)} de Ocorrencias em {pasta}", flush=True)
+
+    total_docs = 0
+    for f in docs:
+        print(f"  -> Carregando Documentos: {f.name}...", flush=True)
+        qtd = carregar_documentos(conn, f)
+        total_docs += qtd
+        print(f"     {qtd} registros processados.", flush=True)
+
+    total_ocorr = 0
+    for f in ocorr:
+        print(f"  -> Carregando Ocorrencias: {f.name}...", flush=True)
+        qtd = carregar_ocorrencias(conn, f)
+        total_ocorr += qtd
+        print(f"     {qtd} registros processados.", flush=True)
+
+    print(f"[APPROVO_CARGA] CONCLUIDO! Total Documentos: {total_docs} | Total Ocorrencias: {total_ocorr}", flush=True)
+    return total_docs, total_ocorr
+
+
+def main():
+    import argparse
+    import banco
+    parser = argparse.ArgumentParser(description="Carrega arquivos Excel do Approvo no PostgreSQL.")
+    parser.add_argument("caminho", help="Caminho para arquivo XLSX individual ou pasta com multiplos arquivos.")
+    args = parser.parse_args()
+
+    conn = banco.conectar()
+    banco.aplicar_esquema(conn)
+    alvo = Path(args.caminho)
+    if alvo.is_dir():
+        carregar_pasta(conn, alvo)
+    elif alvo.is_file():
+        if "ocorr" in alvo.name.lower():
+            n = carregar_ocorrencias(conn, alvo)
+            print(f"{n} ocorrencias carregadas com sucesso.", flush=True)
+        else:
+            n = carregar_documentos(conn, alvo)
+            print(f"{n} documentos carregados com sucesso.", flush=True)
+    conn.close()
+
+
+if __name__ == "__main__":
+    main()
