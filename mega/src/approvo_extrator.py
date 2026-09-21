@@ -37,16 +37,17 @@ def extrair_relatorios_approvo(usuario, senha, pasta_destino, headless=True, tim
     arquivo_ocorr = pasta_destino / f"Approvo_Ocorrencias_{data_iso}.xlsx"
 
     with sync_playwright() as p:
-        _log(f"Iniciando navegador Chromium (headless={headless})...")
-        browser = p.chromium.launch(
-            headless=headless,
-            args=[
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
-                "--window-size=1600,900",
-            ]
-        )
+        _log(f"Iniciando navegador (headless={headless})...")
+        launch_args = [
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--window-size=1600,900",
+        ]
+        try:
+            browser = p.chromium.launch(channel="chrome", headless=headless, args=launch_args)
+        except Exception:
+            browser = p.chromium.launch(headless=headless, args=launch_args)
         context = browser.new_context(
             viewport={"width": 1600, "height": 900},
             accept_downloads=True
