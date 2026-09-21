@@ -31,3 +31,4 @@ vpsssh.txt
 *.njsproj
 *.sln
 *.sw?
+*.code-workspace

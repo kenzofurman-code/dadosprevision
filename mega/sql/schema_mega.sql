@@ -188,3 +188,62 @@ CREATE TABLE IF NOT EXISTS mega.carga (
 );
 CREATE INDEX IF NOT EXISTS idx_mega_carga_data
   ON mega.carga(data_extracao);
+
+-- ---------------------------------------------------------------------------
+-- Approvo Mega ERP: Documentos e Trilha de Ocorrências / Aprovações
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS mega.approvo_documentos (
+  id                    BIGSERIAL PRIMARY KEY,
+  obra                  TEXT,
+  numero                BIGINT NOT NULL,
+  tipo_documento        TEXT NOT NULL,
+  data_documento        DATE,
+  status                TEXT,
+  valor                 NUMERIC,
+  filial                TEXT NOT NULL,
+  agente                TEXT,
+  solicitante           TEXT,
+  data_envio_aprovacao  DATE,
+  classe_financeira     TEXT,
+  centro_custo          TEXT,
+  projeto               TEXT,
+  regra_aprovacao       TEXT,
+  data_extracao         DATE NOT NULL,
+  raw_data              JSONB DEFAULT '{}'::jsonb,
+  CONSTRAINT uq_approvo_documentos UNIQUE (filial, tipo_documento, numero)
+);
+CREATE INDEX IF NOT EXISTS idx_mega_approvo_documentos_obra
+  ON mega.approvo_documentos(obra);
+CREATE INDEX IF NOT EXISTS idx_mega_approvo_documentos_status
+  ON mega.approvo_documentos(status);
+CREATE INDEX IF NOT EXISTS idx_mega_approvo_documentos_data
+  ON mega.approvo_documentos(data_documento);
+
+CREATE TABLE IF NOT EXISTS mega.approvo_ocorrencias (
+  id                  BIGSERIAL PRIMARY KEY,
+  obra                TEXT,
+  numero_documento    BIGINT NOT NULL,
+  acao                TEXT NOT NULL,
+  data_aprovacao      DATE,
+  hora_aprovacao      TIME,
+  data_hora           TIMESTAMP,
+  data_hora_texto     TEXT,
+  aprovador           TEXT NOT NULL,
+  motivo_operacao     TEXT,
+  tipo_documento      TEXT NOT NULL,
+  data_documento      DATE,
+  valor               NUMERIC,
+  filial              TEXT NOT NULL,
+  agente              TEXT,
+  solicitante         TEXT,
+  data_extracao       DATE NOT NULL,
+  raw_data            JSONB DEFAULT '{}'::jsonb,
+  CONSTRAINT uq_approvo_ocorrencias UNIQUE (filial, tipo_documento, numero_documento, data_aprovacao, hora_aprovacao, aprovador, acao)
+);
+CREATE INDEX IF NOT EXISTS idx_mega_approvo_ocorrencias_doc
+  ON mega.approvo_ocorrencias(numero_documento);
+CREATE INDEX IF NOT EXISTS idx_mega_approvo_ocorrencias_obra
+  ON mega.approvo_ocorrencias(obra);
+CREATE INDEX IF NOT EXISTS idx_mega_approvo_ocorrencias_data
+  ON mega.approvo_ocorrencias(data_aprovacao);
