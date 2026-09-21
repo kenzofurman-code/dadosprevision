@@ -13,15 +13,16 @@ import argparse
 import datetime as dt
 import os
 import sys
-from pathlib import Path
-from dotenv import load_dotenv
-
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ / "src"))
 
-# Carrega .env da raiz do projeto se existir
-load_dotenv(RAIZ.parent / ".env")
-load_dotenv(RAIZ / ".env")
+try:
+    from dotenv import load_dotenv
+    # Carrega .env da raiz do projeto se existir
+    load_dotenv(RAIZ.parent / ".env")
+    load_dotenv(RAIZ / ".env")
+except ImportError:
+    pass
 
 import banco
 import approvo_carregar

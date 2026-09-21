@@ -11,3 +11,4 @@ pyarrow                   # opcional: consolidado em parquet em vez de xlsx
 psycopg[binary]           # escrita no PostgreSQL compartilhado com o Dados Prevision
 croniter                  # calcula a proxima execucao a partir de CRON_SCHEDULE_MEGA
 xlrd>=2.0.1               # leitura dos .xls legados e Crystal Reports exportados
+python-dotenv
