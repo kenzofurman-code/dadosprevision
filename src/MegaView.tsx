@@ -2,7 +2,6 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import {
   RefreshCw,
   Search,
-  Download,
   ShoppingBag,
   Eye,
   Scale,
@@ -14,8 +13,27 @@ import {
   CheckCircle2,
   AlertCircle,
   Layers,
+  SlidersHorizontal,
+  BookmarkPlus,
+  FileText,
 } from 'lucide-react'
 import './MegaView.css'
+import {
+  TABLE_COLUMNS,
+  type MegaColumnDef,
+  type SavedView,
+  getAllViews,
+  saveCustomView,
+  updateCustomView,
+  deleteCustomView,
+  getActiveViewSelection,
+  setActiveViewSelection,
+  getRecordValue,
+} from './components/mega/mega-columns'
+import { MegaColumnModal } from './components/mega/MegaColumnModal'
+import { MegaSaveViewModal } from './components/mega/MegaSaveViewModal'
+import { MegaSavedViewsMenu } from './components/mega/MegaSavedViewsMenu'
+import { MegaReportModal } from './components/mega/MegaReportModal'
 
 export type MegaTabKey =
   | 'pedidos_compra'
@@ -86,14 +104,126 @@ export function MegaView() {
   const [pageSize, setPageSize] = useState(50)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
-  const [exporting, setExporting] = useState(false)
 
-  // Determina a tabela correta para o endpoint
+  // Modais de Personalização e Relatórios
+  const [isColumnModalOpen, setIsColumnModalOpen] = useState(false)
+  const [isSaveViewModalOpen, setIsSaveViewModalOpen] = useState(false)
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
+
+  // Determina a tabela correta para o endpoint e para as definições de colunas
   const currentTableKey = useMemo(() => {
     if (activeTab === 'analise_saldo') {
       return `analise_${saldoSubTab}`
     }
     return activeTab
+  }, [activeTab, saldoSubTab])
+
+  // Todas as colunas disponíveis para a tabela ativa
+  const allColumns = useMemo(() => {
+    return TABLE_COLUMNS[currentTableKey] || []
+  }, [currentTableKey])
+
+  // Estado das visões salvas e colunas ativas da tabela atual
+  const [allViews, setAllViews] = useState<SavedView[]>([])
+  const [activeViewId, setActiveViewId] = useState<string | null>(null)
+  const [activeColumns, setActiveColumns] = useState<string[]>([])
+
+  // Sincroniza visões salvas e colunas ativas ao trocar de tabela ou sub-aba
+  useEffect(() => {
+    const views = getAllViews(currentTableKey)
+    setAllViews(views)
+
+    const sel = getActiveViewSelection(currentTableKey)
+    setActiveViewId(sel.activeViewId)
+
+    const validCols = sel.columns.filter((colId) =>
+      allColumns.some((c) => c.id === colId),
+    )
+    setActiveColumns(
+      validCols.length > 0
+        ? validCols
+        : allColumns.filter((c) => c.defaultVisible).map((c) => c.id),
+    )
+  }, [currentTableKey, allColumns])
+
+  // Definições de colunas atualmente ativas
+  const activeColumnDefs = useMemo(() => {
+    return activeColumns
+      .map((id) => allColumns.find((c) => c.id === id))
+      .filter((c): c is MegaColumnDef => Boolean(c))
+  }, [activeColumns, allColumns])
+
+  // Feedback Toast
+  const showToast = (msg: string) => {
+    setToastMessage(msg)
+    setTimeout(() => {
+      setToastMessage(null)
+    }, 3200)
+  }
+
+  // Ações de gerenciamento de visões e colunas
+  const handleApplyColumns = (newCols: string[]) => {
+    setActiveColumns(newCols)
+    setActiveViewSelection(currentTableKey, activeViewId, newCols)
+    showToast(`${newCols.length} colunas exibidas na tabela`)
+  }
+
+  const handleSelectView = (view: SavedView) => {
+    setActiveViewId(view.id)
+    const validCols = view.columns.filter((colId) =>
+      allColumns.some((c) => c.id === colId),
+    )
+    setActiveColumns(validCols)
+    setActiveViewSelection(currentTableKey, view.id, validCols)
+    showToast(`Visão "${view.name}" aplicada`)
+  }
+
+  const handleSaveCustomView = (name: string, isUpdate: boolean) => {
+    if (isUpdate && activeViewId && !activeViewId.startsWith('preset_')) {
+      updateCustomView(currentTableKey, activeViewId, name, activeColumns)
+      showToast(`Visão "${name}" atualizada com sucesso!`)
+    } else {
+      const created = saveCustomView(currentTableKey, name, activeColumns)
+      setActiveViewId(created.id)
+      showToast(`Visão "${name}" salva com sucesso!`)
+    }
+    setAllViews(getAllViews(currentTableKey))
+  }
+
+  const handleDeleteCustomView = (viewId: string) => {
+    deleteCustomView(currentTableKey, viewId)
+    const updated = getAllViews(currentTableKey)
+    setAllViews(updated)
+    if (activeViewId === viewId) {
+      const defaultView = updated[0]
+      setActiveViewId(defaultView.id)
+      setActiveColumns(defaultView.columns)
+      setActiveViewSelection(currentTableKey, defaultView.id, defaultView.columns)
+    }
+    showToast('Visão excluída com sucesso')
+  }
+
+  // Título legível para o modal de relatório
+  const tableTitle = useMemo(() => {
+    switch (activeTab) {
+      case 'pedidos_compra':
+        return 'Pedidos de Compra'
+      case 'visualizacao_itens':
+        return 'Visualização de Itens (Follow-up)'
+      case 'analise_saldo':
+        if (saldoSubTab === 'pedidos') return 'Análise de Saldo — Pedidos'
+        if (saldoSubTab === 'contratos') return 'Análise de Saldo — Contratos'
+        return 'Análise de Saldo — Realizado'
+      case 'itens_solicitados':
+        return 'Itens Solicitados'
+      case 'solicitacoes_por_etapa':
+        return 'Solicitações por Etapa'
+      case 'cargas':
+        return 'Status das Cargas'
+      default:
+        return 'Mega ERP'
+    }
   }, [activeTab, saldoSubTab])
 
   // Carregar lista de obras
@@ -103,7 +233,6 @@ export function MegaView() {
       const data = await res.json()
       if (data.ok && Array.isArray(data.obras)) {
         setObras(data.obras)
-        // Se houver obras e nenhuma selecionada, seleciona a primeira (ex: 340)
         if (data.obras.length > 0 && !selectedObra) {
           setSelectedObra(data.obras[0].obra)
         }
@@ -157,6 +286,26 @@ export function MegaView() {
     }
   }, [currentTableKey, selectedObra, page, pageSize, search])
 
+  // Buscar registros completos para relatórios (até 5.000)
+  const fetchFilteredRecords = async (limit: number = 5000): Promise<any[]> => {
+    try {
+      const params = new URLSearchParams({
+        table: currentTableKey,
+        page: '0',
+        limit: String(limit),
+      })
+      if (selectedObra) params.append('obra', selectedObra)
+      if (search.trim()) params.append('search', search.trim())
+
+      const res = await fetch(`/api/mega/data?${params.toString()}`)
+      const data = await res.json()
+      return data.ok && Array.isArray(data.records) ? data.records : records
+    } catch (err) {
+      console.error('Erro ao buscar registros para relatório:', err)
+      return records
+    }
+  }
+
   // Inicialização
   useEffect(() => {
     loadObras()
@@ -188,53 +337,14 @@ export function MegaView() {
     setPage(0)
   }
 
-  // Exportar registros exibidos para XLSX
-  const handleExportXlsx = async () => {
-    if (records.length === 0) return
-    setExporting(true)
-    try {
-      const XLSX = await import('xlsx')
-      // Baixa até 5.000 linhas da consulta atual para o export
-      const params = new URLSearchParams({
-        table: currentTableKey,
-        page: '0',
-        limit: '5000',
-      })
-      if (selectedObra) params.append('obra', selectedObra)
-      if (search.trim()) params.append('search', search.trim())
-
-      const res = await fetch(`/api/mega/data?${params.toString()}`)
-      const data = await res.json()
-      const exportRows = data.ok ? data.records : records
-
-      // Limpar campo raw_data para exportação mais limpa
-      const cleanRows = exportRows.map((r: any) => {
-        const copy = { ...r }
-        delete copy.raw_data
-        return copy
-      })
-
-      const ws = XLSX.utils.json_to_sheet(cleanRows)
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'Dados_Mega')
-      const dateStr = new Date().toISOString().slice(0, 10)
-      const fileName = `Mega_${currentTableKey}_${selectedObra || 'Todas'}_${dateStr}.xlsx`
-      XLSX.writeFile(wb, fileName)
-    } catch (err) {
-      console.error('Erro ao exportar dados do Mega para XLSX:', err)
-    } finally {
-      setExporting(false)
-    }
-  }
-
   // Renderizadores de status/badge
   const renderBadge = (situacao: string | null | undefined) => {
     if (!situacao) return <span className="mega-badge neutral">-</span>
     const s = String(situacao).toUpperCase()
-    if (s.includes('ATENDIDO') || s.includes('APROVADO') || s.includes('CONCLU') || s.includes('OK')) {
+    if (s.includes('ATENDIDO') || s.includes('APROVADO') || s.includes('CONCLU') || s.includes('OK') || s === 'ATIVO') {
       return <span className="mega-badge success">{situacao}</span>
     }
-    if (s.includes('CANCEL') || s.includes('REPROV') || s.includes('BLOQ')) {
+    if (s.includes('CANCEL') || s.includes('REPROV') || s.includes('BLOQ') || s === 'INATIVO') {
       return <span className="mega-badge danger">{situacao}</span>
     }
     if (s.includes('EM APROV') || s.includes('PEND') || s.includes('ANDAMENTO')) {
@@ -243,284 +353,45 @@ export function MegaView() {
     return <span className="mega-badge info">{situacao}</span>
   }
 
-  // Renderizador de Colunas da Tabela
-  const renderTableHeader = () => {
-    switch (activeTab) {
-      case 'pedidos_compra':
-        return (
-          <tr>
-            <th>Obra</th>
-            <th>Data Extração</th>
-            <th>Nº Pedido</th>
-            <th>Item</th>
-            <th>Situação</th>
-            <th>Dt. Emissão</th>
-            <th>Fornecedor</th>
-            <th>Descrição do Item</th>
-            <th className="num-cell">Qtde</th>
-            <th className="num-cell">Total Pedido</th>
-          </tr>
-        )
-      case 'visualizacao_itens':
-        return (
-          <tr>
-            <th>Obra</th>
-            <th>Data Extração</th>
-            <th>Orçamento</th>
-            <th>Solicitação</th>
-            <th>Seq</th>
-            <th>Situação</th>
-            <th>Fornecedor</th>
-            <th>Cód. Item</th>
-            <th>Descrição</th>
-            <th className="num-cell">Qtde Solicitada</th>
-            <th>Data Necessidade</th>
-            <th className="num-cell">Valor Total</th>
-            <th>Cód. Pedido</th>
-            <th>Cód. Contrato</th>
-          </tr>
-        )
-      case 'analise_saldo':
-        if (saldoSubTab === 'pedidos') {
-          return (
-            <tr>
-              <th>Obra</th>
-              <th>Data Extração</th>
-              <th>Cód. Pedido</th>
-              <th>Fornecedor</th>
-              <th className="num-cell">Qtde Pedido</th>
-              <th className="num-cell">Valor Unitário</th>
-              <th className="num-cell">Qtde Apropriada</th>
-              <th className="num-cell">Valor Apropriação</th>
-            </tr>
-          )
-        }
-        if (saldoSubTab === 'contratos') {
-          return (
-            <tr>
-              <th>Obra</th>
-              <th>Data Extração</th>
-              <th>Cód. Contrato</th>
-              <th>Fornecedor</th>
-              <th>Status Pré-Contrato</th>
-              <th className="num-cell">Saldo Qtde</th>
-              <th className="num-cell">Valor Unitário</th>
-              <th className="num-cell">Total</th>
-            </tr>
-          )
-        }
-        return (
-          <tr>
-            <th>Obra</th>
-            <th>Data Extração</th>
-            <th>Documento</th>
-            <th>Data Doc.</th>
-            <th className="num-cell">AP</th>
-            <th>Fornecedor</th>
-            <th className="num-cell">Valor Apropriação</th>
-          </tr>
-        )
-      case 'itens_solicitados':
-        return (
-          <tr>
-            <th>Obra</th>
-            <th>Data Extração</th>
-            <th>Cód. Solicitação</th>
-            <th>Nº RM</th>
-            <th>Seq</th>
-            <th>Dt. Emissão</th>
-            <th>Situação</th>
-            <th>Descrição do Item</th>
-            <th className="num-cell">Qtde Solicitada</th>
-            <th className="num-cell">Qtde Baixada</th>
-            <th>Unidade</th>
-          </tr>
-        )
-      case 'solicitacoes_por_etapa':
-        return (
-          <tr>
-            <th>Obra</th>
-            <th>Data Extração</th>
-            <th>Cód. Solicitação</th>
-            <th>Seq</th>
-            <th>Código Etapa</th>
-            <th>Insumo</th>
-            <th>Descrição do Insumo</th>
-            <th>Projeto</th>
-            <th>Dt. Emissão</th>
-            <th>Dt. Necessidade</th>
-            <th>Situação</th>
-          </tr>
-        )
-      case 'cargas':
-        return (
-          <tr>
-            <th>ID</th>
-            <th>Data Extração</th>
-            <th>Relatório</th>
-            <th>Arquivo</th>
-            <th>Status</th>
-            <th>Obras OK</th>
-            <th>Obras Sem Movimento</th>
-            <th>Obras Falhou</th>
-            <th>Motivo</th>
-            <th>Executado Em</th>
-          </tr>
-        )
-      default:
-        return null
-    }
-  }
+  // Renderizador dinâmico de células
+  const renderCell = (record: any, col: MegaColumnDef) => {
+    const val = getRecordValue(record, col)
 
-  const renderTableRows = () => {
-    if (records.length === 0) {
+    if (col.type === 'badge') {
+      return renderBadge(val)
+    }
+    if (col.type === 'date') {
+      return formatDate(val)
+    }
+    if (col.type === 'currency') {
+      return <strong>{formatCurrency(val)}</strong>
+    }
+    if (col.type === 'number') {
+      return formatNumber(val)
+    }
+    if (col.id === 'obra') {
       return (
-        <tr>
-          <td colSpan={14} className="text-center">
-            <div className="mega-empty-state">
-              <AlertCircle size={28} />
-              <span>Nenhum registro encontrado para os filtros selecionados.</span>
-            </div>
-          </td>
-        </tr>
+        <span>
+          <strong>{val}</strong>{' '}
+          {record.obra_nome ? <small>{record.obra_nome}</small> : null}
+        </span>
       )
     }
+    if (col.id === 'numero_insumo' || col.id === 'cod_insumo' || col.id === 'cod_item_compra') {
+      return <span className="mega-code-badge insumo">{val || '-'}</span>
+    }
+    if (col.id === 'descricao_insumo' || col.id === 'desc_item_compra') {
+      return <span className="mega-insumo-text">{val || '-'}</span>
+    }
+    if (col.type === 'code') {
+      return <strong>{val !== null && val !== undefined ? String(val) : '-'}</strong>
+    }
 
-    return records.map((record, index) => {
-      const key = record.id || record.numero_do_pedido || record.solicitacao || record.codigo_solicitacao || index
+    if (Array.isArray(val)) {
+      return val.length > 0 ? val.join(', ') : '-'
+    }
 
-      switch (activeTab) {
-        case 'pedidos_compra':
-          return (
-            <tr key={key}>
-              <td><strong>{record.obra}</strong> <small>{record.obra_nome}</small></td>
-              <td>{formatDate(record.data_extracao)}</td>
-              <td><strong>{record.numero_do_pedido}</strong></td>
-              <td>{record.item_pedido}</td>
-              <td>{renderBadge(record.situacao_do_pedido)}</td>
-              <td>{formatDate(record.dt_emissao)}</td>
-              <td>{record.nome_fantasia || '-'}</td>
-              <td>{record.descricao_do_item || '-'}</td>
-              <td className="num-cell">{formatNumber(record.quantidade)}</td>
-              <td className="num-cell"><strong>{formatCurrency(record.total_pedido_compra)}</strong></td>
-            </tr>
-          )
-        case 'visualizacao_itens':
-          return (
-            <tr key={key}>
-              <td><strong>{record.obra}</strong></td>
-              <td>{formatDate(record.data_extracao)}</td>
-              <td>{record.orcamento || '-'}</td>
-              <td><strong>{record.solicitacao}</strong></td>
-              <td>{record.sequencia}</td>
-              <td>{renderBadge(record.situacao_do_item)}</td>
-              <td>{record.fornecedor || '-'}</td>
-              <td>{record.cod_item || '-'}</td>
-              <td>{record.descricao || '-'}</td>
-              <td className="num-cell">{formatNumber(record.qtde_solicitada)}</td>
-              <td>{formatDate(record.data_de_necessidade)}</td>
-              <td className="num-cell"><strong>{formatCurrency(record.valor_total)}</strong></td>
-              <td>{record.cod_pedido || '-'}</td>
-              <td>{record.cod_contrato || '-'}</td>
-            </tr>
-          )
-        case 'analise_saldo':
-          if (saldoSubTab === 'pedidos') {
-            return (
-              <tr key={key}>
-                <td><strong>{record.obra}</strong></td>
-                <td>{formatDate(record.data_extracao)}</td>
-                <td><strong>{record.codigo_pedido}</strong></td>
-                <td>{record.fornecedor || '-'}</td>
-                <td className="num-cell">{formatNumber(record.qtde_pedido)}</td>
-                <td className="num-cell">{formatCurrency(record.valor_unitario)}</td>
-                <td className="num-cell">{formatNumber(record.qtde_apropriada)}</td>
-                <td className="num-cell"><strong>{formatCurrency(record.valor_apropriacao)}</strong></td>
-              </tr>
-            )
-          }
-          if (saldoSubTab === 'contratos') {
-            return (
-              <tr key={key}>
-                <td><strong>{record.obra}</strong></td>
-                <td>{formatDate(record.data_extracao)}</td>
-                <td><strong>{record.codigo_contrato}</strong></td>
-                <td>{record.fornecedor || '-'}</td>
-                <td>{renderBadge(record.status_pre_contrato)}</td>
-                <td className="num-cell">{formatNumber(record.saldo_qtde_contrato)}</td>
-                <td className="num-cell">{formatCurrency(record.valor_unitario)}</td>
-                <td className="num-cell"><strong>{formatCurrency(record.total)}</strong></td>
-              </tr>
-            )
-          }
-          return (
-            <tr key={key}>
-              <td><strong>{record.obra}</strong></td>
-              <td>{formatDate(record.data_extracao)}</td>
-              <td><strong>{record.documento}</strong></td>
-              <td>{formatDate(record.data_documento)}</td>
-              <td className="num-cell">{formatNumber(record.ap)}</td>
-              <td>{record.fornecedor || '-'}</td>
-              <td className="num-cell"><strong>{formatCurrency(record.valor_apropriacao)}</strong></td>
-            </tr>
-          )
-        case 'itens_solicitados':
-          return (
-            <tr key={key}>
-              <td><strong>{record.obra}</strong></td>
-              <td>{formatDate(record.data_extracao)}</td>
-              <td><strong>{record.codigo_solicitacao}</strong></td>
-              <td>{record.numero_rm}</td>
-              <td>{record.sequencial_item}</td>
-              <td>{formatDate(record.data_de_emissao)}</td>
-              <td>{renderBadge(record.situacao_do_item)}</td>
-              <td>{record.descricao_do_item || '-'}</td>
-              <td className="num-cell">{formatNumber(record.quantidade_solicitada)}</td>
-              <td className="num-cell">{formatNumber(record.quantidade_baixada)}</td>
-              <td>{record.unidade || '-'}</td>
-            </tr>
-          )
-        case 'solicitacoes_por_etapa':
-          return (
-            <tr key={key}>
-              <td><strong>{record.obra}</strong> {record.obra_nome ? <small>{record.obra_nome}</small> : null}</td>
-              <td>{formatDate(record.data_extracao)}</td>
-              <td><strong>{record.codigo_solicitacao}</strong></td>
-              <td>{record.sequencial_item}</td>
-              <td><span className="mega-code-badge">{record.codigo_etapa || '-'}</span></td>
-              <td>{record.numero_insumo || '-'}</td>
-              <td>{record.descricao_insumo || '-'}</td>
-              <td>{record.projeto || '-'}</td>
-              <td>{formatDate(record.data_de_emissao)}</td>
-              <td>{formatDate(record.data_de_necessidade)}</td>
-              <td>{renderBadge(record.situacao_do_item)}</td>
-            </tr>
-          )
-        case 'cargas':
-          return (
-            <tr key={key}>
-              <td>#{record.id}</td>
-              <td>{formatDate(record.data_extracao)}</td>
-              <td><strong>{record.relatorio}</strong></td>
-              <td>{record.arquivo}</td>
-              <td>
-                {record.bloqueado ? (
-                  <span className="mega-badge danger">Bloqueado</span>
-                ) : (
-                  <span className="mega-badge success">OK</span>
-                )}
-              </td>
-              <td>{Array.isArray(record.obras_ok) && record.obras_ok.length > 0 ? record.obras_ok.join(', ') : '-'}</td>
-              <td>{Array.isArray(record.obras_sem_movimento) && record.obras_sem_movimento.length > 0 ? record.obras_sem_movimento.join(', ') : '-'}</td>
-              <td>{Array.isArray(record.obras_falhou) && record.obras_falhou.length > 0 ? record.obras_falhou.join(', ') : '-'}</td>
-              <td><small>{record.motivo_bloqueio || '-'}</small></td>
-              <td><small>{new Date(record.executado_em).toLocaleString('pt-BR')}</small></td>
-            </tr>
-          )
-        default:
-          return null
-      }
-    })
+    return val !== null && val !== undefined && val !== '' ? String(val) : '-'
   }
 
   const totalPages = Math.ceil(totalRecords / pageSize)
@@ -707,7 +578,7 @@ export function MegaView() {
             <Search size={14} style={{ color: 'var(--text-muted)' }} />
             <input
               type="text"
-              placeholder="Buscar fornecedor, pedido, etapa, item..."
+              placeholder="Buscar por insumo, fornecedor, pedido, etapa..."
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value)
@@ -718,6 +589,50 @@ export function MegaView() {
         </div>
 
         <div className="mega-toolbar-right">
+          {/* Seletor de Visões Salvas */}
+          <MegaSavedViewsMenu
+            allViews={allViews}
+            activeViewId={activeViewId}
+            onSelectView={handleSelectView}
+            onDeleteView={handleDeleteCustomView}
+            onOpenSaveModal={() => setIsSaveViewModalOpen(true)}
+          />
+
+          {/* Botão Configurar Colunas */}
+          <button
+            type="button"
+            className="mega-btn"
+            onClick={() => setIsColumnModalOpen(true)}
+            title="Escolher quais colunas mostrar ou ocultar na tabela"
+          >
+            <SlidersHorizontal size={14} className="text-primary" />
+            <span>Colunas ({activeColumns.length}/{allColumns.length})</span>
+          </button>
+
+          {/* Botão Salvar Visão */}
+          <button
+            type="button"
+            className="mega-btn"
+            onClick={() => setIsSaveViewModalOpen(true)}
+            title="Salvar a seleção atual de colunas"
+          >
+            <BookmarkPlus size={14} />
+            <span>Salvar visão</span>
+          </button>
+
+          {/* Botão Gerar Relatório */}
+          <button
+            type="button"
+            className="mega-btn"
+            onClick={() => setIsReportModalOpen(true)}
+            disabled={records.length === 0}
+            title="Gerar e exportar relatório (Excel, PDF/Impressão ou CSV)"
+          >
+            <FileText size={14} className="text-primary" />
+            <span>Gerar relatório</span>
+          </button>
+
+          {/* Botão Atualizar */}
           <button
             type="button"
             className="mega-btn"
@@ -730,37 +645,65 @@ export function MegaView() {
             <RefreshCw size={14} className={loading ? 'mega-loading-spinner' : ''} />
             <span>Atualizar</span>
           </button>
-
-          <button
-            type="button"
-            className="mega-btn primary"
-            onClick={handleExportXlsx}
-            disabled={exporting || records.length === 0}
-            title="Exportar dados visíveis para planilha Excel"
-          >
-            <Download size={14} />
-            <span>{exporting ? 'Exportando...' : 'Exportar Excel'}</span>
-          </button>
         </div>
       </div>
 
-      {/* 4. Tabela de Registros */}
+      {/* 4. Tabela de Registros Dinâmica */}
       <div className="mega-table-container">
         <div className="mega-table-scroll">
           <table className="mega-table">
-            <thead>{renderTableHeader()}</thead>
+            <thead>
+              <tr>
+                {activeColumnDefs.map((col) => (
+                  <th
+                    key={col.id}
+                    className={col.align === 'right' ? 'num-cell' : ''}
+                  >
+                    {col.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={14} className="text-center">
+                  <td colSpan={Math.max(1, activeColumnDefs.length)} className="text-center">
                     <div className="mega-loading-state">
                       <RefreshCw size={24} className="mega-loading-spinner" />
                       <span>Carregando registros do Mega ERP...</span>
                     </div>
                   </td>
                 </tr>
+              ) : records.length === 0 ? (
+                <tr>
+                  <td colSpan={Math.max(1, activeColumnDefs.length)} className="text-center">
+                    <div className="mega-empty-state">
+                      <AlertCircle size={28} />
+                      <span>Nenhum registro encontrado para os filtros selecionados.</span>
+                    </div>
+                  </td>
+                </tr>
               ) : (
-                renderTableRows()
+                records.map((record, index) => {
+                  const key =
+                    record.id ||
+                    record.numero_do_pedido ||
+                    record.solicitacao ||
+                    record.codigo_solicitacao ||
+                    index
+                  return (
+                    <tr key={key}>
+                      {activeColumnDefs.map((col) => (
+                        <td
+                          key={col.id}
+                          className={col.align === 'right' ? 'num-cell' : ''}
+                        >
+                          {renderCell(record, col)}
+                        </td>
+                      ))}
+                    </tr>
+                  )
+                })
               )}
             </tbody>
           </table>
@@ -815,6 +758,49 @@ export function MegaView() {
           </div>
         </div>
       </div>
+
+      {/* Modais de Configuração, Salvar Visão e Geração de Relatórios */}
+      <MegaColumnModal
+        isOpen={isColumnModalOpen}
+        onClose={() => setIsColumnModalOpen(false)}
+        allColumns={allColumns}
+        activeColumnIds={activeColumns}
+        onApplyColumns={handleApplyColumns}
+        onOpenSaveView={() => setIsSaveViewModalOpen(true)}
+      />
+
+      <MegaSaveViewModal
+        isOpen={isSaveViewModalOpen}
+        onClose={() => setIsSaveViewModalOpen(false)}
+        tableKey={currentTableKey}
+        activeColumns={activeColumns}
+        allColumns={allColumns}
+        activeView={allViews.find((v) => v.id === activeViewId) || null}
+        onSaveView={handleSaveCustomView}
+      />
+
+      <MegaReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        tableTitle={tableTitle}
+        tableKey={currentTableKey}
+        selectedObra={selectedObra}
+        obraNome={obras.find((o) => o.obra === selectedObra)?.obra_nome}
+        search={search}
+        activeColumns={activeColumns}
+        allColumns={allColumns}
+        currentRecords={records}
+        totalRecords={totalRecords}
+        fetchFilteredRecords={fetchFilteredRecords}
+      />
+
+      {/* Notificação Toast */}
+      {toastMessage && (
+        <div className="mega-toast">
+          <CheckCircle2 size={16} className="text-emerald" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   )
 }
