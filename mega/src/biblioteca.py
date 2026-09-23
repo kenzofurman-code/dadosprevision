@@ -721,7 +721,7 @@ class Operador:
             # 1. O visualizador do Crystal Reports abriu na tela
             # 2. A caixa modal 'Aguarde enquanto o documento está sendo processado' sumiu
             viewer_aberto = any(v in texto_tela for v in ("relatorio principal", "relatório principal", "caminho do rel", "fator de zoom", ".rpt"))
-            esta_processando = any(p in texto_tela for p in ("processado", "aguarde", "1+"))
+            esta_processando = ("processado" in texto_tela or "aguarde" in texto_tela)
             if viewer_aberto and not esta_processando:
                 self.log("      relatorio gerado! Documento pronto na tela.")
                 caixa_aba = True
