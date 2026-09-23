@@ -31,8 +31,17 @@ def traduzir_colunas(df, relatorio_id, aba=None):
     descartar = COLUNAS_DESCARTAR.get(chave, COLUNAS_DESCARTAR.get(relatorio_id, []))
     df = df.drop(columns=[c for c in descartar if c in df.columns])
     manual = RENOMEIO_MANUAL.get(chave, RENOMEIO_MANUAL.get(relatorio_id, {}))
-    novo_nome = {c: manual.get(c, normalizar_nome_coluna(c)) for c in df.columns}
-    return df.rename(columns=novo_nome)
+    novos_nomes = {}
+    vistos = {}
+    for c in df.columns:
+        alvo = manual.get(c, normalizar_nome_coluna(c))
+        if alvo in vistos:
+            vistos[alvo] += 1
+            novos_nomes[c] = f"{alvo}_{vistos[alvo]}"
+        else:
+            vistos[alvo] = 0
+            novos_nomes[c] = alvo
+    return df.rename(columns=novos_nomes)
 
 
 COLUNAS_DESCARTAR = {
@@ -121,6 +130,12 @@ RENOMEIO_MANUAL = {
         "Cód. Alternativo.2": "codigo_contrato_alternativo",
         # "Cód. Alternativo.3" e "Descrição.2" descartadas em COLUNAS_DESCARTAR
         # (confirmado com o usuario: sempre vazias, sem uso conhecido).
+    },
+    "contratos_itens": {
+        "Cód. Item.": "cod_item_insumo",
+        "Cód. Padrão Unidade": "cod_padrao",
+        "Pr. Contrato": "valor_unitario",
+        "Situação Item": "situacao",
     },
     # "Característica Estoque.1" e "Código" de pedidos_compra descartadas em
     # COLUNAS_DESCARTAR (confirmado com o usuario: sempre vazias, sem uso

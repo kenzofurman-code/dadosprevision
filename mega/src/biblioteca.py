@@ -742,101 +742,99 @@ class Operador:
         destino = Path(destino)
         destino.parent.mkdir(parents=True, exist_ok=True)
 
-        with self.pagina.expect_download(timeout=timeout_download * 1000) as info:
-            self.log("      clicando no icone de exportar em (%d, %d)..." % (x_icone, y_icone))
-            self.pagina.mouse.click(x_icone, y_icone)
-            time.sleep(3)
+        self.log("      clicando no icone de exportar em (%d, %d)..." % (x_icone, y_icone))
+        self.pagina.mouse.click(x_icone, y_icone)
+        time.sleep(3)
 
-            # Aguardar janela 'Exportar Relatório'
-            self.log("      aguardando dialogo 'Exportar Relatório'...")
-            self.esperar_texto(("Exportar Relatório", "Exportar", "Salvar", "Tipo", "Nome"), timeout=45)
-            time.sleep(2)
+        # Aguardar janela 'Exportar Relatório'
+        self.log("      aguardando dialogo 'Exportar Relatório'...")
+        self.esperar_texto(("Exportar Relatório", "Exportar", "Salvar", "Tipo", "Nome"), timeout=45)
+        time.sleep(1.5)
 
-            # 1. Ajustar o Tipo para Microsoft Excel (*.xls)
-            # O rotulo "Tipo:" fica na regiao inferior esquerda (x < 150, y > 350)
-            img = self.tela()
-            todas = self.v.palavras_todas(img)
-            candidatos_tipo = [p for p in todas
-                               if "tipo" in p["texto"].lower() and p["x"] < 150 and p["y"] > 350]
-            if candidatos_tipo:
-                c_tipo = candidatos_tipo[0]
-                x_combo = c_tipo["x"] + c_tipo.get("w", 30) + 120
-                y_combo = c_tipo["y"] + c_tipo.get("h", 16) // 2
+        # Selecionar pasta 'Downloads' no painel lateral esquerdo (x ~ 55, y ~ 250)
+        # para que o arquivo seja gravado na pasta redirecionada do cliente e baixado via gateway
+        self.log("      selecionando pasta 'Downloads' na barra lateral...")
+        img_side = self.tela()
+        todas_palavras = self.v.palavras_todas(img_side)
+        caixa_down = next((p for p in todas_palavras if "download" in p["texto"].lower() and p["x"] < 120 and p["y"] < 350), None)
+        if caixa_down:
+            self.pagina.mouse.click(caixa_down["x"] + caixa_down.get("w", 30) // 2,
+                                    caixa_down["y"] + caixa_down.get("h", 16) // 2)
+        else:
+            self.pagina.mouse.click(55, 250)
+        time.sleep(1.5)
+
+        # 1. Ajustar o Tipo para Microsoft Excel (*.xls)
+        # O rotulo "Tipo:" fica na regiao inferior esquerda (x < 150, y > 350)
+        img = self.tela()
+        todas = self.v.palavras_todas(img)
+        candidatos_tipo = [p for p in todas
+                           if "tipo" in p["texto"].lower() and p["x"] < 150 and p["y"] > 350]
+        if candidatos_tipo:
+            c_tipo = candidatos_tipo[0]
+            x_combo = c_tipo["x"] + c_tipo.get("w", 30) + 120
+            y_combo = c_tipo["y"] + c_tipo.get("h", 16) // 2
+        else:
+            caixa_salv = self.v.achar_texto("Salvar", img=img)
+            if caixa_salv:
+                x_combo = caixa_salv.x - 180
+                y_combo = caixa_salv.y - 45
             else:
-                caixa_salv = self.v.achar_texto("Salvar", img=img)
-                if caixa_salv:
-                    x_combo = caixa_salv.x - 180
-                    y_combo = caixa_salv.y - 45
-                else:
-                    x_combo, y_combo = 200, 470
+                x_combo, y_combo = 200, 470
 
-            self.log("      clicando na combobox Tipo em (%d, %d)..." % (x_combo, y_combo))
-            self.pagina.mouse.click(x_combo, y_combo)
-            time.sleep(1.5)
+        self.log("      clicando na combobox Tipo em (%d, %d)..." % (x_combo, y_combo))
+        self.pagina.mouse.click(x_combo, y_combo)
+        time.sleep(1.5)
 
-            # Ao clicar, a combobox abre. Tentar achar opcao Excel pelo OCR ou navegar pelo teclado
-            img_drop = self.tela()
-            caixa_excel = None
-            if tipo == "data_only":
-                caixa_excel = self.v.achar_texto("Data-Only", img=img_drop)
-            if not caixa_excel:
-                caixa_excel = (self.v.achar_texto("Microsoft Excel", img=img_drop)
-                               or self.v.achar_texto("97-2003", img=img_drop)
-                               or self.v.achar_texto("Excel", img=img_drop))
-            if caixa_excel and caixa_excel.y > 200:
-                self.log("      opcao Excel (%s) localizada pelo OCR em (%d, %d); clicando"
-                         % (tipo, caixa_excel.x, caixa_excel.y))
-                self.pagina.mouse.click(caixa_excel.x + caixa_excel.largura // 2,
-                                        caixa_excel.y + caixa_excel.altura // 2)
-            else:
-                deslocamento = 4 if tipo == "data_only" else 3
-                self.log("      opcao Excel nao lida direto; enviando %dx ArrowDown + Enter" % deslocamento)
-                for _ in range(deslocamento):
-                    self.tecla("ArrowDown", pausa=0.25)
-                self.tecla("Enter", pausa=1.0)
+        # Ao clicar, a combobox abre. Tentar achar opcao Excel pelo OCR ou navegar pelo teclado
+        img_drop = self.tela()
+        caixa_excel = None
+        if tipo == "data_only":
+            caixa_excel = self.v.achar_texto("Data-Only", img=img_drop)
+        if not caixa_excel:
+            caixa_excel = (self.v.achar_texto("Microsoft Excel", img=img_drop)
+                           or self.v.achar_texto("97-2003", img=img_drop)
+                           or self.v.achar_texto("Excel", img=img_drop))
+        if caixa_excel and caixa_excel.y > 200:
+            self.log("      opcao Excel (%s) localizada pelo OCR em (%d, %d); clicando"
+                     % (tipo, caixa_excel.x, caixa_excel.y))
+            self.pagina.mouse.click(caixa_excel.x + caixa_excel.largura // 2,
+                                    caixa_excel.y + caixa_excel.altura // 2)
+        else:
+            deslocamento = 4 if tipo == "data_only" else 3
+            self.log("      opcao Excel nao lida direto; enviando %dx ArrowDown + Enter" % deslocamento)
+            for _ in range(deslocamento):
+                self.tecla("ArrowDown", pausa=0.25)
+            self.tecla("Enter", pausa=1.0)
 
-            time.sleep(1.5)
+        time.sleep(1.5)
 
-            # Screenshot de confirmacao da selecao do tipo
-            try:
-                Path("dados/falhas").mkdir(parents=True, exist_ok=True)
-                self.pagina.screenshot(path="dados/falhas/pos_selecao_tipo.png")
-            except Exception:
-                pass
+        # Screenshot de confirmacao da selecao do tipo
+        try:
+            Path("dados/falhas").mkdir(parents=True, exist_ok=True)
+            self.pagina.screenshot(path="dados/falhas/pos_selecao_tipo.png")
+        except Exception:
+            pass
 
-            # 2. Preencher campo Nome (x=280, y=445)
-            self.log("      preenchendo nome do arquivo (%s)..." % destino.name)
-            self.pagina.mouse.click(280, 445)
-            time.sleep(0.5)
-            self.tecla("End", pausa=0.1)
-            for _ in range(30):
-                self.pagina.keyboard.press("Backspace")
-            self.digitar(destino.stem)
-            time.sleep(0.8)
+        # 2. Preencher campo Nome (x=280, y=445)
+        self.log("      preenchendo nome do arquivo (%s)..." % destino.name)
+        self.pagina.mouse.click(280, 445)
+        time.sleep(0.5)
+        self.tecla("End", pausa=0.1)
+        for _ in range(30):
+            self.pagina.keyboard.press("Backspace")
+        self.digitar(destino.stem)
+        time.sleep(0.8)
 
-            # 3. Confirmar Salvar no botão (394, 522)
-            self.log("      confirmando salvamento do arquivo...")
-            # Na janela 'Exportar Relatório' (largura ~490px), o botao Salvar fica centralizado em (394, 522)
+        # 3. Confirmar Salvar no botão (394, 522) e aguardar recepção do download
+        self.log("      confirmando salvamento do arquivo...")
+        with self.pagina.expect_download(timeout=180000) as info:
             self.pagina.mouse.click(394, 522)
             time.sleep(0.5)
             self.tecla("Enter", pausa=1.0)
-            time.sleep(2.0)
-
-            # Se o diálogo ainda estiver visível, tentar achar Salvar pelo OCR ou reenviar clique em (394, 522)
-            img_chk = self.tela()
-            if self.v.achar_texto("Exportar Relatório", img=img_chk):
-                self.log("      dialogo 'Exportar Relatório' ainda visivel; reenviando clique em Salvar (394, 522)...")
-                caixa_salvar = self.v.achar_texto("Salvar", img=img_chk)
-                if caixa_salvar and caixa_salvar.y > 450:
-                    self.pagina.mouse.click(caixa_salvar.x + caixa_salvar.largura // 2,
-                                            caixa_salvar.y + caixa_salvar.altura // 2)
-                else:
-                    self.pagina.mouse.click(394, 522)
-                self.tecla("Enter", pausa=1.0)
-
             self.log("      aguardando recepcao do arquivo baixado...")
+            baixado = info.value
 
-        baixado = info.value
         baixado.save_as(str(destino))
         self._conferir_formato(destino)
         self.log("   arquivo salvo com sucesso: %s (%d bytes)" % (destino.name, destino.stat().st_size))

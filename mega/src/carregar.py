@@ -298,6 +298,17 @@ def _separar_raw_data(df, tabela):
         # chave (verificado sem colisao nas 25.244 linhas reais das 8 obras)
         # sem violar o NOT NULL.
         saida["fornecedor"] = saida["fornecedor"].fillna("")
+    if tabela == "contratos_itens":
+        # Descarta linhas de rodapé ou vazias que não têm cod_contrato / cod_item
+        if "cod_contrato" in saida.columns and "cod_item" in saida.columns:
+            saida = saida[saida["cod_contrato"].notna() & saida["cod_item"].notna()].copy()
+            try:
+                saida["cod_contrato"] = saida["cod_contrato"].astype(int)
+                saida["cod_item"] = saida["cod_item"].astype(int)
+            except Exception:
+                pass
+        if "aditivo" in saida.columns:
+            saida["aditivo"] = saida["aditivo"].fillna("").astype(str)
     # NaN do pandas nao vira NULL sozinho: o Postgres recusa NaN num campo
     # BIGINT/NUMERIC com "out of range" (confirmado contra um Postgres 16 real
     # em 2026-09-08 — cod_contrato vazio, comum quando o item ainda nao foi

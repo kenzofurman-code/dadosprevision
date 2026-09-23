@@ -246,8 +246,8 @@ relatorios:
   - id: contratos_itens
     descricao: "Follow-up de Itens de Contratos de Empreiteiros"
     leitura:
-      linha_cabecalho: 1
-      colunas: 16
+      linha_cabecalho: 2
+      colunas: 75
     busca_tela: "up de itens"
     palavra_modulo: "Contratos de Empreiteiros"
     ancora_titulo_tela: "Follow-Up Itens"
