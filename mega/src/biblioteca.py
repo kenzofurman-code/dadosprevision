@@ -571,11 +571,12 @@ class Operador:
                     limite = time.time() + 75    # com retentativa, nao vale esperar mais
                     while time.time() < limite:
                         img = self.tela()
-                        if (self.v.achar_texto("Salvar como", img=img)
-                                or self.v.achar_texto("Ocultar pastas", img=img)):
+                        palavras = [p["texto"].lower() for p in self.v.palavras_todas(img)]
+                        texto_tela = " ".join(palavras)
+                        if any(k in texto_tela for k in ("salvar como", "salvar", "ocultar pastas", "pastas")):
                             apareceu = True
                             break
-                        time.sleep(3)
+                        time.sleep(2)
                     if not apareceu:
                         raise FalhaDeEtapa("a janela 'Salvar como' nao apareceu")
                     self.log("      janela 'Salvar como' confirmada; enviando Enter")
@@ -696,21 +697,21 @@ class Operador:
         8. Fecha o visualizador do Crystal Reports clicando em 'OK'.
         """
         self.log("      aguardando geracao no Crystal Reports (ate %ds)..." % timeout_espera_geracao)
-        ANCORAS_CRYSTAL = ("Relatório Principal", "Principal", "Caminho do relatório",
-                           "Total de Páginas", "Fator de Zoom", "Requisição de Materiais",
-                           "No. da página atual", "No. Total de Páginas")
+        ANCORAS_CRYSTAL = ("relatório principal", "relatorio principal", "principal", "caminho do relatório",
+                           "caminho do relatorio", "total de páginas", "total de paginas", "fator de zoom",
+                           "requisição de materiais", "requisicao de materiais",
+                           "no. da página atual", "no. da pagina atual", "no. total de páginas",
+                           "espelho_nota_fiscal", "nota_fiscal_modificado")
         limite = time.time() + timeout_espera_geracao
-        caixa_aba = None
+        caixa_aba = False
         ultimo_snap = 0
         while time.time() < limite:
             img = self.tela()
-            for ancora in ANCORAS_CRYSTAL:
-                caixa = self.v.achar_texto(ancora, img=img)
-                if caixa:
-                    caixa_aba = caixa
-                    self.log("      relatorio gerado! Ancora detectada: %r" % ancora)
-                    break
-            if caixa_aba:
+            palavras = [p["texto"].lower() for p in self.v.palavras_todas(img)]
+            texto_tela = " ".join(palavras)
+            if any(ancora in texto_tela for ancora in ANCORAS_CRYSTAL):
+                self.log("      relatorio gerado! Ancora detectada na tela.")
+                caixa_aba = True
                 break
             if time.time() - ultimo_snap > 30:
                 ultimo_snap = time.time()
@@ -721,7 +722,7 @@ class Operador:
                     self.log("      ainda processando relatorio (screenshot: %s)..." % caminho_snap.name)
                 except Exception:
                     pass
-            time.sleep(4)
+            time.sleep(3)
 
         if not caixa_aba:
             try:
@@ -751,7 +752,7 @@ class Operador:
         self.esperar_texto(("Exportar Relatório", "Exportar", "Salvar", "Tipo", "Nome"), timeout=45)
         time.sleep(1.5)
 
-        # Selecionar pasta 'Downloads' no painel lateral esquerdo (x ~ 60, y ~ 250)
+        # Selecionar pasta 'Downloads' no painel lateral esquerdo (x ~ 80, y ~ 227)
         # para que o arquivo seja gravado na pasta redirecionada do cliente e baixado via gateway
         self.log("      selecionando pasta 'Downloads' na barra lateral...")
         img_side = self.tela()
@@ -760,42 +761,27 @@ class Operador:
         if caixa_down:
             cx = caixa_down["x"] + caixa_down.get("w", 30) // 2
             cy = caixa_down["y"] + caixa_down.get("h", 16) // 2
-            self.pagina.mouse.dblclick(cx, cy)
+            self.pagina.mouse.click(cx, cy)
         else:
-            self.pagina.mouse.dblclick(60, 250)
+            self.pagina.mouse.click(80, 227)
         time.sleep(0.5)
         self.tecla("Enter", pausa=1.0)
         time.sleep(1.0)
 
         # 1. Ajustar o Tipo para Microsoft Excel (*.xls)
-        # Na janela 'Exportar Relatório', o campo Tipo fica em (280, 475)
-        self.log("      clicando na combobox Tipo em (280, 475)...")
-        self.pagina.mouse.click(280, 475)
-        time.sleep(1.5)
+        # Na janela 'Exportar Relatório', o campo Tipo fica em (440, 421)
+        self.log("      clicando na combobox Tipo em (440, 421)...")
+        self.pagina.mouse.click(440, 421)
+        time.sleep(1.0)
 
-        # Ao clicar, a combobox abre. Tentar achar opcao Excel pelo OCR ou navegar pelo teclado
-        img_drop = self.tela()
-        caixa_excel = None
-        if tipo == "data_only":
-            caixa_excel = self.v.achar_texto("Data-Only", img=img_drop)
-        if not caixa_excel:
-            caixa_excel = (self.v.achar_texto("Microsoft Excel", img=img_drop)
-                           or self.v.achar_texto("97-2003", img=img_drop)
-                           or self.v.achar_texto("Excel", img=img_drop))
-        if caixa_excel and caixa_excel.y > 200:
-            self.log("      opcao Excel (%s) localizada pelo OCR em (%d, %d); clicando"
-                     % (tipo, caixa_excel.x, caixa_excel.y))
-            self.pagina.mouse.click(caixa_excel.x + caixa_excel.largura // 2,
-                                    caixa_excel.y + caixa_excel.altura // 2)
-        else:
-            deslocamento = 5 if tipo == "data_only" else 4
-            self.log("      opcao Excel nao lida direto; enviando Home + %dx ArrowDown + Enter" % deslocamento)
-            self.tecla("Home", pausa=0.2)
-            for _ in range(deslocamento):
-                self.tecla("ArrowDown", pausa=0.2)
-            self.tecla("Enter", pausa=1.0)
-
-        time.sleep(1.5)
+        # Navegar pelo teclado para selecionar o tipo Excel Data-Only
+        deslocamento = 5 if tipo == "data_only" else 4
+        self.log("      enviando Home + %dx ArrowDown + Enter na combobox Tipo..." % deslocamento)
+        self.tecla("Home", pausa=0.3)
+        for _ in range(deslocamento):
+            self.tecla("ArrowDown", pausa=0.2)
+        self.tecla("Enter", pausa=1.0)
+        time.sleep(1.0)
 
         # Screenshot de confirmacao da selecao do tipo
         try:
@@ -804,20 +790,20 @@ class Operador:
         except Exception:
             pass
 
-        # 2. Preencher campo Nome (x=280, y=445)
+        # 2. Preencher campo Nome (x=250, y=395)
         self.log("      preenchendo nome do arquivo (%s)..." % destino.name)
-        self.pagina.mouse.click(280, 445)
+        self.pagina.mouse.click(250, 395)
         time.sleep(0.5)
         self.tecla("End", pausa=0.1)
-        for _ in range(30):
+        for _ in range(35):
             self.pagina.keyboard.press("Backspace")
         self.digitar(destino.stem)
         time.sleep(0.8)
 
-        # 3. Confirmar Salvar no botão (394, 522) e aguardar recepção do download
-        self.log("      confirmando salvamento do arquivo...")
+        # 3. Confirmar Salvar no botão (628, 470) e aguardar recepção do download
+        self.log("      confirmando salvamento do arquivo em (628, 470)...")
         with self.pagina.expect_download(timeout=180000) as info:
-            self.pagina.mouse.click(394, 522)
+            self.pagina.mouse.click(628, 470)
             time.sleep(0.5)
             self.tecla("Enter", pausa=1.0)
             self.log("      aguardando recepcao do arquivo baixado...")
