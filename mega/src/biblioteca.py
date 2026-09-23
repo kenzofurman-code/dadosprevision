@@ -651,7 +651,7 @@ class Operador:
 
         def _tem_ancora(img):
             import unicodedata
-            palavras = self.v.palavras_todas(img)
+            palavras = self.v._palavras(img, escala=1.0)
             texto_unificado = unicodedata.normalize('NFKD', " ".join(p["texto"].lower() for p in palavras)).encode('ASCII', 'ignore').decode('ASCII')
             return any(anc in texto_unificado for anc in ANCORAS_CRYSTAL)
 
@@ -663,32 +663,26 @@ class Operador:
             return True
 
         self.log("      fechando visualizador do Crystal Reports...")
-        for tentativa in range(1, 4):
-            # Envia Escape preventivo caso algum modal tenha aberto
-            self.tecla("Escape", pausa=0.3)
-
+        for tentativa in range(1, 3):
             # 1. Tentar primeiro o botão OK em (1554, 850)
             self.pagina.mouse.click(1554, 850)
-            time.sleep(1.5)
-            img_pos = self.tela()
-            if not _tem_ancora(img_pos):
+            time.sleep(2.0)
+            if not _tem_ancora(self.tela()):
                 self.log("      visualizador fechado com sucesso pelo botão OK.")
                 return True
 
             # 2. Se ainda presente, clicar no botão 'X' no canto superior direito (1588, 12)
             self.log("      visualizador ainda presente; tentando fechar pelo 'X' em (1588, 12)...")
             self.pagina.mouse.click(1588, 12)
-            time.sleep(1.5)
-            img_pos2 = self.tela()
-            if not _tem_ancora(img_pos2):
+            time.sleep(2.0)
+            if not _tem_ancora(self.tela()):
                 self.log("      visualizador fechado com sucesso pelo botão 'X'.")
                 return True
 
             # 3. Se ainda presente, enviar Escape
             self.log("      visualizador ainda presente; enviando Escape...")
             self.tecla("Escape", pausa=1.5)
-            img_pos3 = self.tela()
-            if not _tem_ancora(img_pos3):
+            if not _tem_ancora(self.tela()):
                 self.log("      visualizador fechado com sucesso pelo Escape.")
                 return True
 
@@ -715,14 +709,14 @@ class Operador:
         ultimo_snap = 0
         while time.time() < limite:
             img = self.tela()
-            palavras = [p["texto"].lower() for p in self.v.palavras_todas(img)]
+            palavras = [p["texto"].lower() for p in self.v._palavras(img, escala=1.0)]
             texto_tela = " ".join(palavras)
             # O documento so esta pronto de verdade quando:
             # 1. O visualizador do Crystal Reports abriu na tela
-            # 2. A caixa modal 'Aguarde enquanto o documento está sendo processado' sumiu
+            # 2. O conteudo da tabela do relatorio renderizou (colunas e dados presentes)
             viewer_aberto = any(v in texto_tela for v in ("relatorio principal", "relatório principal", "caminho do rel", "fator de zoom", ".rpt"))
-            esta_processando = ("processado" in texto_tela or "aguarde" in texto_tela)
-            if viewer_aberto and not esta_processando:
+            tem_conteudo = any(anc in texto_tela for anc in ANCORAS_DOCUMENTO)
+            if viewer_aberto and tem_conteudo:
                 self.log("      relatorio gerado! Documento pronto na tela.")
                 caixa_aba = True
                 break
