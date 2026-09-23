@@ -45,9 +45,9 @@ def main():
     import rodar_noite
     import rodar_approvo
 
-    cron_approvo = os.environ.get("CRON_SCHEDULE_APPROVO", "0 1 * * *")
-    cron_noite = os.environ.get("CRON_SCHEDULE_MEGA", "0 2 * * *")
-    cron_retry = os.environ.get("CRON_SCHEDULE_MEGA_RETRY", "0 6 * * *")
+    cron_approvo = os.environ.get("CRON_SCHEDULE_APPROVO", "0 22 * * *")
+    cron_noite = os.environ.get("CRON_SCHEDULE_MEGA", "0 0 * * *")
+    cron_retry = os.environ.get("CRON_SCHEDULE_MEGA_RETRY", "30 7 * * *")
 
     print("[AGENDADOR] Iniciado com cron_approvo=%r, cron_noite=%r, cron_retry=%r" % (
         cron_approvo, cron_noite, cron_retry), flush=True)
@@ -61,19 +61,19 @@ def main():
         time.sleep(max(0, espera))
 
         if tipo == "approvo":
-            print("[AGENDADOR] Disparando rotina do Approvo (01:00)...", flush=True)
+            print("[AGENDADOR] Disparando rotina do Approvo (22:00)...", flush=True)
             try:
                 rodar_approvo.rodar(headless=True)
             except Exception as e:
                 print("execucao do Approvo falhou: %s" % e, flush=True)
         elif tipo == "noite":
-            print("[AGENDADOR] Disparando rotina noturna completa...", flush=True)
+            print("[AGENDADOR] Disparando rotina noturna completa (00:00)...", flush=True)
             try:
                 rodar_noite.main()
             except Exception as e:
                 print("execucao da noite falhou: %s" % e, flush=True)
         elif tipo == "retry":
-            print("[AGENDADOR] Disparando auditoria e retry...", flush=True)
+            print("[AGENDADOR] Disparando auditoria e retry (07:30)...", flush=True)
             try:
                 retry.main()
             except Exception as e:

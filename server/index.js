@@ -298,8 +298,8 @@ async function start() {
   try {
     await initDb()
 
-    // Cron job for automatic sync (Default: Every day at 06:00 and 18:00)
-    const schedule = process.env.CRON_SYNC_SCHEDULE || '0 6,18 * * *'
+    // Cron job for automatic sync (Default: Every day at 20:00)
+    const schedule = process.env.CRON_SYNC_SCHEDULE || '0 20 * * *'
     if (cron.validate(schedule)) {
       cron.schedule(schedule, async () => {
         console.log(`[CRON] Executando sincronizacao automatica (${new Date().toISOString()})...`)

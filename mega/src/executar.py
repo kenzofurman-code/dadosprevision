@@ -338,6 +338,9 @@ def _rodar_relatorio_na_obra_ativa(op, v, rel, obra, data_iso, pasta):
     esta funcao roda o relatorio pressupondo que a empresa ativa ja e a
     da obra.
     """
+    # Se houver visualizador do Crystal Reports remanescente de relatório anterior, fecha antes de abrir próxima tela
+    op.fechar_visualizador_crystal()
+
     op.abrir_tela(rel["busca_tela"], rel["ancora_titulo_tela"],
                   palavra_modulo=rel.get("palavra_modulo"))
     if rel.get("confere_filial", True):
@@ -352,7 +355,7 @@ def _rodar_relatorio_na_obra_ativa(op, v, rel, obra, data_iso, pasta):
         if formato in ("crystal_xls", "crystal_data_only"):
             destino = pasta / ("%s_%s_%s.xls" % (exp["arquivo"], obra["codigo"], data_iso))
             tipo = "data_only" if formato == "crystal_data_only" else "excel"
-            caminhos.append(op.exportar_crystal_relatorio(destino, tipo=tipo))
+            caminhos.append(op.exportar_crystal_relatorio(destino, timeout_espera_geracao=300, tipo=tipo))
             return ("ok", caminhos)
 
     time.sleep(25)

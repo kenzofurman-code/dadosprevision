@@ -30,7 +30,7 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no Coolify}
       PREVISION_API_KEY: ${PREVISION_API_KEY}
       PREVISION_REST_TOKEN: ${PREVISION_REST_TOKEN:-}
-      CRON_SYNC_SCHEDULE: ${CRON_SYNC_SCHEDULE:-0 6,18 * * *}
+      CRON_SYNC_SCHEDULE: ${CRON_SYNC_SCHEDULE:-0 20 * * *}
     expose:
       - "3000"
     healthcheck:
@@ -61,7 +61,11 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no Coolify}
       MEGA_USUARIO: ${MEGA_USUARIO:?defina MEGA_USUARIO no Coolify}
       MEGA_SENHA: ${MEGA_SENHA:?defina MEGA_SENHA no Coolify}
-      CRON_SCHEDULE_MEGA: ${CRON_SCHEDULE_MEGA:-0 2 * * *}
+      CRON_SCHEDULE_MEGA: ${CRON_SCHEDULE_MEGA:-0 0 * * *}
+      CRON_SCHEDULE_MEGA_RETRY: ${CRON_SCHEDULE_MEGA_RETRY:-30 7 * * *}
+      APPROVO_USUARIO: ${APPROVO_USUARIO:-}
+      APPROVO_SENHA: ${APPROVO_SENHA:-}
+      CRON_SCHEDULE_APPROVO: ${CRON_SCHEDULE_APPROVO:-0 22 * * *}
     volumes:
       - mega_dados:/app/dados   # so para BLOQUEADO reter evidencia
 
