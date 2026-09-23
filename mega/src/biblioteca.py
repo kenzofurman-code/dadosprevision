@@ -751,39 +751,26 @@ class Operador:
         self.esperar_texto(("Exportar Relatório", "Exportar", "Salvar", "Tipo", "Nome"), timeout=45)
         time.sleep(1.5)
 
-        # Selecionar pasta 'Downloads' no painel lateral esquerdo (x ~ 55, y ~ 250)
+        # Selecionar pasta 'Downloads' no painel lateral esquerdo (x ~ 60, y ~ 250)
         # para que o arquivo seja gravado na pasta redirecionada do cliente e baixado via gateway
         self.log("      selecionando pasta 'Downloads' na barra lateral...")
         img_side = self.tela()
         todas_palavras = self.v.palavras_todas(img_side)
         caixa_down = next((p for p in todas_palavras if "download" in p["texto"].lower() and p["x"] < 120 and p["y"] < 350), None)
         if caixa_down:
-            self.pagina.mouse.click(caixa_down["x"] + caixa_down.get("w", 30) // 2,
-                                    caixa_down["y"] + caixa_down.get("h", 16) // 2)
+            cx = caixa_down["x"] + caixa_down.get("w", 30) // 2
+            cy = caixa_down["y"] + caixa_down.get("h", 16) // 2
+            self.pagina.mouse.dblclick(cx, cy)
         else:
-            self.pagina.mouse.click(55, 250)
-        time.sleep(1.5)
+            self.pagina.mouse.dblclick(60, 250)
+        time.sleep(0.5)
+        self.tecla("Enter", pausa=1.0)
+        time.sleep(1.0)
 
         # 1. Ajustar o Tipo para Microsoft Excel (*.xls)
-        # O rotulo "Tipo:" fica na regiao inferior esquerda (x < 150, y > 350)
-        img = self.tela()
-        todas = self.v.palavras_todas(img)
-        candidatos_tipo = [p for p in todas
-                           if "tipo" in p["texto"].lower() and p["x"] < 150 and p["y"] > 350]
-        if candidatos_tipo:
-            c_tipo = candidatos_tipo[0]
-            x_combo = c_tipo["x"] + c_tipo.get("w", 30) + 120
-            y_combo = c_tipo["y"] + c_tipo.get("h", 16) // 2
-        else:
-            caixa_salv = self.v.achar_texto("Salvar", img=img)
-            if caixa_salv:
-                x_combo = caixa_salv.x - 180
-                y_combo = caixa_salv.y - 45
-            else:
-                x_combo, y_combo = 200, 470
-
-        self.log("      clicando na combobox Tipo em (%d, %d)..." % (x_combo, y_combo))
-        self.pagina.mouse.click(x_combo, y_combo)
+        # Na janela 'Exportar Relatório', o campo Tipo fica em (280, 475)
+        self.log("      clicando na combobox Tipo em (280, 475)...")
+        self.pagina.mouse.click(280, 475)
         time.sleep(1.5)
 
         # Ao clicar, a combobox abre. Tentar achar opcao Excel pelo OCR ou navegar pelo teclado
@@ -801,10 +788,11 @@ class Operador:
             self.pagina.mouse.click(caixa_excel.x + caixa_excel.largura // 2,
                                     caixa_excel.y + caixa_excel.altura // 2)
         else:
-            deslocamento = 4 if tipo == "data_only" else 3
-            self.log("      opcao Excel nao lida direto; enviando %dx ArrowDown + Enter" % deslocamento)
+            deslocamento = 5 if tipo == "data_only" else 4
+            self.log("      opcao Excel nao lida direto; enviando Home + %dx ArrowDown + Enter" % deslocamento)
+            self.tecla("Home", pausa=0.2)
             for _ in range(deslocamento):
-                self.tecla("ArrowDown", pausa=0.25)
+                self.tecla("ArrowDown", pausa=0.2)
             self.tecla("Enter", pausa=1.0)
 
         time.sleep(1.5)
