@@ -31,7 +31,7 @@ class Operador:
     def tela(self, cutucar=True, ponto=None):
         return self.v.capturar(cutucar=cutucar, ponto=ponto)
 
-    def esperar_texto(self, alvo, timeout=60, intervalo=3, ponto_cutucao=None):
+    def esperar_texto(self, alvo, timeout=60, intervalo=3, ponto_cutucao=None, regiao=None):
         """Espera um texto (ou qualquer um de uma lista/tupla de textos) aparecer e devolve sua caixa.
         Ancora de progresso.
         """
@@ -43,7 +43,7 @@ class Operador:
             if erro:
                 raise FalhaDeEtapa("dialogo de erro na tela: %r" % erro)
             for a in alvos:
-                caixa = self.v.achar_texto(a, img=img)
+                caixa = self.v.achar_texto(a, img=img, regiao=regiao)
                 if caixa:
                     return caixa
             time.sleep(intervalo)
@@ -447,19 +447,7 @@ class Operador:
                           if len(p) >= 4 and _remover_acentos(p) not in ("follow-up", "follow", "visao", "visoes")]
 
         while time.time() < limite_busca:
-            # 1a prioridade: se a busca tem palavra discriminatoria (ex: 'pedidos'), procurar diretamente por ela no titulo
-            for termo in palavras_busca:
-                if termo not in ("solicita", "solicitacao", "solicitacoes"):
-                    caixa = self.v.achar_texto(termo, img=img, regiao=REGIAO_GAVETA)
-                    if caixa:
-                        self.log("   card localizado pelo termo da busca %r em y=%d" % (termo, caixa.y))
-                        self.pagina.mouse.click(110, caixa.y)
-                        clicou = True
-                        break
-            if clicou:
-                break
-
-            # 2a prioridade: desambiguacao por modulo (ex: 'Compras') quando informado explicitamente
+            # 1a prioridade: desambiguacao por modulo (ex: 'Contratos de Empreiteiros', 'Compras') quando informado explicitamente
             if palavra_modulo:
                 caixa = self.v.achar_texto(palavra_modulo, img=img, regiao=REGIAO_GAVETA)
                 if caixa:
@@ -469,6 +457,18 @@ class Operador:
                     self.pagina.mouse.click(110, max(0, caixa.y - 18))
                     clicou = True
                     break
+
+            # 2a prioridade: se a busca tem palavra discriminatoria (ex: 'pedidos'), procurar diretamente por ela no titulo
+            for termo in palavras_busca:
+                if termo not in ("solicita", "solicitacao", "solicitacoes", "operacionais"):
+                    caixa = self.v.achar_texto(termo, img=img, regiao=REGIAO_GAVETA)
+                    if caixa:
+                        self.log("   card localizado pelo termo da busca %r em y=%d" % (termo, caixa.y))
+                        self.pagina.mouse.click(110, caixa.y)
+                        clicou = True
+                        break
+            if clicou:
+                break
 
             time.sleep(1.5)
             img = self.tela()
@@ -621,23 +621,23 @@ class Operador:
                     "o arquivo %s foi salvo como documento OLE2 mas nao contem o stream 'Workbook' "
                     "(foi exportado como .rpt em vez de .xls)" % caminho.name)
 
-    def exportar_crystal_relatorio(self, destino, timeout_espera_geracao=300,
-                                   timeout_download=300):
-        """Exporta o relatorio aberto no Crystal Reports Viewer como Excel (.xls).
+    def exportar_crystal_relatorio(self, destino, timeout_espera_geracao=180, timeout_download=120, tipo="excel"):
+        """Exporta relatorio gerado no visualizador do Crystal Reports para Excel (.xls).
 
-        No visualizador do Crystal Reports:
-        1. Aguarda confirmacao de geracao (Aba 'Relatório Principal', 'Caminho do relatório',
+        1. Aguarda a renderizacao no visualizador do Crystal Reports (identificado
+           por ancoras como 'Relatório Principal', 'Caminho do relatório'
            ou 'No. Total de Páginas').
         2. Clica no 1o icone da barra de ferramentas superior (Exportar).
         3. Aguarda a janela 'Exportar Relatório'.
-        4. Seleciona o formato 'Microsoft Excel (97-2003) (*.xls)' no campo Tipo.
+        4. Seleciona o formato Excel (ou Data-Only) no campo Tipo.
         5. Confirma Salvar e captura o download disparado pelo gateway Web RDP.
         6. Salva no arquivo de destino e valida a assinatura binaria OLE2 (.xls).
         7. Fecha o visualizador do Crystal Reports clicando em 'OK'.
         """
         self.log("      aguardando geracao no Crystal Reports (ate %ds)..." % timeout_espera_geracao)
         ANCORAS_CRYSTAL = ("Relatório Principal", "Principal", "Caminho do relatório",
-                           "Total de Páginas", "Fator de Zoom", "Requisição de Materiais")
+                           "Total de Páginas", "Fator de Zoom", "Requisição de Materiais",
+                           "No. da página atual", "No. Total de Páginas")
         limite = time.time() + timeout_espera_geracao
         caixa_aba = None
         ultimo_snap = 0
@@ -715,17 +715,22 @@ class Operador:
 
             # Ao clicar, a combobox abre. Tentar achar opcao Excel pelo OCR ou navegar pelo teclado
             img_drop = self.tela()
-            caixa_excel = (self.v.achar_texto("Microsoft Excel", img=img_drop)
-                           or self.v.achar_texto("97-2003", img=img_drop)
-                           or self.v.achar_texto("Excel", img=img_drop))
+            caixa_excel = None
+            if tipo == "data_only":
+                caixa_excel = self.v.achar_texto("Data-Only", img=img_drop)
+            if not caixa_excel:
+                caixa_excel = (self.v.achar_texto("Microsoft Excel", img=img_drop)
+                               or self.v.achar_texto("97-2003", img=img_drop)
+                               or self.v.achar_texto("Excel", img=img_drop))
             if caixa_excel and caixa_excel.y > 200:
-                self.log("      opcao Excel localizada pelo OCR em (%d, %d); clicando"
-                         % (caixa_excel.x, caixa_excel.y))
+                self.log("      opcao Excel (%s) localizada pelo OCR em (%d, %d); clicando"
+                         % (tipo, caixa_excel.x, caixa_excel.y))
                 self.pagina.mouse.click(caixa_excel.x + caixa_excel.largura // 2,
                                         caixa_excel.y + caixa_excel.altura // 2)
             else:
-                self.log("      opcao Excel nao lida direto; enviando 3x ArrowDown + Enter")
-                for _ in range(3):
+                deslocamento = 4 if tipo == "data_only" else 3
+                self.log("      opcao Excel nao lida direto; enviando %dx ArrowDown + Enter" % deslocamento)
+                for _ in range(deslocamento):
                     self.tecla("ArrowDown", pausa=0.25)
                 self.tecla("Enter", pausa=1.0)
 

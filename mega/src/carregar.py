@@ -11,9 +11,11 @@ nunca as tem. Elas sao sinteticas e precisam ser inseridas AQUI, uma vez por
 obra, logo apos ler o .xlsx e antes de traduzir_colunas — mesmo padrao ja usado
 em consolidar.consolidar() para o arquivo consolidado (df.insert(0/1/2, ...)).
 """
+import datetime as dt
 import json
 import math
 from pathlib import Path
+import re
 
 import pandas as pd
 
@@ -38,6 +40,8 @@ TABELA_POR_ARQUIVO = {
     "Analise_Pedidos": "analise_pedidos_hist",
     "Analise_Contratos": "analise_contratos_hist",
     "Analise_Realizado": "analise_realizado",
+    "Medicoes": "medicoes_contratos",
+    "Follow_Up_Itens": "contratos_itens",
 }
 
 # Colunas que cada tabela de sql/schema_mega.sql realmente declara (sem id, sem
@@ -76,6 +80,24 @@ TABELA_COLUNAS = {
         "codigo_contrato", "fornecedor", "status_pre_contrato",
         "saldo_qtde_contrato", "valor_unitario", "total",
     ],
+    "medicoes_contratos": [
+        "numero_contrato", "numero_medicao", "item_sequencial",
+        "periodo_inicio", "periodo_fim", "descricao_servico", "unidade",
+        "quantidade_medida", "valor_unitario", "valor_total", "valor_faturado",
+        "fornecedor_nome", "fornecedor_cnpj", "data_emissao", "situacao_medicao",
+        "inss", "iss", "irrf", "caucao",
+    ],
+    "contratos_itens": [
+        "cod_contrato", "cod_item", "cod_alternativo", "consolidador",
+        "cod_agrupador", "aditivo", "item_alternativo", "descricao",
+        "cod_padrao", "cod_unidade", "unidade", "quantidade",
+        "valor_unitario", "total_item", "total_contratado", "situacao",
+    ],
+}
+
+CHAVES_NATURAIS = {
+    "medicoes_contratos": ["obra", "numero_contrato", "numero_medicao", "item_sequencial"],
+    "contratos_itens": ["obra", "cod_contrato", "cod_item", "aditivo"],
 }
 
 
@@ -120,6 +142,117 @@ def _ler_crystal_solicitacoes_etapa(caminho):
     dados = dados.rename(columns=renomeio)
     dados = dados.drop(columns=[12], errors="ignore")
     return dados
+
+
+def _ler_crystal_medicoes(caminho):
+    """Le o .xls/.xlsx do Crystal Reports de medicoes de contratos (dados2.xlsx).
+    Extrai as linhas de medicao estruturadas e soma retencoes fiscais/caucao."""
+    df_raw = pd.read_excel(caminho, header=None)
+    mask_contrato = df_raw[5].astype(str).str.contains('Contrato', na=False)
+    indices_contrato = df_raw[mask_contrato].index.tolist()
+
+    registros = []
+    total_linhas = len(df_raw)
+    contadores = {}
+
+    for i, idx in enumerate(indices_contrato):
+        prox_idx = indices_contrato[i + 1] if i + 1 < len(indices_contrato) else total_linhas
+        row = df_raw.iloc[idx]
+
+        c_qtd = row[0]
+        c_und = str(row[1]).strip() if pd.notna(row[1]) else None
+        c_desc = str(row[2]).strip() if pd.notna(row[2]) else None
+        c_unit = row[3]
+        c_tot = row[4]
+
+        c_cont_str = str(row[5])
+        m_cont = re.search(r'(\d+)', c_cont_str)
+        num_contrato = int(m_cont.group(1)) if m_cont else 0
+
+        c_med_str = str(row[6])
+        m_med = re.search(r'Medi[^\d]*(\d+)', c_med_str)
+        num_medicao = int(m_med.group(1)) if m_med else 0
+
+        m_per_ini = re.search(r'Per[^\d]*(\d{2}/\d{2}/\d{4})', c_med_str)
+        per_ini = m_per_ini.group(1) if m_per_ini else None
+        if per_ini:
+            try:
+                per_ini = dt.datetime.strptime(per_ini, "%d/%m/%Y").date()
+            except Exception:
+                pass
+
+        m_per_fim = re.search(r'a\s+(\d{2}/\d{2}/\d{4})', c_med_str)
+        per_fim = m_per_fim.group(1) if m_per_fim else None
+        if per_fim:
+            try:
+                per_fim = dt.datetime.strptime(per_fim, "%d/%m/%Y").date()
+            except Exception:
+                pass
+
+        c_faturado = row[7]
+        c_fornec = str(row[8]).strip() if pd.notna(row[8]) else None
+
+        c_cnpj_str = str(row[9]) if pd.notna(row[9]) else ''
+        m_cnpj = re.search(r'(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}|\d{3}\.\d{3}\.\d{3}-\d{2})', c_cnpj_str)
+        cnpj = m_cnpj.group(1) if m_cnpj else None
+
+        c_emiss_str = str(row[10]) if pd.notna(row[10]) else ''
+        m_emiss = re.search(r'(\d{2}/\d{2}/\d{4})', c_emiss_str)
+        dt_emiss = m_emiss.group(1) if m_emiss else None
+        if dt_emiss:
+            try:
+                dt_emiss = dt.datetime.strptime(dt_emiss, "%d/%m/%Y").date()
+            except Exception:
+                pass
+
+        status = str(row[11]).strip() if pd.notna(row[11]) else None
+
+        # Sublinhas entre idx+1 e prox_idx para retenções
+        inss = 0.0
+        iss = 0.0
+        irrf = 0.0
+        caucao = 0.0
+
+        for sub_i in range(idx + 1, prox_idx):
+            sub_tipo = str(df_raw.iloc[sub_i, 3] or '').strip().upper()
+            sub_val = df_raw.iloc[sub_i, 2]
+            if pd.notna(sub_val) and isinstance(sub_val, (int, float)):
+                if 'INSS' in sub_tipo:
+                    inss += float(sub_val)
+                elif 'ISS' in sub_tipo:
+                    iss += float(sub_val)
+                elif 'IRRF' in sub_tipo:
+                    irrf += float(sub_val)
+                elif 'CAU' in sub_tipo:
+                    caucao += float(sub_val)
+
+        chave_med = (num_contrato, num_medicao)
+        contadores[chave_med] = contadores.get(chave_med, 0) + 1
+        item_seq = contadores[chave_med]
+
+        registros.append({
+            'numero_contrato': num_contrato,
+            'numero_medicao': num_medicao,
+            'item_sequencial': item_seq,
+            'periodo_inicio': per_ini,
+            'periodo_fim': per_fim,
+            'descricao_servico': c_desc,
+            'unidade': c_und,
+            'quantidade_medida': float(c_qtd) if pd.notna(c_qtd) else 0.0,
+            'valor_unitario': float(c_unit) if pd.notna(c_unit) else 0.0,
+            'valor_total': float(c_tot) if pd.notna(c_tot) else 0.0,
+            'valor_faturado': float(c_faturado) if pd.notna(c_faturado) else 0.0,
+            'fornecedor_nome': c_fornec,
+            'fornecedor_cnpj': cnpj,
+            'data_emissao': dt_emiss,
+            'situacao_medicao': status,
+            'inss': inss,
+            'iss': iss,
+            'irrf': irrf,
+            'caucao': caucao,
+        })
+
+    return pd.DataFrame(registros)
 
 
 
@@ -258,6 +391,8 @@ def carregar_relatorio(cfg, conn, rel_id, data_iso, pasta, resultado_execucao,
                 continue
             if arquivo_base == "Solicitacoes_Por_Etapa":
                 df = _ler_crystal_solicitacoes_etapa(caminho)
+            elif arquivo_base == "Medicoes":
+                df = _ler_crystal_medicoes(caminho)
             else:
                 df = ler_bruto(caminho, rel["leitura"])
             df.insert(0, "obra", obra)
@@ -301,6 +436,10 @@ def carregar_relatorio(cfg, conn, rel_id, data_iso, pasta, resultado_execucao,
             if retencao == "historico":
                 banco.inserir_historico(conn, tabela, colunas, linhas,
                                         marcador_parametro=marcador_parametro)
+            elif retencao == "upsert":
+                chaves = CHAVES_NATURAIS.get(tabela, ["obra"])
+                banco.upsert_linhas(conn, tabela, colunas, chaves, linhas,
+                                    marcador_parametro=marcador_parametro)
             else:
                 banco.substituir_obra(conn, tabela, colunas, obra, linhas,
                                       marcador_parametro=marcador_parametro)

@@ -59,7 +59,9 @@ def preparar_itens_solicitados(op, rel, obra):
     """Passos especificos da tela de Itens Solicitados."""
     op.clicar_texto("Mostrar apenas Itens Solicitados")
 
-    rotulo = op.esperar_texto("Data de emissao", timeout=30)
+    # Restringir à barra lateral esquerda (x < 300) para evitar colidir com
+    # a coluna homônima no cabeçalho do grid (que fica no topo em y=132).
+    rotulo = op.esperar_texto("Data de emissao", timeout=30, regiao=(0, 200, 300, 600))
     campo = Caixa(rotulo.x, rotulo.y + rotulo.altura + 4, 90, 18, "", 0)
     inicial = "01/01/2025"
     for passo in rel.get("preparo", []):
@@ -265,12 +267,61 @@ def preparar_solicitacoes_por_etapa(op, rel, obra):
             op.tecla("Enter", pausa=1.0)
 
 
+def preparar_medicoes_contratos(op, rel, obra):
+    """Medições de Contratos: seleciona 'Medição modificado' na lista de relatórios,
+    clica em Executar (1518, 857), aguarda modal de parâmetros e clica em Confirmar."""
+    op.log("   selecionando 'Medição modificado'...")
+    caixa_rel = op.esperar_texto(("Medição modificado", "Medicao modificado", "Espelho da Nota Fiscal", "Medição"), timeout=45)
+    op.pagina.mouse.click(caixa_rel.x + 30, caixa_rel.y + caixa_rel.altura // 2)
+    time.sleep(1.5)
+
+    op.log("   clicando em Executar em (1518, 857)...")
+    op.pagina.mouse.click(1518, 857)
+    time.sleep(1)
+
+    op.log("   aguardando janela de parâmetros de medições...")
+    limite = time.time() + 90
+    caixa_conf = None
+    while time.time() < limite:
+        img = op.tela()
+        caixa_conf = op.v.achar_texto("Confirmar", img=img)
+        if caixa_conf:
+            break
+        op.pagina.mouse.click(1518, 857)
+        time.sleep(3)
+
+    if not caixa_conf:
+        try:
+            op.pagina.screenshot(path="dados/falhas/falha_parametros_medicoes.png")
+        except Exception:
+            pass
+        raise FalhaDeEtapa("a janela de parâmetros de 'Medição modificado' nao apareceu em 90s")
+
+    time.sleep(1.5)
+    op.log("   clicando em Confirmar...")
+    op.pagina.mouse.click(caixa_conf.x + caixa_conf.largura // 2,
+                          caixa_conf.y + caixa_conf.altura // 2)
+
+
+def preparar_contratos_itens(op, rel, obra):
+    """Follow-up de Itens de Contratos: clica no botão Filtrar na aba Geral e aguarda o grid."""
+    op.log("   aguardando botão Filtrar na aba Geral...")
+    caixa_filt = op.esperar_texto("Filtrar", timeout=30)
+    op.log("   clicando em Filtrar em (%d, %d)..." % (caixa_filt.x, caixa_filt.y))
+    op.pagina.mouse.click(caixa_filt.x + caixa_filt.largura // 2,
+                          caixa_filt.y + caixa_filt.altura // 2)
+    op.log("   aguardando carregamento do grid de itens dos contratos...")
+    time.sleep(15)
+
+
 PREPARADORES = {
     "analise_saldo_solicitacao": preparar_analise_saldo,
     "itens_solicitados": preparar_itens_solicitados,
     "pedidos_compra": preparar_pedidos_compra,
     "visualizacao_itens": preparar_visualizacao_itens,
     "solicitacoes_por_etapa": preparar_solicitacoes_por_etapa,
+    "medicoes_contratos": preparar_medicoes_contratos,
+    "contratos_itens": preparar_contratos_itens,
 }
 
 
@@ -297,9 +348,11 @@ def _rodar_relatorio_na_obra_ativa(op, v, rel, obra, data_iso, pasta):
     # Se for relatório via Crystal Reports, a exportação é feita pelo visualizador
     caminhos = []
     for exp in rel["exportacoes"]:
-        if exp.get("formato") == "crystal_xls":
+        formato = exp.get("formato")
+        if formato in ("crystal_xls", "crystal_data_only"):
             destino = pasta / ("%s_%s_%s.xls" % (exp["arquivo"], obra["codigo"], data_iso))
-            caminhos.append(op.exportar_crystal_relatorio(destino))
+            tipo = "data_only" if formato == "crystal_data_only" else "excel"
+            caminhos.append(op.exportar_crystal_relatorio(destino, tipo=tipo))
             return ("ok", caminhos)
 
     time.sleep(25)

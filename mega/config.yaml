@@ -227,3 +227,41 @@ relatorios:
         formato: "crystal_xls"
         arquivo: "Solicitacoes_Por_Etapa"
 
+  - id: medicoes_contratos
+    descricao: "Espelho de Medições de Contratos de Empreiteiros (Crystal Reports)"
+    leitura:
+      linha_cabecalho: 1
+      colunas: 12
+    busca_tela: "operacionais"
+    palavra_modulo: "Contratos de Empreiteiros"
+    ancora_titulo_tela: "RELATÓRIOS/LISTAGENS"
+    confere_filial: false
+    retencao: "upsert"
+    chave_natural: ["obra", "numero_contrato", "numero_medicao", "item_sequencial"]
+    exportacoes:
+      - aba: null
+        formato: "crystal_data_only"
+        arquivo: "Medicoes"
+
+  - id: contratos_itens
+    descricao: "Follow-up de Itens de Contratos de Empreiteiros"
+    leitura:
+      linha_cabecalho: 1
+      colunas: 16
+    busca_tela: "up de itens"
+    palavra_modulo: "Contratos de Empreiteiros"
+    ancora_titulo_tela: "Follow-Up Itens"
+    confere_filial: false
+    retencao: "upsert"
+    chave_natural: ["obra", "cod_contrato", "cod_item", "aditivo"]
+    preparo:
+      - tipo: botao
+        alvo: "Filtrar"
+        espera: "grid popula na aba Itens (~15s)"
+    exportacoes:
+      - aba: null
+        caminho_menu: ["Exportar", "Excel"]
+        arquivo: "Follow_Up_Itens"
+    grid_vazio_e_valido: true
+
+

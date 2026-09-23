@@ -57,6 +57,34 @@ def substituir_obra(conn, tabela, colunas, obra, linhas, marcador_parametro="%s"
             linhas)
 
 
+def upsert_linhas(conn, tabela, colunas, chaves, linhas, marcador_parametro="%s"):
+    """Insere novos registros ou atualiza apenas campos que tenham mudado (IS DISTINCT FROM)."""
+    if not linhas:
+        return
+    prefixo = "" if marcador_parametro == "?" else "mega."
+    cur = conn.cursor()
+    colunas_sql = ", ".join(colunas)
+    marcadores = ", ".join([marcador_parametro] * len(colunas))
+    chaves_sql = ", ".join(chaves)
+
+    colunas_update = [c for c in colunas if c not in chaves]
+    if colunas_update:
+        updates_sql = ", ".join(["%s = EXCLUDED.%s" % (c, c) for c in colunas_update])
+        # Apenas atualiza se houver alguma diferença real
+        distinct_sql = " OR ".join(["%s%s.%s IS DISTINCT FROM EXCLUDED.%s" % (prefixo, tabela, c, c) for c in colunas_update])
+        sql = (
+            "INSERT INTO %s%s (%s) VALUES (%s) "
+            "ON CONFLICT (%s) DO UPDATE SET %s WHERE %s"
+            % (prefixo, tabela, colunas_sql, marcadores, chaves_sql, updates_sql, distinct_sql)
+        )
+    else:
+        sql = (
+            "INSERT INTO %s%s (%s) VALUES (%s) ON CONFLICT (%s) DO NOTHING"
+            % (prefixo, tabela, colunas_sql, marcadores, chaves_sql)
+        )
+    cur.executemany(sql, linhas)
+
+
 def inserir_historico(conn, tabela, colunas, linhas, marcador_parametro="%s"):
     if not linhas:
         return

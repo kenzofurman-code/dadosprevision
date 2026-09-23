@@ -247,3 +247,69 @@ CREATE INDEX IF NOT EXISTS idx_mega_approvo_ocorrencias_obra
   ON mega.approvo_ocorrencias(obra);
 CREATE INDEX IF NOT EXISTS idx_mega_approvo_ocorrencias_data
   ON mega.approvo_ocorrencias(data_aprovacao);
+
+-- ---------------------------------------------------------------------------
+-- medicoes_contratos: espelho de medições de contratos de empreiteiros
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS mega.medicoes_contratos (
+  obra                    TEXT NOT NULL,
+  obra_nome               TEXT,
+  data_extracao           DATE NOT NULL,
+  numero_contrato         BIGINT NOT NULL,
+  numero_medicao          BIGINT NOT NULL,
+  item_sequencial         INTEGER NOT NULL,
+  periodo_inicio          DATE,
+  periodo_fim             DATE,
+  descricao_servico       TEXT,
+  unidade                 TEXT,
+  quantidade_medida       NUMERIC,
+  valor_unitario          NUMERIC,
+  valor_total             NUMERIC,
+  valor_faturado          NUMERIC,
+  fornecedor_nome         TEXT,
+  fornecedor_cnpj         TEXT,
+  data_emissao            DATE,
+  situacao_medicao        TEXT,
+  inss                    NUMERIC DEFAULT 0,
+  iss                     NUMERIC DEFAULT 0,
+  irrf                    NUMERIC DEFAULT 0,
+  caucao                  NUMERIC DEFAULT 0,
+  raw_data                JSONB DEFAULT '{}'::jsonb,
+  PRIMARY KEY (obra, numero_contrato, numero_medicao, item_sequencial)
+);
+CREATE INDEX IF NOT EXISTS idx_mega_medicoes_obra
+  ON mega.medicoes_contratos(obra);
+CREATE INDEX IF NOT EXISTS idx_mega_medicoes_contrato
+  ON mega.medicoes_contratos(numero_contrato);
+
+-- ---------------------------------------------------------------------------
+-- contratos_itens: follow-up de itens de contratos de empreiteiros
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS mega.contratos_itens (
+  obra                    TEXT NOT NULL,
+  obra_nome               TEXT,
+  data_extracao           DATE NOT NULL,
+  cod_contrato            BIGINT NOT NULL,
+  cod_item                BIGINT NOT NULL,
+  cod_alternativo         TEXT,
+  consolidador            TEXT,
+  cod_agrupador           BIGINT,
+  aditivo                 TEXT NOT NULL DEFAULT '',
+  item_alternativo        TEXT,
+  descricao               TEXT,
+  cod_padrao              TEXT,
+  cod_unidade             TEXT,
+  unidade                 TEXT,
+  quantidade              NUMERIC,
+  valor_unitario          NUMERIC,
+  total_item              NUMERIC,
+  total_contratado        NUMERIC,
+  situacao                TEXT,
+  raw_data                JSONB DEFAULT '{}'::jsonb,
+  PRIMARY KEY (obra, cod_contrato, cod_item, aditivo)
+);
+CREATE INDEX IF NOT EXISTS idx_mega_contratos_itens_obra
+  ON mega.contratos_itens(obra);
+CREATE INDEX IF NOT EXISTS idx_mega_contratos_itens_contrato
+  ON mega.contratos_itens(cod_contrato);
+

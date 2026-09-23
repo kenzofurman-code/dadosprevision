@@ -23,10 +23,12 @@ from visao import Visao
 
 RAIZ = Path(__file__).resolve().parent.parent
 ORDEM_RELATORIOS = ["itens_solicitados", "analise_saldo_solicitacao",
-                    "visualizacao_itens", "pedidos_compra", "solicitacoes_por_etapa"]
+                    "visualizacao_itens", "pedidos_compra", "solicitacoes_por_etapa",
+                    "medicoes_contratos", "contratos_itens"]
 # Por padrao, retry foca nas telas operacionais diarias (evita loop em telas
 # que estejam temporariamente fora do ar como Saldo Resumido). Configuravel por env.
-RELATORIOS_RETRY_PADRAO = ["itens_solicitados", "visualizacao_itens", "pedidos_compra", "solicitacoes_por_etapa"]
+RELATORIOS_RETRY_PADRAO = ["itens_solicitados", "visualizacao_itens", "pedidos_compra", "solicitacoes_por_etapa",
+                           "medicoes_contratos", "contratos_itens"]
 
 
 def _log(msg):
@@ -142,6 +144,8 @@ def identificar_pendencias(cfg, conn, data_iso, pasta=None, marcador_parametro="
             # mas ficou pendente de carga (ex: carga em lote bloqueada por falha em outra obra)
             arquivo_base = rel["exportacoes"][0]["arquivo"]
             caminho_local = pasta / ("%s_%s_%s.xlsx" % (arquivo_base, cod_obra, data_iso))
+            if not caminho_local.exists():
+                caminho_local = pasta / ("%s_%s_%s.xls" % (arquivo_base, cod_obra, data_iso))
 
             carregou_local = False
             if caminho_local.exists() and caminho_local.stat().st_size > 0:

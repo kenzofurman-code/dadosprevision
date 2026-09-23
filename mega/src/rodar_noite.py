@@ -20,7 +20,8 @@ from visao import Visao
 
 RAIZ = Path(__file__).resolve().parent.parent
 ORDEM_RELATORIOS = ["itens_solicitados", "analise_saldo_solicitacao",
-                    "visualizacao_itens", "pedidos_compra", "solicitacoes_por_etapa"]
+                    "visualizacao_itens", "pedidos_compra", "solicitacoes_por_etapa",
+                    "medicoes_contratos", "contratos_itens"]
 # Historico: a noite mais lenta ja observada (todos os relatorios, sem
 # problema nenhum) levou ~3h. 4h da folga sem deixar a execucao rodar por
 # tempo indefinido -- ver executar_por_obra().

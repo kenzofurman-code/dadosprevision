@@ -84,12 +84,10 @@ def rodar(headless=True):
                 conn,
                 relatorio="approvo_completo",
                 arquivo=f"Approvo_{data_iso}",
-                data_extracao=data_iso,
-                obras_ok=["TODAS"],
-                obras_sem_movimento=[],
-                obras_falhou=[],
+                data_iso=data_iso,
+                resultado={"ok": ["TODAS"], "sem_movimento": [], "falhou": []},
                 bloqueado=False,
-                motivo_bloqueio=None
+                motivo=None,
             )
             conn.commit()
         except Exception as e:
