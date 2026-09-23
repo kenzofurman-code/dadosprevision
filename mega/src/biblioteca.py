@@ -618,36 +618,52 @@ class Operador:
     def fechar_visualizador_crystal(self):
         """Fecha o visualizador do Crystal Reports caso esteja aberto na tela.
 
-        Seguindo a recomendação de segurança:
-        1. Confere se alguma âncora do Crystal Reports está visível na tela. Se não estiver, sai imediatamente.
-        2. Tenta clicar no botão azul 'OK' no canto inferior direito (1554, 850).
-        3. Confere novamente se o visualizador fechou. Se ainda estiver presente, clica no botão 'X'
+        Seguindo a recomendação de segurança do usuário:
+        1. Envia Escape preventivo para fechar qualquer diálogo modal/dropdown
+           remanescente (ex: 'Exportar Relatório').
+        2. Confere se alguma âncora do Crystal Reports está visível na tela em passo único de OCR.
+           Se não estiver, sai imediatamente.
+        3. Clica no botão azul 'OK' no canto inferior direito (1554, 850).
+        4. Confere novamente se o visualizador fechou. Se ainda estiver presente, clica no botão 'X'
            no canto superior direito da janela (1588, 12).
-        4. Se ainda persistir, envia tecla Escape.
+        5. Se ainda persistir, envia tecla Escape.
         NUNCA envia Alt+F4 para evitar risco de fechar a sessão/janela remota inteira.
         """
-        ANCORAS_CRYSTAL = ("Relatório Principal", "Principal", "Caminho do relatório",
-                           "Total de Páginas", "Fator de Zoom", "No. da página atual", "página atual")
+        ANCORAS_CRYSTAL = ("relatorio principal", "principal", "caminho do relatorio",
+                           "total de paginas", "fator de zoom", "pagina atual", "requisicao de materiais")
+
+        def _tem_ancora(img):
+            import unicodedata
+            palavras = self.v.palavras_todas(img)
+            texto_unificado = unicodedata.normalize('NFKD', " ".join(p["texto"].lower() for p in palavras)).encode('ASCII', 'ignore').decode('ASCII')
+            return any(anc in texto_unificado for anc in ANCORAS_CRYSTAL)
+
+        # 1. Enviar Escape preventivo para fechar qualquer diálogo ou menu aberto na frente do visualizador
+        self.tecla("Escape", pausa=0.5)
+
         img = self.tela()
-        if not any(self.v.achar_texto(anc, img=img) for anc in ANCORAS_CRYSTAL):
+        if not _tem_ancora(img):
             return True
 
         self.log("      fechando visualizador do Crystal Reports...")
         for tentativa in range(1, 4):
+            # Envia Escape preventivo caso algum modal tenha aberto
+            self.tecla("Escape", pausa=0.3)
+
             # 1. Tentar primeiro o botão OK em (1554, 850)
             self.pagina.mouse.click(1554, 850)
-            time.sleep(2.0)
+            time.sleep(1.5)
             img_pos = self.tela()
-            if not any(self.v.achar_texto(anc, img=img_pos) for anc in ANCORAS_CRYSTAL):
+            if not _tem_ancora(img_pos):
                 self.log("      visualizador fechado com sucesso pelo botão OK.")
                 return True
 
             # 2. Se ainda presente, clicar no botão 'X' no canto superior direito (1588, 12)
             self.log("      visualizador ainda presente; tentando fechar pelo 'X' em (1588, 12)...")
             self.pagina.mouse.click(1588, 12)
-            time.sleep(2.0)
+            time.sleep(1.5)
             img_pos2 = self.tela()
-            if not any(self.v.achar_texto(anc, img=img_pos2) for anc in ANCORAS_CRYSTAL):
+            if not _tem_ancora(img_pos2):
                 self.log("      visualizador fechado com sucesso pelo botão 'X'.")
                 return True
 
@@ -655,7 +671,7 @@ class Operador:
             self.log("      visualizador ainda presente; enviando Escape...")
             self.tecla("Escape", pausa=1.5)
             img_pos3 = self.tela()
-            if not any(self.v.achar_texto(anc, img=img_pos3) for anc in ANCORAS_CRYSTAL):
+            if not _tem_ancora(img_pos3):
                 self.log("      visualizador fechado com sucesso pelo Escape.")
                 return True
 
@@ -670,9 +686,10 @@ class Operador:
         2. Clica no 1o icone da barra de ferramentas superior (Exportar).
         3. Aguarda a janela 'Exportar Relatório'.
         4. Seleciona o formato Excel (ou Data-Only) no campo Tipo.
-        5. Confirma Salvar e captura o download disparado pelo gateway Web RDP.
-        6. Salva no arquivo de destino e valida a assinatura binaria OLE2 (.xls).
-        7. Fecha o visualizador do Crystal Reports clicando em 'OK'.
+        5. Preenche o campo Nome e confirma Salvar.
+        6. Captura o download disparado pelo gateway Web RDP.
+        7. Salva no arquivo de destino e valida a assinatura binaria OLE2 (.xls).
+        8. Fecha o visualizador do Crystal Reports clicando em 'OK'.
         """
         self.log("      aguardando geracao no Crystal Reports (ate %ds)..." % timeout_espera_geracao)
         ANCORAS_CRYSTAL = ("Relatório Principal", "Principal", "Caminho do relatório",
@@ -783,23 +800,34 @@ class Operador:
             except Exception:
                 pass
 
-            # 2. Confirmar Salvar
-            self.log("      confirmando salvamento do arquivo...")
-            # Na janela 'Exportar Relatório', o botao Salvar fica centralizado em (530, 528).
-            # Clicamos diretamente nas coordenadas e enviamos Alt+S como acelerador nativo do Windows.
-            self.pagina.mouse.click(530, 528)
+            # 2. Preencher campo Nome (x=280, y=445)
+            self.log("      preenchendo nome do arquivo (%s)..." % destino.name)
+            self.pagina.mouse.click(280, 445)
             time.sleep(0.5)
-            self.pagina.keyboard.press("Alt+s")
+            self.tecla("End", pausa=0.1)
+            for _ in range(30):
+                self.pagina.keyboard.press("Backspace")
+            self.digitar(destino.stem)
+            time.sleep(0.8)
+
+            # 3. Confirmar Salvar no botão (394, 522)
+            self.log("      confirmando salvamento do arquivo...")
+            # Na janela 'Exportar Relatório' (largura ~490px), o botao Salvar fica centralizado em (394, 522)
+            self.pagina.mouse.click(394, 522)
             time.sleep(0.5)
             self.tecla("Enter", pausa=1.0)
             time.sleep(2.0)
 
-            # Se o diálogo ainda estiver visível, reenviar clique
+            # Se o diálogo ainda estiver visível, tentar achar Salvar pelo OCR ou reenviar clique em (394, 522)
             img_chk = self.tela()
             if self.v.achar_texto("Exportar Relatório", img=img_chk):
-                self.log("      dialogo 'Exportar Relatório' ainda visivel; reenviando clique em (530, 528)...")
-                self.pagina.mouse.click(530, 528)
-                self.pagina.keyboard.press("Alt+s")
+                self.log("      dialogo 'Exportar Relatório' ainda visivel; reenviando clique em Salvar (394, 522)...")
+                caixa_salvar = self.v.achar_texto("Salvar", img=img_chk)
+                if caixa_salvar and caixa_salvar.y > 450:
+                    self.pagina.mouse.click(caixa_salvar.x + caixa_salvar.largura // 2,
+                                            caixa_salvar.y + caixa_salvar.altura // 2)
+                else:
+                    self.pagina.mouse.click(394, 522)
                 self.tecla("Enter", pausa=1.0)
 
             self.log("      aguardando recepcao do arquivo baixado...")
@@ -809,7 +837,7 @@ class Operador:
         self._conferir_formato(destino)
         self.log("   arquivo salvo com sucesso: %s (%d bytes)" % (destino.name, destino.stat().st_size))
 
-        # 3. Fechar visualizador do Crystal Reports
+        # 4. Fechar visualizador do Crystal Reports
         time.sleep(2)
         if not self.fechar_visualizador_crystal():
             self.log("      aviso: visualizador do Crystal Reports pode ainda estar visivel.")
