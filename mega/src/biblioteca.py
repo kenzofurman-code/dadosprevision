@@ -612,11 +612,18 @@ class Operador:
     def _conferir_formato(self, caminho):
         """O conteudo tem que corresponder a extensao."""
         caminho = Path(caminho)
-        esperado = self.ASSINATURAS.get(caminho.suffix.lower())
-        if not esperado:
-            return
         with open(str(caminho), "rb") as arquivo:
             conteudo = arquivo.read()
+
+        # Se o arquivo foi salvo com extensão .xls mas na verdade é .xlsx (zip PK)
+        if caminho.suffix.lower() == ".xls" and conteudo.startswith(self.ASSINATURAS[".xlsx"]):
+            novo_caminho = caminho.with_suffix(".xlsx")
+            caminho.rename(novo_caminho)
+            return novo_caminho
+
+        esperado = self.ASSINATURAS.get(caminho.suffix.lower())
+        if not esperado:
+            return caminho
         if not conteudo.startswith(esperado):
             caminho.unlink(missing_ok=True)
             raise FalhaDeEtapa(
@@ -631,6 +638,7 @@ class Operador:
                 raise FalhaDeEtapa(
                     "o arquivo %s foi salvo como documento OLE2 mas nao contem o stream 'Workbook' "
                     "(foi exportado como .rpt em vez de .xls)" % caminho.name)
+        return caminho
 
     def fechar_visualizador_crystal(self):
         """Fecha o visualizador do Crystal Reports caso esteja aberto na tela.
@@ -845,7 +853,7 @@ class Operador:
             baixado = info.value
 
         baixado.save_as(str(destino))
-        self._conferir_formato(destino)
+        destino = self._conferir_formato(destino)
         self.log("   arquivo salvo com sucesso: %s (%d bytes)" % (destino.name, destino.stat().st_size))
 
         # 4. Fechar visualizador do Crystal Reports

@@ -353,7 +353,8 @@ def _rodar_relatorio_na_obra_ativa(op, v, rel, obra, data_iso, pasta):
     for exp in rel["exportacoes"]:
         formato = exp.get("formato")
         if formato in ("crystal_xls", "crystal_data_only"):
-            destino = pasta / ("%s_%s_%s.xls" % (exp["arquivo"], obra["codigo"], data_iso))
+            ext = ".xlsx" if formato == "crystal_data_only" else ".xls"
+            destino = pasta / ("%s_%s_%s%s" % (exp["arquivo"], obra["codigo"], data_iso, ext))
             tipo = "data_only" if formato == "crystal_data_only" else "excel"
             caminhos.append(op.exportar_crystal_relatorio(destino, timeout_espera_geracao=300, tipo=tipo))
             return ("ok", caminhos)
