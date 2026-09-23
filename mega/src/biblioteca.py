@@ -583,7 +583,7 @@ class Operador:
                     limite = time.time() + 75    # com retentativa, nao vale esperar mais
                     while time.time() < limite:
                         img = self.tela()
-                        palavras = [p["texto"].lower() for p in self.v.palavras_todas(img)]
+                        palavras = [p["texto"].lower() for p in self.v._palavras(img, escala=1.0)]
                         texto_tela = " ".join(palavras)
                         if any(k in texto_tela for k in ("salvar como", "salvar", "ocultar pastas", "pastas")):
                             apareceu = True
@@ -646,8 +646,8 @@ class Operador:
         5. Se ainda persistir, envia tecla Escape.
         NUNCA envia Alt+F4 para evitar risco de fechar a sessão/janela remota inteira.
         """
-        ANCORAS_CRYSTAL = ("relatorio principal", "caminho do relatorio", "caminho do rel",
-                           "total de paginas", "fator de zoom", "pagina atual", ".rpt")
+        ANCORAS_CRYSTAL = ("relatorio principal", "caminho do relatorio",
+                           "total de paginas", "fator de zoom", "pagina atual")
 
         def _tem_ancora(img):
             import unicodedata
@@ -703,7 +703,8 @@ class Operador:
         8. Fecha o visualizador do Crystal Reports clicando em 'OK'.
         """
         self.log("      aguardando geracao no Crystal Reports (ate %ds)..." % timeout_espera_geracao)
-        ANCORAS_DOCUMENTO = ("cnpj", "inscric", "emissao", "liberac", "ltd", "contrato", "espelho")
+        time.sleep(5)
+        ANCORAS_DOCUMENTO = ("dataliberac", "datalibera", "insoia", "inscric", "emiss")
         limite = time.time() + timeout_espera_geracao
         caixa_aba = False
         ultimo_snap = 0
@@ -711,15 +712,26 @@ class Operador:
             img = self.tela()
             palavras = [p["texto"].lower() for p in self.v._palavras(img, escala=1.0)]
             texto_tela = " ".join(palavras)
-            # O documento so esta pronto de verdade quando:
-            # 1. O visualizador do Crystal Reports abriu na tela
-            # 2. O conteudo da tabela do relatorio renderizou (colunas e dados presentes)
-            viewer_aberto = any(v in texto_tela for v in ("relatorio principal", "relatório principal", "caminho do rel", "fator de zoom", ".rpt"))
+
+            esta_processando = ("aguarde" in texto_tela and "processado" in texto_tela) or \
+                               ("aguarde" in texto_tela and "documento" in texto_tela)
+            viewer_aberto = any(v in texto_tela for v in ("relatorio principal", "relatório principal", "fator de zoom", "total de paginas"))
             tem_conteudo = any(anc in texto_tela for anc in ANCORAS_DOCUMENTO)
-            if viewer_aberto and tem_conteudo:
+
+            try:
+                px_centro = img[300, 800]
+                centro_branco = (px_centro[0] > 240 and px_centro[1] > 240 and px_centro[2] > 240)
+                px_icon = img[43, 20]
+                icon_colorido = (abs(int(px_icon[0]) - int(px_icon[2])) > 40)
+            except Exception:
+                centro_branco = False
+                icon_colorido = False
+
+            if viewer_aberto and not esta_processando and (tem_conteudo or (centro_branco and icon_colorido)):
                 self.log("      relatorio gerado! Documento pronto na tela.")
                 caixa_aba = True
                 break
+
             if time.time() - ultimo_snap > 30:
                 ultimo_snap = time.time()
                 try:
@@ -729,7 +741,7 @@ class Operador:
                     self.log("      ainda processando relatorio (screenshot: %s)..." % caminho_snap.name)
                 except Exception:
                     pass
-            time.sleep(3)
+            time.sleep(5)
 
         if not caixa_aba:
             try:
@@ -741,11 +753,11 @@ class Operador:
                 pass
             raise FalhaDeEtapa("o visualizador do Crystal Reports nao abriu em %ds" % timeout_espera_geracao)
 
-        time.sleep(3)
+        time.sleep(2)
 
-        # O icone de exportar fica na barra superior: x ~ 15, y ~ 45
-        x_icone = 15
-        y_icone = 45
+        # O icone de exportar fica na barra superior: x=20, y=43
+        x_icone = 20
+        y_icone = 43
 
         destino = Path(destino)
         destino.parent.mkdir(parents=True, exist_ok=True)
@@ -761,16 +773,16 @@ class Operador:
         apareceu_diag = False
         while time.time() < limite_diag:
             img = self.tela()
-            todas = self.v.palavras_todas(img)
-            texto_tela = " ".join(p["texto"].lower() for p in todas)
+            palavras = [p["texto"].lower() for p in self.v._palavras(img, escala=1.0)]
+            texto_tela = " ".join(palavras)
             if any(a in texto_tela for a in alvos_exportar):
                 apareceu_diag = True
                 break
-            # Se apos 10s ainda nao abriu, repete clique no icone
-            if (time.time() - (limite_diag - 60)) > 10 and int(time.time() - (limite_diag - 60)) % 10 < 4:
+            # Se apos 8s ainda nao abriu, repete clique no icone
+            if (time.time() - (limite_diag - 60)) > 8:
                 self.log("      dialogo ainda nao abriu; repetindo clique no icone em (%d, %d)..." % (x_icone, y_icone))
                 self.pagina.mouse.click(x_icone, y_icone)
-            time.sleep(2.5)
+            time.sleep(3.0)
         if not apareceu_diag:
             raise FalhaDeEtapa("o dialogo 'Exportar Relatório' nao apareceu em 60s")
         time.sleep(1.5)
@@ -779,14 +791,14 @@ class Operador:
         # para que o arquivo seja gravado na pasta redirecionada do cliente e baixado via gateway
         self.log("      selecionando pasta 'Downloads' na barra lateral...")
         img_side = self.tela()
-        todas_palavras = self.v.palavras_todas(img_side)
+        todas_palavras = self.v._palavras(img_side, escala=1.0)
         caixa_down = next((p for p in todas_palavras if "download" in p["texto"].lower() and p["x"] < 120 and p["y"] < 350), None)
         if caixa_down:
             cx = caixa_down["x"] + caixa_down.get("w", 30) // 2
             cy = caixa_down["y"] + caixa_down.get("h", 16) // 2
             self.pagina.mouse.click(cx, cy)
         else:
-            self.pagina.mouse.click(80, 227)
+            self.pagina.mouse.click(91, 227)
         time.sleep(0.5)
         self.tecla("Enter", pausa=1.0)
         time.sleep(1.0)
