@@ -709,11 +709,7 @@ class Operador:
         8. Fecha o visualizador do Crystal Reports clicando em 'OK'.
         """
         self.log("      aguardando geracao no Crystal Reports (ate %ds)..." % timeout_espera_geracao)
-        ANCORAS_CRYSTAL = ("relatório principal", "relatorio principal", "principal", "caminho do relatório",
-                           "caminho do relatorio", "total de páginas", "total de paginas", "fator de zoom",
-                           "requisição de materiais", "requisicao de materiais",
-                           "no. da página atual", "no. da pagina atual", "no. total de páginas",
-                           "espelho_nota_fiscal", "nota_fiscal_modificado")
+        ANCORAS_DOCUMENTO = ("cnpj", "inscric", "emissao", "liberac", "ltd", "contrato", "espelho")
         limite = time.time() + timeout_espera_geracao
         caixa_aba = False
         ultimo_snap = 0
@@ -721,8 +717,13 @@ class Operador:
             img = self.tela()
             palavras = [p["texto"].lower() for p in self.v.palavras_todas(img)]
             texto_tela = " ".join(palavras)
-            if any(ancora in texto_tela for ancora in ANCORAS_CRYSTAL):
-                self.log("      relatorio gerado! Ancora detectada na tela.")
+            # O documento so esta pronto de verdade quando a caixa modal 'Aguarde enquanto o documento está sendo processado' sumiu
+            # e a moldura do visualizador com conteudo esta desenhada
+            esta_processando = ("processado" in texto_tela or "aguarde" in texto_tela)
+            tem_conteudo = any(anc in texto_tela for anc in ANCORAS_DOCUMENTO)
+            tem_moldura = ("principal" in texto_tela or "relatorio" in texto_tela or "paginas" in texto_tela)
+            if not esta_processando and (tem_conteudo or tem_moldura):
+                self.log("      relatorio gerado! Documento pronto na tela.")
                 caixa_aba = True
                 break
             if time.time() - ultimo_snap > 30:
