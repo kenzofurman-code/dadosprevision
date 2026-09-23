@@ -646,8 +646,8 @@ class Operador:
         5. Se ainda persistir, envia tecla Escape.
         NUNCA envia Alt+F4 para evitar risco de fechar a sessão/janela remota inteira.
         """
-        ANCORAS_CRYSTAL = ("relatorio principal", "principal", "caminho do relatorio",
-                           "total de paginas", "fator de zoom", "pagina atual", "requisicao de materiais")
+        ANCORAS_CRYSTAL = ("relatorio principal", "caminho do relatorio", "caminho do rel",
+                           "total de paginas", "fator de zoom", "pagina atual", ".rpt")
 
         def _tem_ancora(img):
             import unicodedata
@@ -717,12 +717,12 @@ class Operador:
             img = self.tela()
             palavras = [p["texto"].lower() for p in self.v.palavras_todas(img)]
             texto_tela = " ".join(palavras)
-            # O documento so esta pronto de verdade quando a caixa modal 'Aguarde enquanto o documento está sendo processado' sumiu
-            # e a moldura do visualizador com conteudo esta desenhada
-            esta_processando = ("processado" in texto_tela or "aguarde" in texto_tela)
-            tem_conteudo = any(anc in texto_tela for anc in ANCORAS_DOCUMENTO)
-            tem_moldura = ("principal" in texto_tela or "relatorio" in texto_tela or "paginas" in texto_tela)
-            if not esta_processando and (tem_conteudo or tem_moldura):
+            # O documento so esta pronto de verdade quando:
+            # 1. O visualizador do Crystal Reports abriu na tela
+            # 2. A caixa modal 'Aguarde enquanto o documento está sendo processado' sumiu
+            viewer_aberto = any(v in texto_tela for v in ("relatorio principal", "relatório principal", "caminho do rel", "fator de zoom", ".rpt"))
+            esta_processando = any(p in texto_tela for p in ("processado", "aguarde", "1+"))
+            if viewer_aberto and not esta_processando:
                 self.log("      relatorio gerado! Documento pronto na tela.")
                 caixa_aba = True
                 break
