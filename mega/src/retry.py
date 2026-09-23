@@ -81,6 +81,20 @@ def identificar_pendencias(cfg, conn, data_iso, pasta=None, marcador_parametro="
     except Exception:
         obras_ok_por_tabela["solicitacoes_por_etapa"] = set()
 
+    # medicoes_contratos
+    try:
+        cur.execute("SELECT DISTINCT obra FROM %smedicoes_contratos WHERE data_extracao = %s" % (prefixo, m), (data_iso,))
+        obras_ok_por_tabela["medicoes_contratos"] = set(r[0] for r in cur.fetchall())
+    except Exception:
+        obras_ok_por_tabela["medicoes_contratos"] = set()
+
+    # contratos_itens
+    try:
+        cur.execute("SELECT DISTINCT obra FROM %scontratos_itens WHERE data_extracao = %s" % (prefixo, m), (data_iso,))
+        obras_ok_por_tabela["contratos_itens"] = set(r[0] for r in cur.fetchall())
+    except Exception:
+        obras_ok_por_tabela["contratos_itens"] = set()
+
     def _para_set(val):
         if isinstance(val, (list, set)):
             return set(val)
