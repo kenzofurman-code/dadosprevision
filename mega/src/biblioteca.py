@@ -42,8 +42,20 @@ class Operador:
             erro = self.v.dialogo_de_erro(img=img)
             if erro:
                 raise FalhaDeEtapa("dialogo de erro na tela: %r" % erro)
-            for a in alvos:
-                caixa = self.v.achar_texto(a, img=img, regiao=regiao)
+            if len(alvos) > 1:
+                todas = self.v.palavras_todas(img)
+                texto_tela = " ".join(p["texto"].lower() for p in todas)
+                for a in alvos:
+                    if a.lower() in texto_tela:
+                        caixa = self.v.achar_texto(a, img=img, regiao=regiao)
+                        if caixa:
+                            return caixa
+                        p_match = next((p for p in todas if a.lower() in p["texto"].lower()), None)
+                        if p_match:
+                            from visao import Caixa
+                            return Caixa(p_match["x"], p_match["y"], p_match.get("w", 30), p_match.get("h", 16))
+            else:
+                caixa = self.v.achar_texto(alvos[0], img=img, regiao=regiao)
                 if caixa:
                     return caixa
             time.sleep(intervalo)
@@ -745,11 +757,27 @@ class Operador:
 
         self.log("      clicando no icone de exportar em (%d, %d)..." % (x_icone, y_icone))
         self.pagina.mouse.click(x_icone, y_icone)
-        time.sleep(3)
+        time.sleep(2)
 
         # Aguardar janela 'Exportar Relatório'
         self.log("      aguardando dialogo 'Exportar Relatório'...")
-        self.esperar_texto(("Exportar Relatório", "Exportar", "Salvar", "Tipo", "Nome"), timeout=45)
+        alvos_exportar = ("exportar relatorio", "exportar relatório", "exportar", "salvar", "tipo:", "nome:")
+        limite_diag = time.time() + 60
+        apareceu_diag = False
+        while time.time() < limite_diag:
+            img = self.tela()
+            todas = self.v.palavras_todas(img)
+            texto_tela = " ".join(p["texto"].lower() for p in todas)
+            if any(a in texto_tela for a in alvos_exportar):
+                apareceu_diag = True
+                break
+            # Se apos 10s ainda nao abriu, repete clique no icone
+            if (time.time() - (limite_diag - 60)) > 10 and int(time.time() - (limite_diag - 60)) % 10 < 4:
+                self.log("      dialogo ainda nao abriu; repetindo clique no icone em (%d, %d)..." % (x_icone, y_icone))
+                self.pagina.mouse.click(x_icone, y_icone)
+            time.sleep(2.5)
+        if not apareceu_diag:
+            raise FalhaDeEtapa("o dialogo 'Exportar Relatório' nao apareceu em 60s")
         time.sleep(1.5)
 
         # Selecionar pasta 'Downloads' no painel lateral esquerdo (x ~ 80, y ~ 227)
