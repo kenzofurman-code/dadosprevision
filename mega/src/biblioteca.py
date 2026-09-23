@@ -63,7 +63,8 @@ class Operador:
     # esta desenhada e responde.
     ANCORAS_TELA = ("Bem-vindo", "Gestao Empresarial", "Visoes",
                     "ITENS SOLICITADOS", "Saldo Resumido", "PEDIDOS DE COMPRA",
-                    "Solicitacoes", "Orcamento")
+                    "Solicitacoes", "Orcamento", "RELATÓRIOS", "Relatórios",
+                    "Contratos", "Menu", "Procurar")
 
     def responder_sessao_duplicada(self, img=None):
         """Responde ao "usuario ja esta logado em uma sessao RDP. Desconecta-lo?".
@@ -125,6 +126,7 @@ class Operador:
         ultimo_log = 0
         segundos_sem_palavras = 0
         segundos_com_launcher = 0
+        ultimo_clique_taskbar = 0
         while time.time() < limite:
             img = self.tela()
             if self.responder_sessao_duplicada(img=img):
@@ -138,18 +140,20 @@ class Operador:
                 self.log("   ERP pronto (%d palavras na tela)" % len(palavras))
                 return "conteudo"
 
-            # Se o item "Mega ERP" estiver na barra de tarefas (Y >= 840) mas a tela
-            # principal nao estiver desenhada (janela minimizada ou em background):
-            # Clicar no botao da barra de tarefas para restaurar/maximizar a tela.
-            caixa_erp_tb = self.v.achar_texto("Mega ERP", img=img)
-            if caixa_erp_tb and caixa_erp_tb.y >= 840:
-                self.log("   'Mega ERP' detectado na barra de tarefas; clicando para focar/restaurar")
-                cx, cy = centro(caixa_erp_tb)
-                try:
-                    self.pagina.mouse.click(cx, cy)
-                    time.sleep(3)
-                except Exception:
-                    pass
+            # Se a janela estiver minimizada (tela com menos de 6 palavras e sem ancoras)
+            # e o item "Mega ERP" estiver na barra de tarefas (Y >= 840):
+            # Clicar no botao da barra de tarefas para restaurar a tela (com debounce de 15s).
+            if len(palavras) < 6 and (time.time() - ultimo_clique_taskbar > 15):
+                caixa_erp_tb = self.v.achar_texto("Mega ERP", img=img)
+                if caixa_erp_tb and caixa_erp_tb.y >= 840:
+                    self.log("   'Mega ERP' detectado na barra de tarefas com tela minimizada; clicando para focar/restaurar")
+                    cx, cy = centro(caixa_erp_tb)
+                    try:
+                        self.pagina.mouse.click(cx, cy)
+                        ultimo_clique_taskbar = time.time()
+                        time.sleep(3)
+                    except Exception:
+                        pass
 
             # Se o splash "Mega ERP Launcher" estiver na tela (card central com barra roxa):
             # No Linux sob Xvfb ele dura apenas ~5-10s enquanto o Auth Launcher valida o token.
