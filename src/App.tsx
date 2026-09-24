@@ -53,8 +53,8 @@ type DataView =
   | 'budgets'
   | 'dashboard'
   | 'curvas'
-  | 'gestao_a_vista'
   | 'dados_mega'
+  | 'gestao_a_vista'
 
 type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix' | 'panel5' | 'milestones'
 type GestaoTablePanel = 'panel1' | 'panel2' | 'panel3'
@@ -598,6 +598,7 @@ const columns: Record<DataView, Column[]> = {
     },
   ],
   curvas: [],
+  dados_mega: [],
   gestao_a_vista: [],
   dados_mega: [],
 }
@@ -3358,7 +3359,9 @@ function App() {
           ? dashboardColumns[dashboardMode]
           : activeView === 'curvas'
             ? []
-            : columns[activeView]
+            : activeView === 'dados_mega'
+              ? []
+              : columns[activeView]
 
   function changeView(view: DataView) {
     if (view !== 'gestao_a_vista' && view !== 'curvas' && view !== 'dados_mega') lastDataView.current = view
@@ -3560,8 +3563,12 @@ function App() {
       )}
 
       <section className="workspace">
+<<<<<<< HEAD
         {activeView !== 'dados_mega' && (
           <div className="toolbar">
+=======
+        {activeView !== 'dados_mega' && <div className="toolbar">
+>>>>>>> d9b1acb (feat: adicionar visualizador Mega de itens e medicoes)
           <div className="view-title">
             <activeTab.icon size={18} />
             <h2>{activeTab.label}</h2>
@@ -3853,15 +3860,25 @@ function App() {
               </label>}
             </div>
           )}
+<<<<<<< HEAD
         </div>
         )}
+=======
+        </div>}
+>>>>>>> d9b1acb (feat: adicionar visualizador Mega de itens e medicoes)
 
         {(message || error) && (
           <div className={`feedback ${error ? 'error' : 'success'}`}>{error || message}</div>
         )}
 
         <div className={`table-panel ${activeView === 'dashboard' && dashboardMode === 'cff' ? 'cff-panel' : activeView === 'gestao_a_vista' ? 'gestao-panel' : activeView === 'dados_mega' ? 'mega-panel' : ''}`} aria-live="polite">
+<<<<<<< HEAD
           {loading ? (
+=======
+          {activeView === 'dados_mega' ? (
+            <MegaViewer />
+          ) : loading ? (
+>>>>>>> d9b1acb (feat: adicionar visualizador Mega de itens e medicoes)
             <div className="state-message">
               <RefreshCw size={20} className="spin" />
               Carregando dados
