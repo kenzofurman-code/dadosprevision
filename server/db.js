@@ -339,6 +339,10 @@ export async function getMegaObras() {
       UNION
       SELECT obra, obra_nome FROM mega.solicitacoes_por_etapa WHERE obra IS NOT NULL
       UNION
+      SELECT obra, obra_nome FROM mega.medicoes_contratos WHERE obra IS NOT NULL
+      UNION
+      SELECT obra, obra_nome FROM mega.contratos_itens WHERE obra IS NOT NULL
+      UNION
       SELECT obra, observacao as obra_nome FROM mega.obra_projeto WHERE obra IS NOT NULL
     ) sub
     ORDER BY obra ASC;
@@ -359,9 +363,11 @@ export async function getMegaSummary(obra = '') {
     query(`SELECT COUNT(*) as count FROM mega.analise_realizado ${whereObra}`, params),
     query(`SELECT COUNT(*) as count FROM mega.itens_solicitados ${whereObra}`, params),
     query(`SELECT COUNT(*) as count FROM mega.solicitacoes_por_etapa ${whereObra}`, params),
+    query(`SELECT COUNT(*) as count FROM mega.contratos_itens ${whereObra}`, params),
+    query(`SELECT COUNT(*) as count FROM mega.medicoes_contratos ${whereObra}`, params),
     query(`SELECT MAX(data_extracao) as ultima_data FROM mega.carga WHERE bloqueado = FALSE`),
   ]
-  const [pedidos, visItens, saldoPedidos, saldoContratos, saldoRealizado, itensSolic, solicitacoesEtapa, carga] =
+  const [pedidos, visItens, saldoPedidos, saldoContratos, saldoRealizado, itensSolic, solicitacoesEtapa, followItens, medicoesContratos, carga] =
     await Promise.all(queries)
 
   return {
@@ -372,6 +378,8 @@ export async function getMegaSummary(obra = '') {
     totalSaldoRealizado: Number(saldoRealizado.rows[0]?.count || 0),
     totalItensSolicitados: Number(itensSolic.rows[0]?.count || 0),
     totalSolicitacoesEtapa: Number(solicitacoesEtapa.rows[0]?.count || 0),
+    totalFollowItensContratos: Number(followItens.rows[0]?.count || 0),
+    totalMedicoesContratos: Number(medicoesContratos.rows[0]?.count || 0),
     ultimaExtracao: carga.rows[0]?.ultima_data || null,
   }
 }
@@ -454,6 +462,41 @@ const MEGA_TABLE_MAP = {
     orderBy: 'id DESC',
     searchColumns: ['relatorio', 'arquivo', 'motivo_bloqueio'],
   },
+  follow_itenscontratos_itens: {
+    table: 'mega.contratos_itens',
+    hasObra: true,
+    orderBy: 'data_extracao DESC, cod_contrato ASC, cod_item ASC, aditivo ASC',
+    searchColumns: [
+      'CAST(cod_contrato AS TEXT)',
+      'CAST(cod_item AS TEXT)',
+      'descricao',
+      'unidade',
+      'situacao',
+      'cod_alternativo',
+      'consolidador',
+    ],
+  },
+  follow_itenscontratos_medicoes: {
+    table: 'mega.medicoes_contratos',
+    hasObra: true,
+    orderBy: 'data_extracao DESC, numero_contrato ASC, numero_medicao ASC, item_sequencial ASC',
+    searchColumns: [
+      'CAST(numero_contrato AS TEXT)',
+      'CAST(numero_medicao AS TEXT)',
+      'CAST(item_sequencial AS TEXT)',
+      'descricao_servico',
+      'unidade',
+      'fornecedor_nome',
+      'situacao_medicao',
+    ],
+  },
+  follow_itenscontratos_historico: {
+    table: 'mega.carga',
+    hasObra: false,
+    fixedWhere: "relatorio IN ('contratos_itens', 'medicoes_contratos')",
+    orderBy: 'executado_em DESC, id DESC',
+    searchColumns: ['relatorio', 'arquivo', 'motivo_bloqueio'],
+  },
 }
 
 export async function getMegaTable(tableType, { obra = '', page = 0, pageSize = 50, search = '' } = {}) {
@@ -464,6 +507,10 @@ export async function getMegaTable(tableType, { obra = '', page = 0, pageSize = 
 
   const conditions = []
   const params = []
+
+  if (meta.fixedWhere) {
+    conditions.push(meta.fixedWhere)
+  }
 
   if (meta.hasObra && obra) {
     params.push(obra)

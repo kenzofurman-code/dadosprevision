@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Layers,
+  History,
   SlidersHorizontal,
   BookmarkPlus,
   FileText,
@@ -42,6 +43,9 @@ export type MegaTabKey =
   | 'itens_solicitados'
   | 'solicitacoes_por_etapa'
   | 'cargas'
+  | 'follow_itenscontratos_itens'
+  | 'follow_itenscontratos_medicoes'
+  | 'follow_itenscontratos_historico'
 
 export type SaldoSubTab = 'pedidos' | 'contratos' | 'realizado'
 
@@ -58,6 +62,8 @@ interface MegaSummary {
   totalSaldoRealizado: number
   totalItensSolicitados: number
   totalSolicitacoesEtapa?: number
+  totalFollowItensContratos?: number
+  totalMedicoesContratos?: number
   ultimaExtracao: string | null
 }
 
@@ -221,6 +227,12 @@ export function MegaView() {
         return 'Solicitações por Etapa'
       case 'cargas':
         return 'Status das Cargas'
+      case 'follow_itenscontratos_itens':
+        return 'follow_itenscontratos — Follow-up de itens'
+      case 'follow_itenscontratos_medicoes':
+        return 'follow_itenscontratos — Medições de contratos'
+      case 'follow_itenscontratos_historico':
+        return 'follow_itenscontratos — Histórico de cargas'
       default:
         return 'Mega ERP'
     }
@@ -460,6 +472,28 @@ export function MegaView() {
             <small>Rotina noturna ativa (02:00)</small>
           </div>
         </div>
+
+        <div className="mega-summary-card">
+          <div className="mega-summary-icon">
+            <FileText size={20} />
+          </div>
+          <div>
+            <h4>Follow-up de Itens</h4>
+            <p>{integerFormatter.format(summary?.totalFollowItensContratos ?? 0)}</p>
+            <small>Itens de contratos de empreiteiros</small>
+          </div>
+        </div>
+
+        <div className="mega-summary-card">
+          <div className="mega-summary-icon">
+            <CheckCircle2 size={20} />
+          </div>
+          <div>
+            <h4>Medições de Contratos</h4>
+            <p>{integerFormatter.format(summary?.totalMedicoesContratos ?? 0)}</p>
+            <small>Espelho de medições</small>
+          </div>
+        </div>
       </div>
 
       {/* 2. Barra de Navegação Principal do Mega (Sub-abas) */}
@@ -501,6 +535,35 @@ export function MegaView() {
           >
             <FileCheck2 size={15} />
             <span>Itens Solicitados</span>
+          </button>
+
+          <button
+            type="button"
+            className={`mega-tab-btn ${activeTab === 'follow_itenscontratos_itens' ? 'active' : ''}`}
+            onClick={() => handleTabChange('follow_itenscontratos_itens')}
+          >
+            <FileText size={15} />
+            <span>Follow-up de Itens</span>
+            {summary && <span className="mega-tab-badge">{integerFormatter.format(summary.totalFollowItensContratos ?? 0)}</span>}
+          </button>
+
+          <button
+            type="button"
+            className={`mega-tab-btn ${activeTab === 'follow_itenscontratos_medicoes' ? 'active' : ''}`}
+            onClick={() => handleTabChange('follow_itenscontratos_medicoes')}
+          >
+            <CheckCircle2 size={15} />
+            <span>Medições de Contratos</span>
+            {summary && <span className="mega-tab-badge">{integerFormatter.format(summary.totalMedicoesContratos ?? 0)}</span>}
+          </button>
+
+          <button
+            type="button"
+            className={`mega-tab-btn ${activeTab === 'follow_itenscontratos_historico' ? 'active' : ''}`}
+            onClick={() => handleTabChange('follow_itenscontratos_historico')}
+          >
+            <History size={15} />
+            <span>Histórico follow_itenscontratos</span>
           </button>
 
           <button
@@ -556,7 +619,7 @@ export function MegaView() {
       {/* 3. Toolbar de Filtros e Ações */}
       <div className="mega-toolbar">
         <div className="mega-toolbar-left">
-          {activeTab !== 'cargas' && (
+          {activeTab !== 'cargas' && activeTab !== 'follow_itenscontratos_historico' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Building2 size={16} style={{ color: 'var(--text-muted)' }} />
               <select

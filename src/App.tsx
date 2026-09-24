@@ -600,7 +600,6 @@ const columns: Record<DataView, Column[]> = {
   curvas: [],
   dados_mega: [],
   gestao_a_vista: [],
-  dados_mega: [],
 }
 
 const activityColumns: Record<ActivityMode, Column[]> = {
@@ -3563,12 +3562,8 @@ function App() {
       )}
 
       <section className="workspace">
-<<<<<<< HEAD
         {activeView !== 'dados_mega' && (
           <div className="toolbar">
-=======
-        {activeView !== 'dados_mega' && <div className="toolbar">
->>>>>>> d9b1acb (feat: adicionar visualizador Mega de itens e medicoes)
           <div className="view-title">
             <activeTab.icon size={18} />
             <h2>{activeTab.label}</h2>
@@ -3860,25 +3855,17 @@ function App() {
               </label>}
             </div>
           )}
-<<<<<<< HEAD
         </div>
         )}
-=======
-        </div>}
->>>>>>> d9b1acb (feat: adicionar visualizador Mega de itens e medicoes)
 
         {(message || error) && (
           <div className={`feedback ${error ? 'error' : 'success'}`}>{error || message}</div>
         )}
 
         <div className={`table-panel ${activeView === 'dashboard' && dashboardMode === 'cff' ? 'cff-panel' : activeView === 'gestao_a_vista' ? 'gestao-panel' : activeView === 'dados_mega' ? 'mega-panel' : ''}`} aria-live="polite">
-<<<<<<< HEAD
-          {loading ? (
-=======
           {activeView === 'dados_mega' ? (
-            <MegaViewer />
+            <MegaView />
           ) : loading ? (
->>>>>>> d9b1acb (feat: adicionar visualizador Mega de itens e medicoes)
             <div className="state-message">
               <RefreshCw size={20} className="spin" />
               Carregando dados
@@ -3892,8 +3879,6 @@ function App() {
               loading={loading}
               allowedImportedEnterprises={activeCurveEnterprises === null ? null : Array.from(effectiveActiveCurveEnterprises)}
             />
-          ) : activeView === 'dados_mega' ? (
-            <MegaView />
           ) : activeView === 'gestao_a_vista' ? (
             <div className="gestao-vista-wrapper">
               {/* PANEL SUB-TABS NAVIGATION & A4 PRINT BAR */}
