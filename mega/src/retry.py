@@ -25,10 +25,8 @@ RAIZ = Path(__file__).resolve().parent.parent
 ORDEM_RELATORIOS = ["itens_solicitados", "analise_saldo_solicitacao",
                     "visualizacao_itens", "pedidos_compra", "solicitacoes_por_etapa",
                     "medicoes_contratos", "contratos_itens"]
-# Por padrao, retry foca nas telas operacionais diarias (evita loop em telas
-# que estejam temporariamente fora do ar como Saldo Resumido). Configuravel por env.
-RELATORIOS_RETRY_PADRAO = ["itens_solicitados", "visualizacao_itens", "pedidos_compra", "solicitacoes_por_etapa",
-                           "medicoes_contratos", "contratos_itens"]
+RELATORIOS_RETRY_PADRAO = ["itens_solicitados", "analise_saldo_solicitacao", "visualizacao_itens",
+                           "pedidos_compra", "solicitacoes_por_etapa", "medicoes_contratos", "contratos_itens"]
 
 
 def _log(msg):
@@ -183,8 +181,10 @@ def identificar_pendencias(cfg, conn, data_iso, pasta=None, marcador_parametro="
 
 
 def rodar_retry(cfg, conectar_fn=banco.conectar, abrir_sessao_fn=Sessao, data_iso=None,
-                tempo_max_minutos=35, marcador_parametro="%s", aplicar_esquema=True):
+                tempo_max_minutos=None, marcador_parametro="%s", aplicar_esquema=True):
     """Orquestra a checagem e execucao de retry para a data especificada."""
+    if tempo_max_minutos is None:
+        tempo_max_minutos = int(os.environ.get("RETRY_TEMPO_MAX_MINUTOS", "120"))
     if data_iso is None:
         data_iso = dt.date.today().isoformat()
 

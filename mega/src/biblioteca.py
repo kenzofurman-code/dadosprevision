@@ -152,10 +152,10 @@ class Operador:
                 self.log("   ERP pronto (%d palavras na tela)" % len(palavras))
                 return "conteudo"
 
-            # Se a janela estiver minimizada (tela com menos de 6 palavras e sem ancoras)
+            # Se a janela estiver minimizada (tela com menos de 15 palavras e sem ancoras)
             # e o item "Mega ERP" estiver na barra de tarefas (Y >= 840):
-            # Clicar no botao da barra de tarefas para restaurar a tela (com debounce de 15s).
-            if len(palavras) < 6 and (time.time() - ultimo_clique_taskbar > 15):
+            # Clicar no botao da barra de tarefas para restaurar a tela (com debounce de 8s).
+            if len(palavras) < 15 and (time.time() - ultimo_clique_taskbar > 8):
                 caixa_erp_tb = self.v.achar_texto("Mega ERP", img=img)
                 if caixa_erp_tb and caixa_erp_tb.y >= 840:
                     self.log("   'Mega ERP' detectado na barra de tarefas com tela minimizada; clicando para focar/restaurar")
@@ -163,7 +163,13 @@ class Operador:
                     try:
                         self.pagina.mouse.click(cx, cy)
                         ultimo_clique_taskbar = time.time()
-                        time.sleep(3)
+                        time.sleep(2)
+                        img_chk = self.tela()
+                        palavras_chk = [p for p in self.v.palavras_todas(img_chk) if p["conf"] >= 50]
+                        if len(palavras_chk) < 15:
+                            self.pagina.mouse.click(cx, cy)
+                            time.sleep(1)
+                            self.tecla("Alt+Tab", pausa=1.0)
                     except Exception:
                         pass
 
@@ -795,26 +801,46 @@ class Operador:
             raise FalhaDeEtapa("o dialogo 'Exportar Relatório' nao apareceu em 60s")
         time.sleep(1.5)
 
-        # Selecionar pasta 'Downloads' no painel lateral esquerdo (x ~ 80, y ~ 227)
-        # para que o arquivo seja gravado na pasta redirecionada do cliente e baixado via gateway
+        # Garantir selecao da pasta Downloads / \\tsclient\WebFile
         self.log("      selecionando pasta 'Downloads' na barra lateral...")
         img_side = self.tela()
         todas_palavras = self.v._palavras(img_side, escala=1.0)
-        caixa_down = next((p for p in todas_palavras if "download" in p["texto"].lower() and p["x"] < 120 and p["y"] < 350), None)
+        caixa_down = next((p for p in todas_palavras if "download" in p["texto"].lower() and p["y"] < 350), None)
         if caixa_down:
             cx = caixa_down["x"] + caixa_down.get("w", 30) // 2
             cy = caixa_down["y"] + caixa_down.get("h", 16) // 2
-            self.pagina.mouse.click(cx, cy)
+            self.pagina.mouse.dblclick(cx, cy)
         else:
-            self.pagina.mouse.click(91, 227)
-        time.sleep(0.5)
-        self.tecla("Enter", pausa=1.0)
+            self.pagina.mouse.dblclick(91, 227)
         time.sleep(1.0)
 
-        # 1. Ajustar o Tipo para Microsoft Excel (*.xls)
-        # Na janela 'Exportar Relatório', o campo Tipo fica em (440, 421)
-        self.log("      clicando na combobox Tipo em (440, 421)...")
-        self.pagina.mouse.click(440, 421)
+        # Checar se a pasta atual e \\tsclient\WebFile (ou se o caminho no topo contem tsclient/WebFile)
+        img_nav = self.tela()
+        todas_nav = self.v._palavras(img_nav, escala=1.0)
+        texto_nav = " ".join(p["texto"].lower() for p in todas_nav)
+        if not ("webfile" in texto_nav or "tsclient" in texto_nav):
+            self.log("      pasta tsclient nao confirmada pelo clique; forcando navegacao para \\\\tsclient\\WebFile...")
+            c_nome_nav = next((p for p in todas_nav if "nome" in p["texto"].lower() and p["y"] > 350), None)
+            x_nome_nav = (c_nome_nav["x"] + 150) if c_nome_nav else 250
+            y_nome_nav = (c_nome_nav["y"] + c_nome_nav.get("h", 12) // 2) if c_nome_nav else 395
+            self.pagina.mouse.click(x_nome_nav, y_nome_nav)
+            time.sleep(0.5)
+            self.tecla("End", pausa=0.1)
+            for _ in range(40):
+                self.pagina.keyboard.press("Backspace")
+            self.digitar(r"\\tsclient\WebFile")
+            time.sleep(0.5)
+            self.tecla("Enter", pausa=2.0)
+
+        # 1. Ajustar o Tipo para Microsoft Excel
+        img_tipo = self.tela()
+        todas_tipo = self.v._palavras(img_tipo, escala=1.0)
+        c_tipo = next((p for p in todas_tipo if "tipo" in p["texto"].lower() and p["y"] > 350), None)
+        x_combo = (c_tipo["x"] + 340) if c_tipo else 440
+        y_combo = (c_tipo["y"] + c_tipo.get("h", 12) // 2) if c_tipo else 421
+
+        self.log("      clicando na combobox Tipo em (%d, %d)..." % (x_combo, y_combo))
+        self.pagina.mouse.click(x_combo, y_combo)
         time.sleep(1.0)
 
         # Navegar pelo teclado para selecionar o tipo Excel Data-Only
@@ -833,20 +859,30 @@ class Operador:
         except Exception:
             pass
 
-        # 2. Preencher campo Nome (x=250, y=395)
+        # 2. Preencher campo Nome
         self.log("      preenchendo nome do arquivo (%s)..." % destino.name)
-        self.pagina.mouse.click(250, 395)
+        img_nome = self.tela()
+        todas_nome = self.v._palavras(img_nome, escala=1.0)
+        c_nome = next((p for p in todas_nome if "nome" in p["texto"].lower() and p["y"] > 350), None)
+        x_nome = (c_nome["x"] + 150) if c_nome else 250
+        y_nome = (c_nome["y"] + c_nome.get("h", 12) // 2) if c_nome else 395
+
+        self.pagina.mouse.click(x_nome, y_nome)
         time.sleep(0.5)
         self.tecla("End", pausa=0.1)
-        for _ in range(35):
+        for _ in range(40):
             self.pagina.keyboard.press("Backspace")
         self.digitar(destino.stem)
         time.sleep(0.8)
 
-        # 3. Confirmar Salvar no botão (628, 470) e aguardar recepção do download
-        self.log("      confirmando salvamento do arquivo em (628, 470)...")
+        # 3. Confirmar Salvar no botão Salvar e aguardar recepção do download
+        c_salvar = next((p for p in todas_nome if "salvar" in p["texto"].lower() and p["y"] > 400), None)
+        x_salvar = (c_salvar["x"] + c_salvar.get("w", 35) // 2) if c_salvar else 628
+        y_salvar = (c_salvar["y"] + c_salvar.get("h", 25) // 2) if c_salvar else 470
+
+        self.log("      confirmando salvamento do arquivo em (%d, %d)..." % (x_salvar, y_salvar))
         with self.pagina.expect_download(timeout=180000) as info:
-            self.pagina.mouse.click(628, 470)
+            self.pagina.mouse.click(x_salvar, y_salvar)
             time.sleep(0.5)
             self.tecla("Enter", pausa=1.0)
             self.log("      aguardando recepcao do arquivo baixado...")
