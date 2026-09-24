@@ -284,11 +284,25 @@ def preparar_medicoes_contratos(op, rel, obra):
     caixa_conf = None
     while time.time() < limite:
         img = op.tela()
-        caixa_conf = op.v.achar_texto("Confirmar", img=img)
-        if caixa_conf:
+        todas = op.v.palavras_todas(img)
+        # Procura por Confirmar, ou por qualquer âncora do modal (Cancelar, Relatórios, Último Parâmetro, etc.)
+        p_conf = next((p for p in todas if "confirm" in p["texto"].lower() and 200 < p["y"] < 800), None)
+        p_canc = next((p for p in todas if "cancel" in p["texto"].lower() and 200 < p["y"] < 800), None)
+        p_ancora = next((p for p in todas if any(a in p["texto"].lower() for a in ("parâmetro", "parametro", "espelho", "contrato", "medição", "medicao")) and 200 < p["y"] < 600), None)
+
+        if p_conf:
+            caixa_conf = (p_conf["x"] + p_conf.get("w", 30) // 2, p_conf["y"] + p_conf.get("h", 16) // 2)
             break
-        op.pagina.mouse.click(1518, 857)
-        time.sleep(3)
+        if p_canc:
+            # Confirmar fica ~63px à esquerda de Cancelar na mesma altura
+            caixa_conf = (p_canc["x"] - 63, p_canc["y"] + p_canc.get("h", 16) // 2)
+            break
+        if p_ancora:
+            # Modal aberto! Posição padrão do botão Confirmar
+            caixa_conf = (620, 713)
+            break
+
+        time.sleep(2)
 
     if not caixa_conf:
         try:
@@ -298,9 +312,10 @@ def preparar_medicoes_contratos(op, rel, obra):
         raise FalhaDeEtapa("a janela de parâmetros de 'Medição modificado' nao apareceu em 90s")
 
     time.sleep(1.5)
-    op.log("   clicando em Confirmar...")
-    op.pagina.mouse.click(caixa_conf.x + caixa_conf.largura // 2,
-                          caixa_conf.y + caixa_conf.altura // 2)
+    op.log("   clicando em Confirmar em (%d, %d)..." % (caixa_conf[0], caixa_conf[1]))
+    op.pagina.mouse.click(caixa_conf[0], caixa_conf[1])
+    time.sleep(0.5)
+    op.tecla("Enter", pausa=1.0)
 
 
 def preparar_contratos_itens(op, rel, obra):
@@ -338,8 +353,8 @@ def _rodar_relatorio_na_obra_ativa(op, v, rel, obra, data_iso, pasta):
     esta funcao roda o relatorio pressupondo que a empresa ativa ja e a
     da obra.
     """
-    # Se houver visualizador do Crystal Reports remanescente de relatório anterior, fecha antes de abrir próxima tela
-    op.fechar_visualizador_crystal()
+    # Se houver diálogo modal ou visualizador remanescente de relatório anterior, fecha antes de abrir próxima tela
+    op.fechar_modais_ou_janelas_ativas()
 
     op.abrir_tela(rel["busca_tela"], rel["ancora_titulo_tela"],
                   palavra_modulo=rel.get("palavra_modulo"))
@@ -353,7 +368,7 @@ def _rodar_relatorio_na_obra_ativa(op, v, rel, obra, data_iso, pasta):
     for exp in rel["exportacoes"]:
         formato = exp.get("formato")
         if formato in ("crystal_xls", "crystal_data_only"):
-            ext = ".xlsx" if formato == "crystal_data_only" else ".xls"
+            ext = ".xls"
             destino = pasta / ("%s_%s_%s%s" % (exp["arquivo"], obra["codigo"], data_iso, ext))
             tipo = "data_only" if formato == "crystal_data_only" else "excel"
             caminhos.append(op.exportar_crystal_relatorio(destino, timeout_espera_geracao=300, tipo=tipo))

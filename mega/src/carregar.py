@@ -148,8 +148,23 @@ def _ler_crystal_medicoes(caminho):
     """Le o .xls/.xlsx do Crystal Reports de medicoes de contratos (dados2.xlsx).
     Extrai as linhas de medicao estruturadas e soma retencoes fiscais/caucao."""
     df_raw = pd.read_excel(caminho, header=None)
-    mask_contrato = df_raw[5].astype(str).str.contains('Contrato', na=False)
+    col_contrato = 5
+    for c in df_raw.columns:
+        if df_raw[c].astype(str).str.contains('Contrato', case=False, na=False).any():
+            col_contrato = c
+            break
+
+    col_med = col_contrato + 1 if (col_contrato + 1) in df_raw.columns else 6
+    for c in df_raw.columns:
+        if df_raw[c].astype(str).str.contains('Medi', case=False, na=False).any():
+            col_med = c
+            break
+
+    mask_contrato = df_raw[col_contrato].astype(str).str.contains('Contrato', case=False, na=False)
     indices_contrato = df_raw[mask_contrato].index.tolist()
+
+    if not indices_contrato:
+        print("[AVISO] _ler_crystal_medicoes: nenhuma linha com 'Contrato' encontrada na planilha %s (shape %s)" % (caminho.name, df_raw.shape), flush=True)
 
     registros = []
     total_linhas = len(df_raw)
@@ -165,11 +180,11 @@ def _ler_crystal_medicoes(caminho):
         c_unit = row[3]
         c_tot = row[4]
 
-        c_cont_str = str(row[5])
+        c_cont_str = str(row[col_contrato])
         m_cont = re.search(r'(\d+)', c_cont_str)
         num_contrato = int(m_cont.group(1)) if m_cont else 0
 
-        c_med_str = str(row[6])
+        c_med_str = str(row[col_med])
         m_med = re.search(r'Medi[^\d]*(\d+)', c_med_str)
         num_medicao = int(m_med.group(1)) if m_med else 0
 
@@ -412,6 +427,10 @@ def carregar_relatorio(cfg, conn, rel_id, data_iso, pasta, resultado_execucao,
             df_traduzido = traduzir_colunas(df, rel_id, aba=aba)
             por_obra_traduzido[obra] = df_traduzido
             por_obra[obra] = _separar_raw_data(df_traduzido, tabela)
+            if len(df) == 0:
+                print("   [AVISO] %s: 0 registros extraidos da planilha para a obra %s" % (arquivo_base, obra), flush=True)
+            else:
+                print("   [CARGA] %s: %d registros preparados para insercao (obra %s)" % (arquivo_base, len(df), obra), flush=True)
 
         if not por_obra:
             if resultado_execucao.get("sem_movimento"):

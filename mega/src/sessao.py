@@ -139,8 +139,17 @@ class Sessao:
         if "key.megaerp.online" not in pag.url and not forcar:
             return "sessao reaproveitada"
 
+        try:
+            pag.wait_for_selector("#username", timeout=35000)
+        except Exception:
+            try:
+                self.pagina.screenshot(path="dados/falhas/login_timeout.png")
+            except Exception:
+                pass
+            if "key.megaerp.online" not in pag.url:
+                return "sessao reaproveitada"
+            raise
         usuario, senha = credenciais()
-        pag.wait_for_selector("#username", timeout=30000)
         pag.fill("#username", usuario)
         pag.fill("#password", senha)
         pag.click("#kc-login")

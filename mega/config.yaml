@@ -172,6 +172,7 @@ relatorios:
         caminho_menu: ["Exportar", "Excel"]
         arquivo: "Visualizacao_Itens"
         ancora_nome_padrao: "grd_Itens"
+        y: 350
     grid_vazio_e_valido: true
     # O menu de contexto desta tela tem um item a mais no topo ("Exibir Quadro
     # Informativo"), o que desloca o "Exportar". Terceiro layout de menu distinto

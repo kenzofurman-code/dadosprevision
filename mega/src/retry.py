@@ -10,8 +10,11 @@ Roda as 06:00 (antes do inicio do expediente):
 """
 import datetime as dt
 import os
+import sys
 import time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import banco
 import config as cfgmod
@@ -51,6 +54,9 @@ def identificar_pendencias(cfg, conn, data_iso, pasta=None, marcador_parametro="
             relatorios_permitidos = RELATORIOS_RETRY_PADRAO
 
     obras_todas = [o["codigo"] for o in cfgmod.obras(cfg)]
+    env_obras = os.environ.get("RETRY_OBRAS", "")
+    if env_obras:
+        obras_todas = [c.strip() for c in env_obras.split(",") if c.strip()]
     cur = conn.cursor()
     m = marcador_parametro
     prefixo = "" if m == "?" else "mega."

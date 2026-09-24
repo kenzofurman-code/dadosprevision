@@ -26,6 +26,7 @@ class Operador:
         self.pasta_downloads = Path(pasta_downloads or "dados/downloads")
         self.pasta_downloads.mkdir(parents=True, exist_ok=True)
         self.log = log
+        self._crystal_aberto = False
 
     # ------------------------------------------------------------- primitivas
     def tela(self, cutucar=True, ponto=None):
@@ -148,6 +149,10 @@ class Operador:
                     self.log("   ERP pronto (tela: %s)" % alvo)
                     return alvo
             palavras = [p for p in self.v.palavras_todas(img) if p["conf"] >= 50]
+            if len(palavras) >= 20:
+                self.fechar_modais_ou_janelas_ativas()
+                self.log("   ERP pronto (%d palavras na tela)" % len(palavras))
+                return "conteudo"
             if len(palavras) >= minimo_palavras and self.v.achar_texto("Mega ERP", img=img):
                 self.log("   ERP pronto (%d palavras na tela)" % len(palavras))
                 return "conteudo"
@@ -338,10 +343,8 @@ class Operador:
         TEXTOS_PAINEL_ABERTO = ("Trocar Senha do Usuario", "Sair",
                                 "Encerrar Sessão", "Desconectar", "Log Off")
         for tentativa in (1, 2, 3):
-            # Envia Escape preventivo para fechar qualquer dialogo modal aberto (ex: Exportar Relatório pendente)
-            self.tecla("Escape", pausa=0.5)
-            # Se o visualizador do Crystal Reports ainda estiver na frente, fecha
-            self.fechar_visualizador_crystal()
+            # Fecha qualquer dialogo ou modal pendente antes de clicar no icone de pessoa
+            self.fechar_modais_ou_janelas_ativas()
 
             self.pagina.mouse.click(self.ICONE_PESSOA[0], self.ICONE_PESSOA[1])
             time.sleep(3.0)
@@ -417,9 +420,8 @@ class Operador:
         confiavel do que conferir o caminho do modulo antes de clicar: verifica o
         resultado, nao a intencao.
         """
-        # 1. Garantir que o painel de busca lateral esta aberto.
-        # Envia Escape preventivo para fechar qualquer menu de contexto residual que bloqueie a tela.
-        self.tecla("Escape", pausa=0.5)
+        # 1. Garantir que o painel de busca lateral esta aberto e sem modais bloqueando.
+        self.fechar_modais_ou_janelas_ativas()
         # Se ja estiver aberto ("Procurar" visivel), nao clica na lupa para nao recolher.
         for tentativa in (1, 2, 3):
             img = self.tela()
@@ -427,6 +429,8 @@ class Operador:
                 break
             self.pagina.mouse.click(self.ICONE_LUPA[0], self.ICONE_LUPA[1])
             time.sleep(3)
+            if tentativa < 3 and not self.v.achar_texto("Procurar", img=self.tela()):
+                self.fechar_modais_ou_janelas_ativas()
             if tentativa == 3:
                 raise FalhaDeEtapa("o painel de busca de telas nao abriu")
 
@@ -530,16 +534,8 @@ class Operador:
                          % (tentativa, tentativas, str(e).splitlines()[0][:70]))
                 for _ in range(3):
                     self.tecla("Escape", pausa=0.8)
-                # Um popup inesperado (ex.: detalhe de um item, aberto por um
-                # clique que caiu numa celula clicavel da grade em vez do menu)
-                # cobre o texto que estamos esperando, e Escape sozinho pode nao
-                # fechar esse tipo de janela. Um clique esquerdo no mesmo ponto
-                # do right-click original (garantido dentro da grade, nunca na
-                # barra lateral) tira o foco do popup antes da proxima tentativa.
-                # BUG REAL: travou ~2h sem nenhum log, obra 340, relatorio
-                # visualizacao_itens (2026-09-11) -- Escape sozinho nao bastou.
-                self.pagina.mouse.click(x, y)
-                time.sleep(3)
+                self.fechar_modais_ou_janelas_ativas()
+                time.sleep(2)
         raise FalhaDeEtapa("exportacao falhou em %d tentativas: %s"
                            % (tentativas, str(ultimo).splitlines()[0][:80]))
 
@@ -627,6 +623,12 @@ class Operador:
             caminho.rename(novo_caminho)
             return novo_caminho
 
+        # Se o arquivo foi salvo com extensão .xlsx mas na verdade é .xls (OLE2)
+        if caminho.suffix.lower() == ".xlsx" and conteudo.startswith(self.ASSINATURAS[".xls"]):
+            novo_caminho = caminho.with_suffix(".xls")
+            caminho.rename(novo_caminho)
+            caminho = novo_caminho
+
         esperado = self.ASSINATURAS.get(caminho.suffix.lower())
         if not esperado:
             return caminho
@@ -674,6 +676,7 @@ class Operador:
 
         img = self.tela()
         if not _tem_ancora(img):
+            self._crystal_aberto = False
             return True
 
         self.log("      fechando visualizador do Crystal Reports...")
@@ -683,6 +686,7 @@ class Operador:
             time.sleep(2.0)
             if not _tem_ancora(self.tela()):
                 self.log("      visualizador fechado com sucesso pelo botão OK.")
+                self._crystal_aberto = False
                 return True
 
             # 2. Se ainda presente, clicar no botão 'X' no canto superior direito (1588, 12)
@@ -691,6 +695,7 @@ class Operador:
             time.sleep(2.0)
             if not _tem_ancora(self.tela()):
                 self.log("      visualizador fechado com sucesso pelo botão 'X'.")
+                self._crystal_aberto = False
                 return True
 
             # 3. Se ainda presente, enviar Escape
@@ -698,9 +703,48 @@ class Operador:
             self.tecla("Escape", pausa=1.5)
             if not _tem_ancora(self.tela()):
                 self.log("      visualizador fechado com sucesso pelo Escape.")
+                self._crystal_aberto = False
                 return True
 
         return False
+
+    def fechar_modais_ou_janelas_ativas(self):
+        """Fecha diálogos modais, popups de detalhe ou o visualizador Crystal pendentes.
+
+        Seguindo a regra de segurança definida pelo usuário:
+        1. Primeiro busca e clica em botões de fechamento/confirmação limpos:
+           'OK' ou 'Confirmar' ou 'Fechar' ou 'Cancelar'.
+           (Ordem 'OK' / 'Confirmar' primeiro evita disparar novas caixas de pergunta).
+        2. Se ainda houver visualizador do Crystal Reports ativo, fecha-o.
+        3. Envia Escape como fallback preventivo.
+        NUNCA envia Alt+F4 (para evitar qualquer risco de fechar o navegador).
+        """
+        fechou_algo = False
+        try:
+            self.tecla("Escape", pausa=0.3)
+
+            if getattr(self, "_crystal_aberto", False):
+                if self.fechar_visualizador_crystal():
+                    fechou_algo = True
+
+            img = self.tela()
+            palavras = self.v.palavras_todas(img)
+            for alvo in ("ok", "confirmar", "fechar", "cancelar"):
+                p_match = next((p for p in palavras
+                                if p["texto"].strip().lower() == alvo and 100 < p["y"] < 840), None)
+                if p_match:
+                    self.log("   diálogo pendente detectado; clicando em %r (%d, %d)"
+                             % (p_match["texto"], p_match["x"], p_match["y"]))
+                    self.pagina.mouse.click(p_match["x"] + p_match.get("w", 30) // 2,
+                                            p_match["y"] + p_match.get("h", 16) // 2)
+                    time.sleep(2.0)
+                    fechou_algo = True
+                    break
+
+            self.tecla("Escape", pausa=0.3)
+        except Exception as e:
+            self.log("   aviso ao tentar fechar modais pendentes: %s" % str(e)[:60])
+        return fechou_algo
 
     def exportar_crystal_relatorio(self, destino, timeout_espera_geracao=300, timeout_download=120, tipo="excel"):
         """Exporta relatorio gerado no visualizador do Crystal Reports para Excel (.xls).
@@ -717,6 +761,7 @@ class Operador:
         8. Fecha o visualizador do Crystal Reports clicando em 'OK'.
         """
         self.log("      aguardando geracao no Crystal Reports (ate %ds)..." % timeout_espera_geracao)
+        self._crystal_aberto = True
         time.sleep(5)
         ANCORAS_DOCUMENTO = ("dataliberac", "datalibera", "insoia", "inscric", "emiss")
         limite = time.time() + timeout_espera_geracao
@@ -801,85 +846,99 @@ class Operador:
             raise FalhaDeEtapa("o dialogo 'Exportar Relatório' nao apareceu em 60s")
         time.sleep(1.5)
 
-        # Garantir selecao da pasta Downloads / \\tsclient\WebFile
-        self.log("      selecionando pasta 'Downloads' na barra lateral...")
-        img_side = self.tela()
-        todas_palavras = self.v._palavras(img_side, escala=1.0)
-        caixa_down = next((p for p in todas_palavras if "download" in p["texto"].lower() and p["y"] < 350), None)
-        if caixa_down:
-            cx = caixa_down["x"] + caixa_down.get("w", 30) // 2
-            cy = caixa_down["y"] + caixa_down.get("h", 16) // 2
-            self.pagina.mouse.dblclick(cx, cy)
+        # Identificar o diálogo e os controles com base no botão Salvar
+        img_diag = self.tela()
+        todas_w = self.v.palavras_todas(img_diag)
+
+        p_salvar = next((p for p in todas_w if p["texto"].strip().lower() == "salvar" and p["y"] > 350 and p["x"] < 1150), None)
+        if p_salvar:
+            x_salvar = p_salvar["x"] + p_salvar.get("w", 54) // 2
+            y_salvar = p_salvar["y"] + p_salvar.get("h", 23) // 2
         else:
-            self.pagina.mouse.dblclick(91, 227)
-        time.sleep(1.0)
+            p_canc = next((p for p in todas_w if p["texto"].strip().lower() == "cancelar" and p["y"] > 350 and p["x"] < 1150), None)
+            if p_canc:
+                x_salvar = p_canc["x"] - 64
+                y_salvar = p_canc["y"] + p_canc.get("h", 23) // 2
+            else:
+                x_salvar = 894
+                y_salvar = 709
 
-        # Checar se a pasta atual e \\tsclient\WebFile (ou se o caminho no topo contem tsclient/WebFile)
-        img_nav = self.tela()
-        todas_nav = self.v._palavras(img_nav, escala=1.0)
-        texto_nav = " ".join(p["texto"].lower() for p in todas_nav)
-        if not ("webfile" in texto_nav or "tsclient" in texto_nav):
-            self.log("      pasta tsclient nao confirmada pelo clique; forcando navegacao para \\\\tsclient\\WebFile...")
-            c_nome_nav = next((p for p in todas_nav if "nome" in p["texto"].lower() and p["y"] > 350), None)
-            x_nome_nav = (c_nome_nav["x"] + 150) if c_nome_nav else 250
-            y_nome_nav = (c_nome_nav["y"] + c_nome_nav.get("h", 12) // 2) if c_nome_nav else 395
-            self.pagina.mouse.click(x_nome_nav, y_nome_nav)
-            time.sleep(0.5)
-            self.tecla("End", pausa=0.1)
-            for _ in range(40):
-                self.pagina.keyboard.press("Backspace")
-            self.digitar(r"\\tsclient\WebFile")
-            time.sleep(0.5)
-            self.tecla("Enter", pausa=2.0)
+        # Geometria fixa do diálogo Windows em relação ao botão Salvar
+        x_combo = x_salvar - 300
+        y_combo = y_salvar - 50
+        x_seta_combo = x_salvar + 90
+        x_nome = x_salvar - 300
+        y_nome = y_salvar - 75
 
-        # 1. Ajustar o Tipo para Microsoft Excel
-        img_tipo = self.tela()
-        todas_tipo = self.v._palavras(img_tipo, escala=1.0)
-        c_tipo = next((p for p in todas_tipo if "tipo" in p["texto"].lower() and p["y"] > 350), None)
-        x_combo = (c_tipo["x"] + 340) if c_tipo else 440
-        y_combo = (c_tipo["y"] + c_tipo.get("h", 12) // 2) if c_tipo else 421
+        # Fechar qualquer popup de restrição ou aviso que possa estar na tela
+        time.sleep(0.5)
+        img_aviso = self.tela()
+        todas_aviso = self.v.palavras_todas(img_aviso)
+        p_ok_aviso = next((p for p in todas_aviso if p["texto"].strip().lower() == "ok" and 350 < p["y"] < 650 and p["x"] < 1200), None)
+        if p_ok_aviso:
+            self.log("      aviso/restrição detectado na tela; clicando em OK em (%d, %d)..." % (p_ok_aviso["x"], p_ok_aviso["y"]))
+            self.pagina.mouse.click(p_ok_aviso["x"] + p_ok_aviso.get("w", 30) // 2,
+                                    p_ok_aviso["y"] + p_ok_aviso.get("h", 16) // 2)
+            time.sleep(1.0)
 
-        self.log("      clicando na combobox Tipo em (%d, %d)..." % (x_combo, y_combo))
-        self.pagina.mouse.click(x_combo, y_combo)
-        time.sleep(1.0)
+        try:
+            Path("dados/falhas").mkdir(parents=True, exist_ok=True)
+            self.pagina.screenshot(path="dados/falhas/pos_nav_downloads.png")
+        except Exception:
+            pass
 
-        # Navegar pelo teclado para selecionar o tipo Excel Data-Only
-        deslocamento = 5 if tipo == "data_only" else 4
-        self.log("      enviando Home + %dx ArrowDown + Enter na combobox Tipo..." % deslocamento)
+        # 5. Ajustar o Tipo para Microsoft Excel
+        self.log("      abrindo combobox Tipo pela seta em (%d, %d)..." % (x_seta_combo, y_combo))
+        self.pagina.mouse.click(x_seta_combo, y_combo)
+        time.sleep(0.8)
+
+        # Fallback se a seta nao abriu: clicar no corpo do combo e dar Alt+ArrowDown
+        img_drop = self.tela()
+        todas_drop = self.v.palavras_todas(img_drop)
+        if not any("excel" in p["texto"].lower() for p in todas_drop):
+            self.log("      dropdown fechado; clicando no corpo do combo em (%d, %d)..." % (x_combo, y_combo))
+            self.pagina.mouse.click(x_combo, y_combo)
+            time.sleep(0.3)
+            self.tecla("Alt+ArrowDown", pausa=0.8)
+
+        # Seleção direta e confiável pelo teclado:
+        # Home = Crystal Reports (*.rpt)
+        # +1 = PDF (*.pdf)
+        # +2 = CSV (*.csv)
+        # +3 = Microsoft Excel (97-2003) (*.xls)
+        # +4 = Microsoft Excel (97-2003) Data-Only (*.xls)
+        deslocamento = 4 if tipo == "data_only" else 3
+        nome_alvo = "Excel Data-Only" if tipo == "data_only" else "Excel (97-2003)"
+        self.log("      selecionando %s via teclado (Home + %dx ArrowDown + Enter)..." % (nome_alvo, deslocamento))
         self.tecla("Home", pausa=0.3)
         for _ in range(deslocamento):
             self.tecla("ArrowDown", pausa=0.2)
         self.tecla("Enter", pausa=1.0)
-        time.sleep(1.0)
+        time.sleep(0.8)
 
         # Screenshot de confirmacao da selecao do tipo
         try:
-            Path("dados/falhas").mkdir(parents=True, exist_ok=True)
             self.pagina.screenshot(path="dados/falhas/pos_selecao_tipo.png")
         except Exception:
             pass
 
-        # 2. Preencher campo Nome
-        self.log("      preenchendo nome do arquivo (%s)..." % destino.name)
-        img_nome = self.tela()
-        todas_nome = self.v._palavras(img_nome, escala=1.0)
-        c_nome = next((p for p in todas_nome if "nome" in p["texto"].lower() and p["y"] > 350), None)
-        x_nome = (c_nome["x"] + 150) if c_nome else 250
-        y_nome = (c_nome["y"] + c_nome.get("h", 12) // 2) if c_nome else 395
-
+        # 6. Preencher campo Nome
+        self.log("      preenchendo nome do arquivo (%s) em (%d, %d)..." % (destino.name, x_nome, y_nome))
         self.pagina.mouse.click(x_nome, y_nome)
         time.sleep(0.5)
-        self.tecla("End", pausa=0.1)
+        self.tecla("Home", pausa=0.1)
+        self.pagina.keyboard.press("Control+a")
         for _ in range(40):
             self.pagina.keyboard.press("Backspace")
-        self.digitar(destino.stem)
+        self.digitar(destino.name)
         time.sleep(0.8)
 
-        # 3. Confirmar Salvar no botão Salvar e aguardar recepção do download
-        c_salvar = next((p for p in todas_nome if "salvar" in p["texto"].lower() and p["y"] > 400), None)
-        x_salvar = (c_salvar["x"] + c_salvar.get("w", 35) // 2) if c_salvar else 628
-        y_salvar = (c_salvar["y"] + c_salvar.get("h", 25) // 2) if c_salvar else 470
+        try:
+            self.pagina.screenshot(path="dados/falhas/pos_preenchimento_nome.png")
+        except Exception:
+            pass
 
+        # 7. Confirmar Salvar no botão Salvar e aguardar recepção do download
         self.log("      confirmando salvamento do arquivo em (%d, %d)..." % (x_salvar, y_salvar))
         with self.pagina.expect_download(timeout=180000) as info:
             self.pagina.mouse.click(x_salvar, y_salvar)
@@ -919,6 +978,7 @@ class Operador:
         """
         TEXTOS_SAIR = ("Sair", "Encerrar Sessão", "Desconectar", "Log Off")
         try:
+            self.fechar_modais_ou_janelas_ativas()
             self.pagina.mouse.click(self.ICONE_PESSOA[0], self.ICONE_PESSOA[1])
             time.sleep(3.0)
             img = self.tela()
