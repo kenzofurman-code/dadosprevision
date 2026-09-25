@@ -228,13 +228,35 @@ def rodar_retry(cfg, conectar_fn=banco.conectar, abrir_sessao_fn=Sessao, data_is
         op = Operador(erp, visao=v, log=_log)
         op.esperar_erp_pronto(timeout=300)
 
-        for cod_obra, rels_ids in pendencias.items():
+        for i_obra, (cod_obra, rels_ids) in enumerate(pendencias.items()):
             if time.time() > tempo_limite:
                 _log("Tempo limite alcancado; encerrando retry preventivamente.")
                 break
 
             obra = cfgmod.obra(cfg, cod_obra)
             _log("Processando obra %s (%s) - relatorios: %s" % (cod_obra, obra["nome"], rels_ids))
+
+            # Re-login entre obras (a partir da segunda): garante sessao limpa sem
+            # estado degradado herdado da obra anterior (modais fantasmas, menus
+            # que nao respondem, grade que nao carrega).
+            if i_obra > 0:
+                _log("Re-login entre obras: encerrando sessao anterior...")
+                try:
+                    op.encerrar_sessao()
+                except Exception as e:
+                    _log("   aviso: erro ao encerrar sessao anterior: %s" % str(e)[:80])
+                try:
+                    s.fechar()
+                except Exception:
+                    pass
+                _log("   abrindo nova sessao para obra %s..." % cod_obra)
+                s = abrir_sessao_fn()
+                s.abrir()
+                _log("   login: %s" % s.entrar())
+                erp = s.abrir_erp()
+                v = Visao(erp, binario_tesseract=TESSERACT)
+                op = Operador(erp, visao=v, log=_log)
+                op.esperar_erp_pronto(timeout=300)
 
             # Trocar de empresa
             e_troca_final = None

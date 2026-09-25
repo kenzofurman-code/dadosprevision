@@ -45,16 +45,24 @@ def aplicar_esquema(conn):
 
 
 def substituir_obra(conn, tabela, colunas, obra, linhas, marcador_parametro="%s"):
+    """Substitui todos os dados da obra na tabela pelos novos.
+
+    IMPORTANTE: so executa o DELETE se houver novas linhas para inserir.
+    Se linhas estiver vazio (extracao zerada ou arquivo ausente), os dados
+    anteriores sao preservados intactos — evita perder dados de dias
+    anteriores quando a extracao do dia falha silenciosamente.
+    """
+    if not linhas:
+        return
     cur = conn.cursor()
     prefixo = "" if marcador_parametro == "?" else "mega."
     cur.execute("DELETE FROM %s%s WHERE obra = %s" % (prefixo, tabela, marcador_parametro),
                (obra,))
-    if linhas:
-        colunas_sql = ", ".join(colunas)
-        marcadores = ", ".join([marcador_parametro] * len(colunas))
-        cur.executemany(
-            "INSERT INTO %s%s (%s) VALUES (%s)" % (prefixo, tabela, colunas_sql, marcadores),
-            linhas)
+    colunas_sql = ", ".join(colunas)
+    marcadores = ", ".join([marcador_parametro] * len(colunas))
+    cur.executemany(
+        "INSERT INTO %s%s (%s) VALUES (%s)" % (prefixo, tabela, colunas_sql, marcadores),
+        linhas)
 
 
 def upsert_linhas(conn, tabela, colunas, chaves, linhas, marcador_parametro="%s"):
