@@ -83,7 +83,7 @@ relatorios:
     # modulo: procurar pelo TEXTO DA BUSCA nao funciona, porque o resultado se
     # chama "Analise de solicitacao" e a busca e "analise da solici".
     palavra_modulo: "Relatórios"
-    ancora_titulo_tela: "Saldo Resumido"   # aba da tela; texto limpo e estavel
+    ancora_titulo_tela: "Análise de Saldo de Solicitação"   # texto do topo da tela, nítido e de alto contraste
     confere_filial: false                  # esta tela filtra por orcamento
     preparo:
       # O campo Orçamento JA VEM preenchido conforme a empresa ativa (confirmado

@@ -307,6 +307,12 @@ def rodar_retry(cfg, conectar_fn=banco.conectar, abrir_sessao_fn=Sessao, data_is
                 except Exception as e_rel:
                     _log("   [%s] falhou na extracao: %s" % (rel_id, str(e_rel)[:100]))
                     resultados.setdefault(cod_obra, {})[rel_id] = "FALHOU"
+                    if op is not None:
+                        try:
+                            op.pagina.screenshot(path=str(falhas_dir / (
+                                "%s_%s_%s_retry.png" % (data_iso, cod_obra, rel_id))))
+                        except Exception:
+                            pass
                     if "closed" in str(e_rel).lower() or (op is not None and op.pagina.is_closed()):
                         try:
                             op, v = reconectar_sessao(s, _log)

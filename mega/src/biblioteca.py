@@ -70,12 +70,12 @@ class Operador:
     # "Mega ERP" e o item da barra de tarefas do Windows remoto: existe sempre que
     # o ERP esta rodando, seja qual for a tela. E a ancora certa.
     ANCORAS_PRONTO = ("Mega ERP", "Bem-vindo", "Gestao Empresarial", "Visoes",
-                      "ITENS SOLICITADOS", "Saldo Resumido", "PEDIDOS DE COMPRA")
+                      "ITENS SOLICITADOS", "Análise de Saldo de Solicitação", "Saldo Resumido", "PEDIDOS DE COMPRA")
 
     # Telas do ERP ja carregado. Encontrar uma delas e prova de que a interface
     # esta desenhada e responde.
     ANCORAS_TELA = ("Bem-vindo", "Gestao Empresarial", "Visoes",
-                    "ITENS SOLICITADOS", "Saldo Resumido", "PEDIDOS DE COMPRA",
+                    "ITENS SOLICITADOS", "Análise de Saldo de Solicitação", "Saldo Resumido", "PEDIDOS DE COMPRA",
                     "Solicitacoes", "Orcamento", "RELATÓRIOS", "Relatórios",
                     "Contratos", "Menu", "Procurar")
 
