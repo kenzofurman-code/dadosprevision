@@ -9,6 +9,7 @@ exige capturar ativos por ambiente.
 
 Recorte de imagem fica so para os poucos alvos que sao icones (lupa, pessoa).
 """
+import hashlib
 import io
 import unicodedata
 from collections import namedtuple
@@ -70,6 +71,12 @@ class Visao:
         if binario_tesseract:
             pytesseract.pytesseract.tesseract_cmd = binario_tesseract
         self._cache_img = None
+        # OCR e o que mais gasta CPU no robo. Os loops de espera consultam a
+        # MESMA captura dezenas de vezes (uma ancora por vez, cada uma nas 5
+        # variantes, mais dialogo_de_erro/palavras_todas) — sem cache, cada
+        # volta rodava ~80 OCRs de tela cheia, varios em escala 2x, e prendia
+        # a CPU da VPS. Chave = hash dos pixels + variante: resultado identico.
+        self._cache_ocr = {}
 
     # ------------------------------------------------------------------ captura
     def cutucar(self, ponto=None):
@@ -129,6 +136,15 @@ class Visao:
     def _palavras(self, img, escala=None, inverter=False, limiar=None):
         """Roda OCR numa variante e devolve palavras com posicao na escala original."""
         escala = self.escala if escala is None else escala
+        chave = (hashlib.blake2b(np.ascontiguousarray(img).data, digest_size=16).digest(),
+                 img.shape, escala, inverter, limiar)
+        if chave not in self._cache_ocr:
+            if len(self._cache_ocr) >= 32:   # ~6 capturas x 5 variantes
+                self._cache_ocr.pop(next(iter(self._cache_ocr)))
+            self._cache_ocr[chave] = self._palavras_sem_cache(img, escala, inverter, limiar)
+        return self._cache_ocr[chave]
+
+    def _palavras_sem_cache(self, img, escala, inverter, limiar):
         if escala != 1.0:
             base = cv2.resize(img, None, fx=escala, fy=escala,
                               interpolation=cv2.INTER_CUBIC)
