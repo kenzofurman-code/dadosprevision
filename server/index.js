@@ -247,6 +247,7 @@ app.get('/api/mega/data', async (req, res) => {
   try {
     const table = String(req.query.table || '').trim()
     const obra = String(req.query.obra || '').trim()
+    const projectId = String(req.query.projectId || '').trim()
     const page = Math.max(0, Number(req.query.page) || 0)
     const pageSize = Math.min(200, Math.max(10, Number(req.query.limit) || 50))
     const search = String(req.query.search || '').trim()
@@ -255,7 +256,7 @@ app.get('/api/mega/data', async (req, res) => {
       return res.status(400).json({ error: 'Parâmetro table é obrigatório.' })
     }
 
-    const result = await getMegaTable(table, { obra, page, pageSize, search })
+    const result = await getMegaTable(table, { obra, projectId, page, pageSize, search })
     res.json({ ok: true, ...result })
   } catch (err) {
     console.error('Erro em /api/mega/data:', err)

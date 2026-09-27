@@ -365,9 +365,17 @@ export async function getMegaSummary(obra = '') {
     query(`SELECT COUNT(*) as count FROM mega.solicitacoes_por_etapa ${whereObra}`, params),
     query(`SELECT COUNT(*) as count FROM mega.contratos_itens ${whereObra}`, params),
     query(`SELECT COUNT(*) as count FROM mega.medicoes_contratos ${whereObra}`, params),
+    query(
+      `SELECT COUNT(*) as count FROM (
+         SELECT DISTINCT obra, solicitacao, sequencia
+         FROM mega.visualizacao_itens
+         ${whereObra}
+       ) conciliacao`,
+      params,
+    ),
     query(`SELECT MAX(data_extracao) as ultima_data FROM mega.carga WHERE bloqueado = FALSE`),
   ]
-  const [pedidos, visItens, saldoPedidos, saldoContratos, saldoRealizado, itensSolic, solicitacoesEtapa, followItens, medicoesContratos, carga] =
+  const [pedidos, visItens, saldoPedidos, saldoContratos, saldoRealizado, itensSolic, solicitacoesEtapa, followItens, medicoesContratos, conciliacao, carga] =
     await Promise.all(queries)
 
   return {
@@ -380,7 +388,287 @@ export async function getMegaSummary(obra = '') {
     totalSolicitacoesEtapa: Number(solicitacoesEtapa.rows[0]?.count || 0),
     totalFollowItensContratos: Number(followItens.rows[0]?.count || 0),
     totalMedicoesContratos: Number(medicoesContratos.rows[0]?.count || 0),
+    totalConciliacaoContratacoes: Number(conciliacao.rows[0]?.count || 0),
     ultimaExtracao: carga.rows[0]?.ultima_data || null,
+  }
+}
+
+function megaConciliacaoCtes({ obraParam, projectParam }) {
+  const visualObra = obraParam ? `WHERE v.obra = $${obraParam}` : ''
+  const requestObra = obraParam ? `WHERE i.obra = $${obraParam}` : ''
+  const stageObra = obraParam ? `WHERE s.obra = $${obraParam}` : ''
+  const approvalObra = obraParam ? `WHERE a.obra = $${obraParam}` : ''
+  const occurrenceObra = obraParam ? `WHERE o.obra = $${obraParam}` : ''
+  const planningFilter = projectParam ? `WHERE a.projeto_id = $${projectParam}` : 'WHERE FALSE'
+  const cffFilter = projectParam ? `WHERE c.projeto_id = $${projectParam}` : 'WHERE FALSE'
+
+  return `
+    WITH visual_atual AS (
+      SELECT
+        v.obra,
+        v.solicitacao,
+        v.sequencia,
+        MAX(v.obra_nome) AS obra_nome,
+        MAX(v.data_extracao) AS data_extracao,
+        MAX(v.orcamento) AS orcamento,
+        MAX(v.fornecedor) AS fornecedor,
+        MAX(v.cod_item) AS cod_item,
+        MAX(v.descricao) AS descricao,
+        MAX(v.qtde_solicitada) AS qtde_solicitada,
+        MIN(v.data_de_necessidade) AS data_de_necessidade,
+        MIN(v.data_inclusao)::date AS data_inclusao,
+        MAX(v.valor_total) AS valor_solicitado,
+        MAX(v.situacao_do_item) AS situacao_do_item,
+        MAX(v.cod_cotacao) AS cod_cotacao,
+        MAX(v.cod_pedido) AS cod_pedido,
+        MAX(v.cod_contrato) AS cod_contrato,
+        COUNT(DISTINCT NULLIF(v.fornecedor, '')) AS fornecedores_encontrados
+      FROM mega.visualizacao_itens v
+      ${visualObra}
+      GROUP BY v.obra, v.solicitacao, v.sequencia
+    ),
+    request_atual AS (
+      SELECT DISTINCT ON (i.obra, COALESCE(i.numero_rm, i.codigo_solicitacao), i.sequencial_item)
+        i.obra,
+        i.obra_nome,
+        i.codigo_solicitacao,
+        i.numero_rm,
+        i.sequencial_item,
+        i.data_de_emissao,
+        i.situacao_do_item,
+        i.descricao_do_item,
+        i.quantidade_solicitada,
+        i.quantidade_baixada,
+        i.unidade,
+        i.data_extracao
+      FROM mega.itens_solicitados i
+      ${requestObra}
+      ORDER BY i.obra, COALESCE(i.numero_rm, i.codigo_solicitacao), i.sequencial_item, i.data_extracao DESC
+    ),
+    stage_map AS (
+      SELECT
+        s.obra,
+        s.codigo_solicitacao,
+        s.sequencial_item,
+        STRING_AGG(DISTINCT NULLIF(s.codigo_etapa, ''), ', ' ORDER BY NULLIF(s.codigo_etapa, '')) AS codigo_etapa,
+        STRING_AGG(DISTINCT NULLIF(s.projeto, ''), ', ' ORDER BY NULLIF(s.projeto, '')) AS projeto_mega,
+        STRING_AGG(DISTINCT NULLIF(s.descricao_insumo, ''), ' | ' ORDER BY NULLIF(s.descricao_insumo, '')) AS descricao_insumo,
+        MIN(s.data_de_necessidade) AS etapa_data_necessidade
+      FROM mega.solicitacoes_por_etapa s
+      ${stageObra}
+      GROUP BY s.obra, s.codigo_solicitacao, s.sequencial_item
+    ),
+    approval_docs AS (
+      SELECT
+        a.obra,
+        a.numero,
+        MIN(a.data_envio_aprovacao) AS data_envio_aprovacao,
+        COUNT(*)::integer AS documentos_approvo,
+        STRING_AGG(DISTINCT NULLIF(a.tipo_documento, ''), ', ' ORDER BY NULLIF(a.tipo_documento, '')) AS tipos_documento
+      FROM mega.approvo_documentos a
+      ${approvalObra}
+      GROUP BY a.obra, a.numero
+    ),
+    approval_events AS (
+      SELECT
+        o.obra,
+        o.numero_documento,
+        MAX(COALESCE(o.data_hora::date, o.data_aprovacao)) AS ultima_aprovacao,
+        COUNT(*)::integer AS quantidade_aprovacoes,
+        STRING_AGG(DISTINCT NULLIF(o.aprovador, ''), ', ' ORDER BY NULLIF(o.aprovador, '')) AS aprovadores,
+        JSONB_AGG(
+          JSONB_BUILD_OBJECT(
+            'acao', o.acao,
+            'aprovador', o.aprovador,
+            'data', COALESCE(o.data_hora::date, o.data_aprovacao),
+            'hora', o.hora_aprovacao,
+            'tipo_documento', o.tipo_documento
+          ) ORDER BY COALESCE(o.data_hora, o.data_aprovacao::timestamp), o.aprovador
+        ) AS eventos
+      FROM mega.approvo_ocorrencias o
+      ${occurrenceObra}
+      GROUP BY o.obra, o.numero_documento
+    ),
+    pedido_valores AS (
+      SELECT
+        p.obra,
+        p.numero_do_pedido,
+        SUM(COALESCE(p.total_pedido_compra, 0)) AS valor_pedido_documento,
+        MAX(p.dt_emissao) AS data_pedido
+      FROM mega.pedidos_compra p
+      ${obraParam ? `WHERE p.obra = $${obraParam}` : ''}
+      GROUP BY p.obra, p.numero_do_pedido
+    ),
+    contrato_valores AS (
+      SELECT
+        c.obra,
+        c.cod_contrato,
+        SUM(COALESCE(c.total_contratado, c.total_item, 0)) AS valor_contrato_documento,
+        MAX(c.data_extracao) AS data_contrato
+      FROM mega.contratos_itens c
+      ${obraParam ? `WHERE c.obra = $${obraParam}` : ''}
+      GROUP BY c.obra, c.cod_contrato
+    ),
+    atividade_plano AS (
+      SELECT
+        a.codigo_eap,
+        MIN(a.data_inicio) AS atividade_inicio,
+        MAX(a.data_fim) AS atividade_fim,
+        STRING_AGG(DISTINCT NULLIF(a.servico_nome, ''), ' | ' ORDER BY NULLIF(a.servico_nome, '')) AS tarefas_prevision
+      FROM atividades a
+      ${planningFilter}
+      GROUP BY a.codigo_eap
+    ),
+    cff_plano AS (
+      SELECT
+        c.codigo,
+        SUM(COALESCE(c.custo_total, 0)) AS valor_orcamento_prevision,
+        MAX(c.orcamento_nome) AS orcamento_nome
+      FROM cff_itens c
+      ${cffFilter}
+      GROUP BY c.codigo
+    ),
+    processos_base AS (
+      SELECT
+        COALESCE(v.obra, r.obra) AS obra,
+        COALESCE(v.obra_nome, r.obra_nome) AS obra_nome,
+        COALESCE(v.solicitacao, r.numero_rm, r.codigo_solicitacao) AS solicitacao,
+        COALESCE(v.sequencia, r.sequencial_item) AS sequencia,
+        COALESCE(v.data_extracao, r.data_extracao) AS data_extracao,
+        COALESCE(v.orcamento, 0) AS orcamento,
+        COALESCE(v.cod_item, s.codigo_solicitacao) AS cod_item,
+        COALESCE(v.descricao, r.descricao_do_item, s.descricao_insumo) AS descricao,
+        COALESCE(v.qtde_solicitada, r.quantidade_solicitada) AS quantidade_solicitada,
+        COALESCE(v.data_inclusao, r.data_de_emissao, s.etapa_data_necessidade) AS data_solicitacao,
+        COALESCE(v.data_de_necessidade, s.etapa_data_necessidade) AS data_de_necessidade,
+        COALESCE(v.situacao_do_item, r.situacao_do_item) AS situacao_do_item,
+        v.fornecedor,
+        v.fornecedores_encontrados,
+        v.cod_cotacao,
+        v.cod_pedido,
+        v.cod_contrato,
+        v.valor_solicitado,
+        s.codigo_etapa,
+        s.projeto_mega,
+        s.descricao_insumo,
+        p.valor_pedido_documento,
+        p.data_pedido,
+        c.valor_contrato_documento,
+        c.data_contrato,
+        ap.codigo_eap AS codigo_eap_prevision,
+        ap.atividade_inicio,
+        ap.atividade_fim,
+        ap.tarefas_prevision,
+        cp.valor_orcamento_prevision,
+        cp.orcamento_nome
+      FROM visual_atual v
+      FULL OUTER JOIN request_atual r
+        ON r.obra = v.obra
+       AND COALESCE(r.numero_rm, r.codigo_solicitacao) = v.solicitacao
+       AND r.sequencial_item = v.sequencia
+      LEFT JOIN stage_map s
+        ON s.obra = COALESCE(v.obra, r.obra)
+       AND s.sequencial_item = COALESCE(v.sequencia, r.sequencial_item)
+       AND s.codigo_solicitacao IN (v.solicitacao, r.numero_rm, r.codigo_solicitacao)
+      LEFT JOIN pedido_valores p
+        ON p.obra = COALESCE(v.obra, r.obra)
+       AND p.numero_do_pedido = v.cod_pedido
+      LEFT JOIN contrato_valores c
+        ON c.obra = COALESCE(v.obra, r.obra)
+       AND c.cod_contrato = v.cod_contrato
+      LEFT JOIN atividade_plano ap
+        ON ap.codigo_eap = s.codigo_etapa
+      LEFT JOIN cff_plano cp
+        ON cp.codigo = s.codigo_etapa
+    )
+  `
+}
+
+export async function getMegaConciliacao({ obra = '', projectId = '', page = 0, pageSize = 50, search = '' } = {}) {
+  const params = []
+  const obraParam = obra ? (params.push(obra), params.length) : null
+  const projectParam = projectId ? (params.push(projectId), params.length) : null
+  const searchParam = search ? (params.push(`%${search.trim().toLowerCase()}%`), params.length) : null
+  const ctes = megaConciliacaoCtes({ obraParam, projectParam })
+  const searchClause = searchParam
+    ? `WHERE LOWER(CONCAT_WS(' ', c.obra, c.solicitacao, c.sequencia, c.codigo_etapa, c.codigo_eap_prevision, c.cod_item, c.descricao, c.fornecedor, c.cod_pedido, c.cod_contrato, c.status_processo)) LIKE $${searchParam}`
+    : ''
+  const base = `
+    SELECT
+      c.*,
+      CASE
+        WHEN c.atividade_inicio IS NULL THEN 'SEM VÍNCULO AO CRONOGRAMA'
+        WHEN c.cod_contrato IS NOT NULL THEN 'CONTRATO DE MÃO DE OBRA'
+        WHEN c.cod_pedido IS NOT NULL THEN 'PEDIDO DE COMPRA'
+        WHEN c.solicitacao IS NULL THEN 'SEM SOLICITAÇÃO'
+        WHEN c.atividade_inicio < CURRENT_DATE THEN 'ATENÇÃO: ATIVIDADE INICIADA'
+        ELSE 'SOLICITAÇÃO EM ANDAMENTO'
+      END AS status_processo,
+      CASE
+        WHEN c.cod_contrato IS NOT NULL THEN 'MÃO DE OBRA'
+        WHEN c.cod_pedido IS NOT NULL THEN 'MATERIAL'
+        ELSE 'A CLASSIFICAR'
+      END AS tipo_processo,
+      CASE WHEN c.atividade_inicio IS NULL THEN NULL ELSE (c.atividade_inicio - CURRENT_DATE) END AS dias_ate_inicio,
+      req_doc.data_envio_aprovacao AS envio_aprovacao_solicitacao,
+      req_doc.documentos_approvo AS documentos_approvo_solicitacao,
+      req_doc.tipos_documento AS tipos_documento_solicitacao,
+      req_event.ultima_aprovacao AS ultima_aprovacao_solicitacao,
+      req_event.quantidade_aprovacoes AS quantidade_aprovacoes_solicitacao,
+      req_event.aprovadores AS aprovadores_solicitacao,
+      po_event.ultima_aprovacao AS ultima_aprovacao_pedido,
+      contract_event.ultima_aprovacao AS ultima_aprovacao_contrato,
+      NULLIF(GREATEST(
+        COALESCE(req_event.ultima_aprovacao, req_doc.data_envio_aprovacao, DATE '1900-01-01'),
+        COALESCE(po_event.ultima_aprovacao, pdoc.data_envio_aprovacao, DATE '1900-01-01'),
+        COALESCE(contract_event.ultima_aprovacao, cdoc.data_envio_aprovacao, DATE '1900-01-01')
+      ), DATE '1900-01-01') AS ultima_aprovacao,
+      COALESCE(req_event.quantidade_aprovacoes, 0) + COALESCE(po_event.quantidade_aprovacoes, 0) + COALESCE(contract_event.quantidade_aprovacoes, 0) AS quantidade_aprovacoes,
+      JSONB_BUILD_OBJECT(
+        'solicitacao', COALESCE(req_event.eventos, '[]'::jsonb),
+        'pedido', COALESCE(po_event.eventos, '[]'::jsonb),
+        'contrato', COALESCE(contract_event.eventos, '[]'::jsonb)
+      ) AS eventos_aprovacao,
+      CASE
+        WHEN c.codigo_eap_prevision IS NULL THEN 'PENDENTE VÍNCULO PREVISION'
+        ELSE 'PROJEÇÃO MENSAL PENDENTE'
+      END AS situacao_conciliacao
+    FROM processos_base c
+    LEFT JOIN approval_docs req_doc
+      ON req_doc.obra = c.obra AND req_doc.numero = c.solicitacao
+    LEFT JOIN approval_events req_event
+      ON req_event.obra = c.obra AND req_event.numero_documento = c.solicitacao
+    LEFT JOIN approval_docs pdoc
+      ON pdoc.obra = c.obra AND pdoc.numero = c.cod_pedido
+    LEFT JOIN approval_events po_event
+      ON po_event.obra = c.obra AND po_event.numero_documento = c.cod_pedido
+    LEFT JOIN approval_docs cdoc
+      ON cdoc.obra = c.obra AND cdoc.numero = c.cod_contrato
+    LEFT JOIN approval_events contract_event
+      ON contract_event.obra = c.obra AND contract_event.numero_documento = c.cod_contrato
+  `
+
+  const countSql = `${ctes} SELECT COUNT(*) AS total FROM (${base}) c ${searchClause}`
+  const countRes = await query(countSql, params)
+  const total = Number(countRes.rows[0]?.total || 0)
+
+  const offset = page * pageSize
+  const dataParams = [...params, pageSize, offset]
+  const limitParam = params.length + 1
+  const offsetParam = params.length + 2
+  const dataSql = `${ctes}
+    SELECT * FROM (${base}) c
+    ${searchClause}
+    ORDER BY c.atividade_inicio NULLS LAST, c.obra ASC, c.solicitacao ASC NULLS LAST, c.sequencia ASC NULLS LAST
+    LIMIT $${limitParam} OFFSET $${offsetParam}`
+  const { rows } = await query(dataSql, dataParams)
+
+  return {
+    records: rows,
+    total,
+    page,
+    pageSize,
+    hasMore: offset + pageSize < total,
   }
 }
 
@@ -499,7 +787,11 @@ const MEGA_TABLE_MAP = {
   },
 }
 
-export async function getMegaTable(tableType, { obra = '', page = 0, pageSize = 50, search = '' } = {}) {
+export async function getMegaTable(tableType, { obra = '', projectId = '', page = 0, pageSize = 50, search = '' } = {}) {
+  if (tableType === 'conciliacao_contratacoes') {
+    return getMegaConciliacao({ obra, projectId, page, pageSize, search })
+  }
+
   const meta = MEGA_TABLE_MAP[tableType]
   if (!meta) {
     throw new Error(`Tabela Mega desconhecida: ${tableType}`)

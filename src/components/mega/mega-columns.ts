@@ -94,6 +94,40 @@ export function getRecordValue(record: any, col: MegaColumnDef): any {
 
 // Definições de Colunas por Tabela
 export const TABLE_COLUMNS: Record<string, MegaColumnDef[]> = {
+  // 0. CONCILIAÇÃO DE CONTRATAÇÕES — AMÍZ / OBRA 340
+  conciliacao_contratacoes: [
+    { id: 'obra', label: 'Obra', category: 'identificacao', type: 'code', defaultVisible: true, priority: 1 },
+    { id: 'obra_nome', label: 'Nome da Obra', category: 'identificacao', type: 'text', defaultVisible: false, priority: 2 },
+    { id: 'solicitacao', label: 'Solicitação', category: 'identificacao', type: 'code', defaultVisible: true, priority: 3 },
+    { id: 'sequencia', label: 'Seq. Item', category: 'identificacao', type: 'number', align: 'right', defaultVisible: true, priority: 4 },
+    { id: 'codigo_etapa', label: 'Etapa Mega', category: 'itens', type: 'code', defaultVisible: true, priority: 5 },
+    { id: 'codigo_eap_prevision', label: 'EAP Prevision', category: 'itens', type: 'code', defaultVisible: true, priority: 6 },
+    { id: 'descricao', label: 'Descrição', category: 'itens', type: 'text', defaultVisible: true, priority: 7 },
+    { id: 'tipo_processo', label: 'Tipo', category: 'identificacao', type: 'text', defaultVisible: true, priority: 8 },
+    { id: 'valor_orcamento_prevision', label: 'Orçamento CFF', category: 'valores', type: 'currency', align: 'right', defaultVisible: true, priority: 9, description: 'Referência do CFF Prevision; não substitui a projeção mensal vigente' },
+    { id: 'valor_solicitado', label: 'Valor Solicitado', category: 'valores', type: 'currency', align: 'right', defaultVisible: true, priority: 10 },
+    { id: 'cod_pedido', label: 'Pedido', category: 'identificacao', type: 'code', defaultVisible: true, priority: 11 },
+    { id: 'cod_contrato', label: 'Contrato', category: 'identificacao', type: 'code', defaultVisible: true, priority: 12 },
+    { id: 'data_solicitacao', label: 'Data Solicitação', category: 'datas', type: 'date', defaultVisible: true, priority: 13 },
+    { id: 'ultima_aprovacao', label: 'Última Aprovação', category: 'datas', type: 'date', defaultVisible: true, priority: 14 },
+    { id: 'atividade_inicio', label: 'Início Atividade', category: 'datas', type: 'date', defaultVisible: true, priority: 15 },
+    { id: 'atividade_fim', label: 'Fim Atividade', category: 'datas', type: 'date', defaultVisible: false, priority: 16 },
+    { id: 'dias_ate_inicio', label: 'Dias até Início', category: 'valores', type: 'number', align: 'right', defaultVisible: true, priority: 17 },
+    { id: 'status_processo', label: 'Status Processo', category: 'status', type: 'badge', defaultVisible: true, priority: 18 },
+    { id: 'situacao_conciliacao', label: 'Conciliação', category: 'status', type: 'badge', defaultVisible: true, priority: 19 },
+    { id: 'quantidade_aprovacoes', label: 'Qtd. Aprovações', category: 'valores', type: 'number', align: 'right', defaultVisible: false, priority: 20 },
+    { id: 'aprovadores_solicitacao', label: 'Aprovadores', category: 'identificacao', type: 'text', defaultVisible: false, priority: 21 },
+    { id: 'envio_aprovacao_solicitacao', label: 'Envio Approvo', category: 'datas', type: 'date', defaultVisible: false, priority: 22 },
+    { id: 'cod_cotacao', label: 'Cotação', category: 'identificacao', type: 'code', defaultVisible: false, priority: 23 },
+    { id: 'fornecedor', label: 'Fornecedor', category: 'identificacao', type: 'text', defaultVisible: false, priority: 24 },
+    { id: 'data_pedido', label: 'Data Pedido', category: 'datas', type: 'date', defaultVisible: false, priority: 25 },
+    { id: 'data_contrato', label: 'Data Contrato', category: 'datas', type: 'date', defaultVisible: false, priority: 26 },
+    { id: 'valor_pedido_documento', label: 'Valor Pedido (doc.)', category: 'valores', type: 'currency', align: 'right', defaultVisible: false, priority: 27, description: 'Valor agregado do documento; ainda não rateado por item' },
+    { id: 'valor_contrato_documento', label: 'Valor Contrato (doc.)', category: 'valores', type: 'currency', align: 'right', defaultVisible: false, priority: 28, description: 'Valor agregado do contrato; ainda não rateado por item' },
+    { id: 'tarefas_prevision', label: 'Tarefas Prevision', category: 'itens', type: 'text', defaultVisible: false, priority: 29 },
+    { id: 'eventos_aprovacao', label: 'Eventos Approvo', category: 'outros', type: 'text', defaultVisible: false, priority: 30 },
+  ],
+
   // 1. ANÁLISE DE SALDO — PEDIDOS
   analise_pedidos: [
     { id: 'obra', label: 'Obra', category: 'identificacao', type: 'code', defaultVisible: true, priority: 1 },

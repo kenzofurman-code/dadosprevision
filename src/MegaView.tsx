@@ -37,6 +37,7 @@ import { MegaSavedViewsMenu } from './components/mega/MegaSavedViewsMenu'
 import { MegaReportModal } from './components/mega/MegaReportModal'
 
 export type MegaTabKey =
+  | 'conciliacao_contratacoes'
   | 'pedidos_compra'
   | 'visualizacao_itens'
   | 'analise_saldo'
@@ -64,6 +65,7 @@ interface MegaSummary {
   totalSolicitacoesEtapa?: number
   totalFollowItensContratos?: number
   totalMedicoesContratos?: number
+  totalConciliacaoContratacoes?: number
   ultimaExtracao: string | null
 }
 
@@ -98,10 +100,10 @@ function formatNumber(value: any) {
 }
 
 export function MegaView() {
-  const [activeTab, setActiveTab] = useState<MegaTabKey>('pedidos_compra')
+  const [activeTab, setActiveTab] = useState<MegaTabKey>('conciliacao_contratacoes')
   const [saldoSubTab, setSaldoSubTab] = useState<SaldoSubTab>('pedidos')
   const [obras, setObras] = useState<MegaObra[]>([])
-  const [selectedObra, setSelectedObra] = useState<string>('')
+  const [selectedObra, setSelectedObra] = useState<string>('340')
   const [summary, setSummary] = useState<MegaSummary | null>(null)
 
   const [records, setRecords] = useState<any[]>([])
@@ -213,6 +215,8 @@ export function MegaView() {
   // Título legível para o modal de relatório
   const tableTitle = useMemo(() => {
     switch (activeTab) {
+      case 'conciliacao_contratacoes':
+        return 'Conciliação de Contratações — AMÍZ'
       case 'pedidos_compra':
         return 'Pedidos de Compra'
       case 'visualizacao_itens':
@@ -278,6 +282,7 @@ export function MegaView() {
         limit: String(pageSize),
       })
       if (selectedObra) params.append('obra', selectedObra)
+      if (currentTableKey === 'conciliacao_contratacoes' && selectedObra === '340') params.append('projectId', '41833')
       if (search.trim()) params.append('search', search.trim())
 
       const res = await fetch(`/api/mega/data?${params.toString()}`)
@@ -307,6 +312,7 @@ export function MegaView() {
         limit: String(limit),
       })
       if (selectedObra) params.append('obra', selectedObra)
+      if (currentTableKey === 'conciliacao_contratacoes' && selectedObra === '340') params.append('projectId', '41833')
       if (search.trim()) params.append('search', search.trim())
 
       const res = await fetch(`/api/mega/data?${params.toString()}`)
@@ -356,10 +362,10 @@ export function MegaView() {
     if (s.includes('ATENDIDO') || s.includes('APROVADO') || s.includes('CONCLU') || s.includes('OK') || s === 'ATIVO') {
       return <span className="mega-badge success">{situacao}</span>
     }
-    if (s.includes('CANCEL') || s.includes('REPROV') || s.includes('BLOQ') || s === 'INATIVO') {
+    if (s.includes('CANCEL') || s.includes('REPROV') || s.includes('BLOQ') || s.includes('ATRAS') || s.includes('RISCO') || s.includes('IMPACTO') || s === 'INATIVO') {
       return <span className="mega-badge danger">{situacao}</span>
     }
-    if (s.includes('EM APROV') || s.includes('PEND') || s.includes('ANDAMENTO')) {
+    if (s.includes('EM APROV') || s.includes('PEND') || s.includes('ANDAMENTO') || s.includes('ATENÇÃO') || s.includes('ATENCAO') || s.includes('INÍCIO') || s.includes('INICIO')) {
       return <span className="mega-badge warning">{situacao}</span>
     }
     return <span className="mega-badge info">{situacao}</span>
@@ -499,6 +505,16 @@ export function MegaView() {
       {/* 2. Barra de Navegação Principal do Mega (Sub-abas) */}
       <div className="mega-navigation-bar">
         <div className="mega-tabs">
+          <button
+            type="button"
+            className={`mega-tab-btn ${activeTab === 'conciliacao_contratacoes' ? 'active' : ''}`}
+            onClick={() => handleTabChange('conciliacao_contratacoes')}
+          >
+            <Scale size={15} />
+            <span>Conciliação de Contratações</span>
+            {summary && <span className="mega-tab-badge">{integerFormatter.format(summary.totalConciliacaoContratacoes ?? 0)}</span>}
+          </button>
+
           <button
             type="button"
             className={`mega-tab-btn ${activeTab === 'pedidos_compra' ? 'active' : ''}`}
@@ -710,6 +726,16 @@ export function MegaView() {
           </button>
         </div>
       </div>
+
+      {activeTab === 'conciliacao_contratacoes' && selectedObra === '340' && (
+        <div className="mega-info-banner">
+          <strong>AMÍZ · obra 340</strong>
+          <span>
+            A conciliação usa a chave obra + solicitação + sequência, cruza Approvo e cronograma Prevision.
+            O valor exibido como Orçamento CFF é apenas referência; a projeção mensal vigente será importada na próxima etapa.
+          </span>
+        </div>
+      )}
 
       {/* 4. Tabela de Registros Dinâmica */}
       <div className="mega-table-container">

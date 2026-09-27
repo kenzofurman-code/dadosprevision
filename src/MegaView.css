@@ -179,6 +179,23 @@
   gap: 10px;
 }
 
+.mega-info-banner {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.06);
+  color: var(--text-color, #0f172a);
+  font-size: 12px;
+}
+
+.mega-info-banner strong {
+  white-space: nowrap;
+  color: var(--primary-color, #1e40af);
+}
+
 .mega-filter-select {
   padding: 6px 10px;
   border-radius: 6px;
