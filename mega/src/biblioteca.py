@@ -878,6 +878,11 @@ class Operador:
         # no campo Nome aciona o botao padrao (Salvar) do dialogo do Windows.
         p_nome = _achar("nome:")
         p_tipo = _achar("tipo:")
+        if p_tipo and not p_nome:
+            # Quando o campo Nome ja vem preenchido e selecionado (fundo azul),
+            # o OCR perde o rotulo 'Nome:'. Ele fica sempre uma linha acima
+            # do 'Tipo:' (~27px, medido em 2026-09-27).
+            p_nome = dict(p_tipo, y=p_tipo["y"] - 27)
         if not (p_nome and p_tipo):
             try:
                 self.pagina.screenshot(path="dados/falhas/crystal_dialogo_sem_rotulos.png")
