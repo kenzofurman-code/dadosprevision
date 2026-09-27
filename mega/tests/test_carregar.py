@@ -88,7 +88,7 @@ def test_carregar_relatorio_atual_insere_as_linhas_da_obra(pasta_bruta):
     ).fetchall()
     assert linhas == [(10, "Baixado"), (11, "Aberto")]
     assert relatos == [{"arquivo": "Itens_Solicitados", "estado": "OK",
-                        "obras": 1, "motivo": None}]
+                        "obras": 1, "obras_carregadas": ["340"], "motivo": None}]
 
     # As 3 colunas sinteticas devem ter sido preenchidas pelo proprio
     # carregar_relatorio (Ruling 3), com o codigo e o nome corretos da obra 340.
@@ -169,7 +169,7 @@ def test_obra_que_falhou_grava_o_bloqueio_na_tabela_carga(pasta_bruta):
     arquivo, bloqueado, motivo, obras_falhou = linhas[0]
     assert arquivo == "Itens_Solicitados"
     assert bool(bloqueado) is True
-    assert motivo == "obras com falha registrada: 410"
+    assert motivo == "todas as obras falharam: 410"
     assert json.loads(obras_falhou) == ["410"]
 
 
@@ -326,7 +326,7 @@ def test_carregar_visualizacao_itens_grava_a_trilha_de_situacao(tmp_path):
     conn.commit()
 
     assert relatos == [{"arquivo": "Visualizacao_Itens", "estado": "OK",
-                        "obras": 1, "motivo": None}]
+                        "obras": 1, "obras_carregadas": ["340"], "motivo": None}]
 
     trilha = conn.execute(
         "SELECT etapa, ate FROM item_situacao_hist WHERE solicitacao = 1 "
@@ -425,12 +425,13 @@ def test_carga_solicitacoes_por_etapa_sqlite(tmp_path):
         "data_de_necessidade": ["2025-01-23"],
         "situacao_do_item": ["Baixada"],
     })
-    caminho = tmp_path / "Solicitacoes_Por_Etapa_650_2026-09-19.xls"
-    # Salvar via xlwt ou escrever direto com _carregar_tabela_simples
-    cfg = cfgmod.carregar()
-    df_prep = carregar._preparar_sinteticas(df, "650", "PIEMONTE P78 CARNEIRO LOBO", "2026-09-19")
-    df_final = carregar._separar_raw_data(df_prep, "solicitacoes_por_etapa")
-    carregar._carregar_tabela_simples(conn, "solicitacoes_por_etapa", df_final, "650", marcador_parametro="?")
+    df.insert(0, "obra", "650")
+    df.insert(1, "obra_nome", "PIEMONTE P78 CARNEIRO LOBO")
+    df.insert(2, "data_extracao", "2026-09-19")
+    df_final = carregar._separar_raw_data(df, "solicitacoes_por_etapa")
+    linhas = [tuple(r) for r in df_final.itertuples(index=False, name=None)]
+    carregar.banco.substituir_obra(conn, "solicitacoes_por_etapa", list(df_final.columns),
+                                   "650", linhas, marcador_parametro="?")
     conn.commit()
 
     linhas = conn.execute("SELECT obra, codigo_solicitacao, numero_insumo, descricao_insumo FROM solicitacoes_por_etapa").fetchall()

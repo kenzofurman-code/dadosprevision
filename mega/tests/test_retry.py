@@ -18,12 +18,25 @@ import config as cfgmod
 import retry
 
 
+# Relatorios adicionados depois dos testes originais; os testes os consideram
+# sempre completos para focar em visualizacao_itens/pedidos_compra.
+TABELAS_NOVAS = ("solicitacoes_por_etapa", "medicoes_contratos", "contratos_itens")
+
+
+def _completar_tabelas_novas(conn, obras, data_iso):
+    for t in TABELAS_NOVAS:
+        for ob in obras:
+            conn.execute("INSERT INTO %s VALUES (?, ?)" % t, (ob, data_iso))
+
+
 @pytest.fixture
 def mock_conn():
     conn = sqlite3.connect(":memory:")
     # Criar schema mega simulado em SQLite (sem schema prefix)
     conn.execute("CREATE TABLE visualizacao_itens (obra TEXT, data_extracao TEXT)")
     conn.execute("CREATE TABLE pedidos_compra (obra TEXT, data_extracao TEXT)")
+    for t in TABELAS_NOVAS:
+        conn.execute("CREATE TABLE %s (obra TEXT, data_extracao TEXT)" % t)
     conn.execute(
         "CREATE TABLE carga (id INTEGER PRIMARY KEY, relatorio TEXT, arquivo TEXT, "
         "data_extracao TEXT, obras_ok TEXT, obras_sem_movimento TEXT, "
@@ -40,6 +53,8 @@ def test_identificar_pendencias_quando_tudo_ok(mock_conn, tmp_path):
     for ob in obras:
         mock_conn.execute("INSERT INTO visualizacao_itens VALUES (?, ?)", (ob, data_iso))
         mock_conn.execute("INSERT INTO pedidos_compra VALUES (?, ?)", (ob, data_iso))
+
+    _completar_tabelas_novas(mock_conn, obras, data_iso)
 
     import json
     obras_json = json.dumps(obras)
@@ -72,6 +87,8 @@ def test_identificar_pendencias_quando_falhou_em_uma_obra(mock_conn, tmp_path):
             mock_conn.execute("INSERT INTO pedidos_compra VALUES (?, ?)", (ob, data_iso))
 
     # itens_solicitados e analise_saldo completos
+    _completar_tabelas_novas(mock_conn, obras, data_iso)
+
     import json
     obras_json = json.dumps(obras)
     mock_conn.execute(
@@ -98,6 +115,8 @@ def test_rodar_retry_nao_abre_sessao_quando_sem_pendencias(mock_conn, tmp_path):
     for ob in obras:
         mock_conn.execute("INSERT INTO visualizacao_itens VALUES (?, ?)", (ob, data_iso))
         mock_conn.execute("INSERT INTO pedidos_compra VALUES (?, ?)", (ob, data_iso))
+
+    _completar_tabelas_novas(mock_conn, obras, data_iso)
 
     import json
     obras_json = json.dumps(obras)

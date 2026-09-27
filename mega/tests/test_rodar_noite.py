@@ -46,7 +46,7 @@ class _SessaoFalsa:
 
 def test_rodar_relatorios_da_noite_roda_por_obra_numa_unica_sessao(monkeypatch):
     """rodar_noite chama executar_por_obra() UMA vez (nao um loop por
-    relatorio) -- e a lista de relatorios passada cobre os 4, na ordem."""
+    relatorio) -- e a lista de relatorios passada cobre todos, na ordem."""
     cfg = cfgmod.carregar()
     relatorios_recebidos = []
 
@@ -85,8 +85,7 @@ def test_rodar_relatorios_da_noite_roda_por_obra_numa_unica_sessao(monkeypatch):
         cfg, conectar_fn=lambda: _ConexaoFalsa(),
         abrir_sessao_fn=lambda: sessao_falsa, data_iso="2026-09-07")
 
-    assert relatorios_recebidos == ["itens_solicitados", "analise_saldo_solicitacao",
-                                    "visualizacao_itens", "pedidos_compra"]
+    assert relatorios_recebidos == rodar_noite.ORDEM_RELATORIOS
     # abrir() e o que de fato lanca o Chrome/Playwright e cria a pagina;
     # sem ele, entrar() explode com 'NoneType' object has no attribute
     # 'goto' — bug real, confirmado na primeira execucao noturna contra o
@@ -94,8 +93,7 @@ def test_rodar_relatorios_da_noite_roda_por_obra_numa_unica_sessao(monkeypatch):
     # ele, o processo do navegador vaza a cada noite (agendador.py roda no
     # mesmo processo, nao reinicia o container).
     assert sessao_falsa.chamadas == ["abrir", "entrar", "abrir_erp", "fechar"]
-    assert set(resultado.keys()) == {"itens_solicitados", "analise_saldo_solicitacao",
-                                     "visualizacao_itens", "pedidos_compra"}
+    assert set(resultado.keys()) == set(rodar_noite.ORDEM_RELATORIOS)
     # Esperar o ERP montar a area de trabalho antes do primeiro relatorio, e
     # devolver a sessao ao final — nao adianta rodar a noite inteira se a
     # sessao do ERP fica pendurada.
@@ -142,9 +140,9 @@ def test_carga_que_explode_nao_derruba_os_demais_relatorios(monkeypatch):
 
     assert conn.rollbacks == 1
     assert resultado["itens_solicitados"]["carga"][0]["estado"] == "ERRO"
-    # os 3 relatorios seguintes rodaram apesar da falha do primeiro
-    assert [resultado[r]["carga"][0]["estado"]
-            for r in rodar_noite.ORDEM_RELATORIOS[1:]] == ["OK", "OK", "OK"]
+    # os relatorios seguintes rodaram apesar da falha do primeiro
+    assert all(resultado[r]["carga"][0]["estado"] == "OK"
+               for r in rodar_noite.ORDEM_RELATORIOS[1:])
     assert operador_falso.encerrou
 
 
