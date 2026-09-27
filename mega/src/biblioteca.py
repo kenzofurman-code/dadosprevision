@@ -582,8 +582,16 @@ class Operador:
                 with self.pagina.expect_download(timeout=timeout_download * 1000) as info:
                     self.pagina.mouse.click(cx, cy)
                     apareceu = False
-                    limite = time.time() + 75    # com retentativa, nao vale esperar mais
+                    inicio = time.time()
+                    limite = inicio + 75    # com retentativa, nao vale esperar mais
+                    snap_5s = False
                     while time.time() < limite:
+                        # Diagnostico (2026-09-27): a janela as vezes nunca abre e a
+                        # captura de falha so vem depois dos Escapes. Registrar a tela
+                        # logo apos o clique mostra se o menu nao pegou ou se o ERP travou.
+                        if not snap_5s and time.time() - inicio >= 5:
+                            snap_5s = True
+                            self._snap_diag_salvar(destino, "5s")
                         img = self.tela()
                         palavras = [p["texto"].lower() for p in self.v._palavras(img, escala=1.0)]
                         texto_tela = " ".join(palavras)
@@ -592,6 +600,7 @@ class Operador:
                             break
                         time.sleep(2)
                     if not apareceu:
+                        self._snap_diag_salvar(destino, "75s")
                         raise FalhaDeEtapa("a janela 'Salvar como' nao apareceu")
                     self.log("      janela 'Salvar como' confirmada; enviando Enter")
                     time.sleep(1.5)
@@ -606,6 +615,16 @@ class Operador:
                 self.log("   arquivo salvo: %s (%d bytes)" % (destino.name, destino.stat().st_size))
                 return destino
         raise FalhaDeEtapa("caminho de menu vazio")
+
+    def _snap_diag_salvar(self, destino, momento):
+        """Captura de diagnostico da espera pela janela 'Salvar como'."""
+        try:
+            caminho = Path("dados/falhas") / ("salvar_como_%s_%s_%d.png"
+                                               % (Path(destino).stem, momento, int(time.time())))
+            caminho.parent.mkdir(parents=True, exist_ok=True)
+            self.pagina.screenshot(path=str(caminho))
+        except Exception:
+            pass
 
     # xlsx e um zip (comeca com PK); xls antigo e um documento composto OLE2.
     ASSINATURAS = {".xlsx": bytes([80, 75]),
@@ -846,29 +865,32 @@ class Operador:
             raise FalhaDeEtapa("o dialogo 'Exportar Relatório' nao apareceu em 60s")
         time.sleep(1.5)
 
-        # Identificar o diálogo e os controles com base no botão Salvar
+        # Localizar os controles pelos rotulos na tela. O dialogo nao tem
+        # tamanho/posicao fixos (em 2026-09-27 abriu maior, com Salvar em
+        # x~1430), entao nada de coordenadas fixas: sem rotulo, falha na hora.
         img_diag = self.tela()
         todas_w = self.v.palavras_todas(img_diag)
 
-        p_salvar = next((p for p in todas_w if p["texto"].strip().lower() == "salvar" and p["y"] > 350 and p["x"] < 1150), None)
-        if p_salvar:
-            x_salvar = p_salvar["x"] + p_salvar.get("w", 54) // 2
-            y_salvar = p_salvar["y"] + p_salvar.get("h", 23) // 2
-        else:
-            p_canc = next((p for p in todas_w if p["texto"].strip().lower() == "cancelar" and p["y"] > 350 and p["x"] < 1150), None)
-            if p_canc:
-                x_salvar = p_canc["x"] - 64
-                y_salvar = p_canc["y"] + p_canc.get("h", 23) // 2
-            else:
-                x_salvar = 894
-                y_salvar = 709
+        def _achar(rotulo):
+            return next((p for p in todas_w if p["texto"].strip().lower() == rotulo and p["y"] > 350), None)
 
-        # Geometria fixa do diálogo Windows em relação ao botão Salvar
-        x_combo = x_salvar - 300
-        y_combo = y_salvar - 50
-        x_seta_combo = x_salvar + 90
-        x_nome = x_salvar - 300
-        y_nome = y_salvar - 75
+        # O OCR nao le o botao 'Salvar' de forma confiavel; nao precisa: Enter
+        # no campo Nome aciona o botao padrao (Salvar) do dialogo do Windows.
+        p_nome = _achar("nome:")
+        p_tipo = _achar("tipo:")
+        if not (p_nome and p_tipo):
+            try:
+                self.pagina.screenshot(path="dados/falhas/crystal_dialogo_sem_rotulos.png")
+            except Exception:
+                pass
+            raise FalhaDeEtapa("dialogo 'Exportar Relatório' sem rotulos reconheciveis (nome=%s tipo=%s)"
+                               % (bool(p_nome), bool(p_tipo)))
+
+        # Os campos comecam logo a direita do rotulo
+        x_nome = p_nome["x"] + p_nome.get("w", 36) + 60
+        y_nome = p_nome["y"] + p_nome.get("h", 16) // 2
+        x_combo = p_tipo["x"] + p_tipo.get("w", 30) + 60
+        y_combo = p_tipo["y"] + p_tipo.get("h", 16) // 2
 
         # Fechar qualquer popup de restrição ou aviso que possa estar na tela
         time.sleep(0.5)
@@ -888,8 +910,8 @@ class Operador:
             pass
 
         # 5. Ajustar o Tipo para Microsoft Excel
-        self.log("      abrindo combobox Tipo pela seta em (%d, %d)..." % (x_seta_combo, y_combo))
-        self.pagina.mouse.click(x_seta_combo, y_combo)
+        self.log("      abrindo combobox Tipo em (%d, %d)..." % (x_combo, y_combo))
+        self.pagina.mouse.click(x_combo, y_combo)
         time.sleep(0.8)
 
         # Fallback se a seta nao abriu: clicar no corpo do combo e dar Alt+ArrowDown
@@ -922,6 +944,15 @@ class Operador:
         except Exception:
             pass
 
+        # Conferir o Tipo antes de salvar: se ficou em .rpt o ERP exporta um
+        # arquivo Crystal com extensao .xls e so descobrimos 3 min depois.
+        img_conf = self.tela()
+        linha_tipo = " ".join(p["texto"].lower() for p in self.v.palavras_todas(img_conf)
+                              if abs((p["y"] + p.get("h", 16) // 2) - y_combo) < 12 and p["x"] > x_combo - 80)
+        tipo_ok = "excel" in linha_tipo and (("data" in linha_tipo) == (tipo == "data_only"))
+        if not tipo_ok:
+            raise FalhaDeEtapa("Tipo nao ficou em %s no dialogo de exportacao (lido: %r)" % (nome_alvo, linha_tipo))
+
         # 6. Preencher campo Nome
         self.log("      preenchendo nome do arquivo (%s) em (%d, %d)..." % (destino.name, x_nome, y_nome))
         self.pagina.mouse.click(x_nome, y_nome)
@@ -938,11 +969,9 @@ class Operador:
         except Exception:
             pass
 
-        # 7. Confirmar Salvar no botão Salvar e aguardar recepção do download
-        self.log("      confirmando salvamento do arquivo em (%d, %d)..." % (x_salvar, y_salvar))
+        # 7. Confirmar com Enter no campo Nome e aguardar recepção do download
+        self.log("      confirmando salvamento do arquivo (Enter no campo Nome)...")
         with self.pagina.expect_download(timeout=180000) as info:
-            self.pagina.mouse.click(x_salvar, y_salvar)
-            time.sleep(0.5)
             self.tecla("Enter", pausa=1.0)
             self.log("      aguardando recepcao do arquivo baixado...")
             baixado = info.value
