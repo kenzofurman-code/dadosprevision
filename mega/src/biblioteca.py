@@ -961,7 +961,10 @@ class Operador:
         self.pagina.keyboard.press("Control+a")
         for _ in range(40):
             self.pagina.keyboard.press("Backspace")
-        self.digitar(destino.name)
+        # Caminho completo: o dialogo abre na ULTIMA pasta usada (ex.:
+        # \\ocmegbinfs01\...\Client, no servidor do ERP) e so o que e salvo em
+        # \\tsclient\WebFile vira download no navegador.
+        self.digitar("\\\\tsclient\\WebFile\\" + destino.name)
         time.sleep(0.8)
 
         try:
