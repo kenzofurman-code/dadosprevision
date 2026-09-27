@@ -49,11 +49,19 @@ services:
     # vivo contra uma VPS Linux real em 2026-09-08.
     init: true
     shm_size: '1gb'
+    # Teto de recursos: a VPS e compartilhada. pids_limit faz um vazamento de
+    # processos falhar dentro do container em vez de derrubar a VPS.
+    cpus: "2"
+    mem_limit: 3g
+    pids_limit: 512
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       TZ: ${TZ:-America/Sao_Paulo}
+      # Tesseract (OpenMP) abre uma thread por nucleo em cada OCR; para telas
+      # pequenas nao acelera e satura a CPU. Uma thread por chamada.
+      OMP_THREAD_LIMIT: 1
       PGHOST: postgres
       PGPORT: 5432
       PGDATABASE: ${POSTGRES_DB:-dadosprevision}
