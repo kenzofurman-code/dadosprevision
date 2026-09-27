@@ -13,6 +13,7 @@ A senha NUNCA aparece no codigo nem no log: vem do ambiente (ou de um .env que
 fica fora do git).
 """
 import os
+import signal
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -24,6 +25,33 @@ ESTADO_PADRAO = RAIZ / ".sessao.json"
 
 class CredenciaisAusentes(Exception):
     pass
+
+
+def _descendentes(pid, proc=Path("/proc")):
+    """PIDs de todos os descendentes de `pid` (le /proc; vazio fora do Linux)."""
+    pais = {}
+    for d in proc.glob("[0-9]*"):
+        try:
+            stat = (d / "stat").read_text()
+        except OSError:
+            continue
+        # o nome do processo vem entre parenteses e pode conter espacos/parenteses
+        pais[int(d.name)] = int(stat.rsplit(")", 1)[1].split()[1])
+    achados, fila = [], [pid]
+    while fila:
+        atual = fila.pop()
+        for filho, pai in pais.items():
+            if pai == atual:
+                achados.append(filho)
+                fila.append(filho)
+    return achados
+
+
+def _matar(pid):
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except OSError:
+        pass
 
 
 def carregar_dotenv(caminho=None):
@@ -112,22 +140,39 @@ class Sessao:
         return self.pagina
 
     def fechar(self):
-        if self._ctx is not None:
+        # BUG REAL (VPS, 2026-09-25): com o navegador ja caido, close()/stop()
+        # falhavam em silencio e o Chrome + driver ficavam vivos. Cada
+        # reconectar_sessao() empilhava mais um ate a CPU estourar. Por isso a
+        # arvore de processos e fotografada ANTES (depois que o driver morre os
+        # Chromes sao reparentados para o PID 1 e somem da arvore) e morta no fim.
+        filhos = _descendentes(os.getpid())
+        try:
+            conectado = self._nav is not None and self._nav.is_connected()
+        except Exception:
+            conectado = False
+        # close() num navegador travado pode bloquear para sempre: so tenta o
+        # encerramento educado se ele ainda responde.
+        if conectado:
             try:
                 for p in list(self._ctx.pages):
                     if not p.is_closed():
-                        try:
-                            p.close()
-                        except Exception:
-                            pass
+                        p.close()
             except Exception:
                 pass
-        for obj, metodo in ((self._ctx, "close"), (self._nav, "close"), (self._pw, "stop")):
-            if obj is not None:
+            for obj in (self._ctx, self._nav):
                 try:
-                    getattr(obj, metodo)()
+                    obj.close()
                 except Exception:
                     pass
+        if self._pw is not None:
+            try:
+                self._pw.stop()
+            except Exception:
+                pass
+        for pid in filhos:
+            _matar(pid)
+        self._pw = self._nav = self._ctx = None
+        self.pagina = None
 
     # ------------------------------------------------------------------- login
     def entrar(self, forcar=False):
