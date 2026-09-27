@@ -65,7 +65,7 @@ container "up" mas sem nunca logar nada — parece travado, não crashado.
 
 Únicas ao serviço `mega` (documentadas em `.env.example` da raiz, junto com
 as demais): `MEGA_USUARIO`, `MEGA_SENHA`, `CRON_SCHEDULE_MEGA` (padrão
-`0 2 * * *` — 02:00, fora de qualquer horário de uso do ERP, porque a
+`0 0 * * *` — meia-noite, fora de qualquer horário de uso do ERP, porque a
 execução mantém a sessão do usuário aberta por ~2h30).
 
 Nunca commitar `.env` real. Nunca colocar credencial em código, log, ou
