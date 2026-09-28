@@ -393,6 +393,9 @@ export async function getMegaSummary(obra = '') {
   }
 }
 
+const ETAPA_PREVISION_PARA_MEGA = (col) =>
+  `REGEXP_REPLACE(${col}, '^(\\d{2}\\.\\d{2}\\.\\d{2}\\.\\d{2}\\.)(\\d{2})$', '\\10\\2')`
+
 function megaConciliacaoCtes({ obraParam, projectParam }) {
   const visualObra = obraParam ? `WHERE v.obra = $${obraParam}` : ''
   const requestObra = obraParam ? `WHERE i.obra = $${obraParam}` : ''
@@ -509,24 +512,30 @@ function megaConciliacaoCtes({ obraParam, projectParam }) {
       ${obraParam ? `WHERE c.obra = $${obraParam}` : ''}
       GROUP BY c.obra, c.cod_contrato
     ),
+    -- A etapa do Mega (XX.XX.XX.XX.XXX) e o codigo do ORCAMENTO Prevision
+    -- (XX.XX.XX.XX.XX) com um zero a mais no ultimo nivel. O orcamento liga
+    -- as tarefas do cronograma por pesos_orcamento.id_atividade.
     atividade_plano AS (
       SELECT
-        a.codigo_eap,
+        ${ETAPA_PREVISION_PARA_MEGA('p.codigo')} AS codigo_eap,
         MIN(a.data_inicio) AS atividade_inicio,
         MAX(a.data_fim) AS atividade_fim,
         STRING_AGG(DISTINCT NULLIF(a.servico_nome, ''), ' | ' ORDER BY NULLIF(a.servico_nome, '')) AS tarefas_prevision
-      FROM atividades a
-      ${planningFilter}
-      GROUP BY a.codigo_eap
+      FROM pesos_orcamento p
+      JOIN atividades a
+        ON a.projeto_id = p.projeto_id
+       AND a.id_prevision = p.id_atividade
+      ${planningFilter.replace('a.projeto_id', 'p.projeto_id')}
+      GROUP BY 1
     ),
     cff_plano AS (
       SELECT
-        c.codigo,
+        ${ETAPA_PREVISION_PARA_MEGA('c.codigo')} AS codigo,
         SUM(COALESCE(c.custo_total, 0)) AS valor_orcamento_prevision,
         MAX(c.orcamento_nome) AS orcamento_nome
       FROM cff_itens c
       ${cffFilter}
-      GROUP BY c.codigo
+      GROUP BY 1
     ),
     processos_base AS (
       SELECT
@@ -585,6 +594,10 @@ function megaConciliacaoCtes({ obraParam, projectParam }) {
 }
 
 export async function getMegaConciliacao({ obra = '', projectId = '', page = 0, pageSize = 50, search = '' } = {}) {
+  if (!projectId && obra) {
+    const par = await query('SELECT id_prevision FROM mega.obra_projeto WHERE obra = $1', [obra])
+    projectId = par.rows[0]?.id_prevision || ''
+  }
   const params = []
   const obraParam = obra ? (params.push(obra), params.length) : null
   const projectParam = projectId ? (params.push(projectId), params.length) : null

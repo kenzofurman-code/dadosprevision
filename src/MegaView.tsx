@@ -216,7 +216,7 @@ export function MegaView() {
   const tableTitle = useMemo(() => {
     switch (activeTab) {
       case 'conciliacao_contratacoes':
-        return 'Conciliação de Contratações — AMÍZ'
+        return `Conciliação de Contratações — obra ${selectedObra}`
       case 'pedidos_compra':
         return 'Pedidos de Compra'
       case 'visualizacao_itens':
@@ -240,7 +240,7 @@ export function MegaView() {
       default:
         return 'Mega ERP'
     }
-  }, [activeTab, saldoSubTab])
+  }, [activeTab, saldoSubTab, selectedObra])
 
   // Carregar lista de obras
   const loadObras = useCallback(async () => {
@@ -282,7 +282,6 @@ export function MegaView() {
         limit: String(pageSize),
       })
       if (selectedObra) params.append('obra', selectedObra)
-      if (currentTableKey === 'conciliacao_contratacoes' && selectedObra === '340') params.append('projectId', '41833')
       if (search.trim()) params.append('search', search.trim())
 
       const res = await fetch(`/api/mega/data?${params.toString()}`)
@@ -312,7 +311,6 @@ export function MegaView() {
         limit: String(limit),
       })
       if (selectedObra) params.append('obra', selectedObra)
-      if (currentTableKey === 'conciliacao_contratacoes' && selectedObra === '340') params.append('projectId', '41833')
       if (search.trim()) params.append('search', search.trim())
 
       const res = await fetch(`/api/mega/data?${params.toString()}`)
@@ -727,11 +725,12 @@ export function MegaView() {
         </div>
       </div>
 
-      {activeTab === 'conciliacao_contratacoes' && selectedObra === '340' && (
+      {activeTab === 'conciliacao_contratacoes' && selectedObra && (
         <div className="mega-info-banner">
-          <strong>AMÍZ · obra 340</strong>
+          <strong>{obras.find((o) => o.obra === selectedObra)?.obra_nome || 'Obra'} · obra {selectedObra}</strong>
           <span>
             A conciliação usa a chave obra + solicitação + sequência, cruza Approvo e cronograma Prevision.
+            A etapa do Mega liga ao orçamento Prevision pelo código com um zero a mais no último nível.
             O valor exibido como Orçamento CFF é apenas referência; a projeção mensal vigente será importada na próxima etapa.
           </span>
         </div>
