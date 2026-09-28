@@ -25,6 +25,8 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
   const [aberto, setAberto] = useState<number | null>(null)
   const [editando, setEditando] = useState<Grupo | null>(null)
   const [confirmarRestaurar, setConfirmarRestaurar] = useState(false)
+  const [excluindo, setExcluindo] = useState<number | null>(null)
+  const [ramo, setRamo] = useState('')
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
   const [busca, setBusca] = useState('')
   const [grupoDestino, setGrupoDestino] = useState('')
@@ -45,15 +47,20 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
     carregar()
   }, [carregar])
 
+  // Devolve true só se a ação deu certo, para não fechar formulários após erro.
   const executar = async (fn: () => Promise<unknown>, sucesso?: string) => {
     setOcupado(true); setErro(null)
-    try { await fn(); if (sucesso) setAviso(sucesso); await carregar() } catch (e) { setErro((e as Error).message) } finally { setOcupado(false) }
+    try { await fn(); if (sucesso) setAviso(sucesso); await carregar(); return true } catch (e) { setErro((e as Error).message); return false } finally { setOcupado(false) }
   }
 
   const pendenciasFiltradas = useMemo(() => {
     const q = busca.trim().toLowerCase()
     return (config?.pendencias || []).filter((p) => !q || `${p.codigo_etapa} ${p.nome}`.toLowerCase().includes(q))
   }, [config, busca])
+
+  // Nível 4 digitado: quantas etapas nível 5 fora de grupo ele inclui.
+  const ramoValido = /^\d{2}(\.\d{2}){3}$/.test(ramo.trim())
+  const ramoQtd = ramoValido ? (config?.pendencias || []).filter((p) => p.codigo_etapa.startsWith(ramo.trim() + '.')).length : 0
 
   const atrelar = async (grupoId: number, codigos: string[], mover = false) => {
     setOcupado(true); setErro(null)
@@ -135,7 +142,7 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
                 <span className="cc-confirma">
                   Isso apaga os ajustes desta obra.
                   <button type="button" className="cc-btn cc-perigo" disabled={ocupado}
-                    onClick={() => executar(() => api.aplicarPadrao(projectId, true), 'Padrão restaurado.').then(() => setConfirmarRestaurar(false))}>
+                    onClick={() => executar(() => api.aplicarPadrao(projectId, true), 'Padrão restaurado.').then((ok) => ok && setConfirmarRestaurar(false))}>
                     Restaurar
                   </button>
                   <button type="button" className="cc-btn cc-sutil" onClick={() => setConfirmarRestaurar(false)}>Cancelar</button>
@@ -144,7 +151,7 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
           </div>
 
           {editando && (
-            <form className="cc-form" onSubmit={(e) => { e.preventDefault(); executar(() => api.salvarGrupo(projectId, editando), 'Grupo salvo.').then(() => setEditando(null)) }}>
+            <form className="cc-form" onSubmit={(e) => { e.preventDefault(); executar(() => api.salvarGrupo(projectId, editando), 'Grupo salvo.').then((ok) => ok && setEditando(null)) }}>
               <label>Tipo
                 <select id="cc-edit-tipo" value={editando.tipo} onChange={(e) => setEditando({ ...editando, tipo: e.target.value as Tipo })}>
                   <option value="MATERIAL">Material</option><option value="MAO_DE_OBRA">Mão de obra</option>
@@ -190,10 +197,18 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
                           <td className="cc-num">{config.importacao ? fmt(projetado) : '—'}</td>
                           <td className="cc-acoes-linha" onClick={(e) => e.stopPropagation()}>
                             <button type="button" className="cc-btn cc-sutil" onClick={() => setEditando(g)}>Editar</button>
-                            <button type="button" className="cc-btn cc-sutil"
-                              onClick={() => executar(() => api.excluirGrupo(projectId, g.id!), 'Grupo excluído; as etapas voltaram para as pendências.')}>
-                              Excluir
-                            </button>
+                            {excluindo !== g.id
+                              ? <button type="button" className="cc-btn cc-sutil" onClick={() => setExcluindo(g.id ?? null)}>Excluir</button>
+                              : (
+                                <span className="cc-confirma">
+                                  Excluir o grupo? As etapas voltam para as pendências.
+                                  <button type="button" className="cc-btn cc-perigo" disabled={ocupado}
+                                    onClick={() => executar(() => api.excluirGrupo(projectId, g.id!), 'Grupo excluído; as etapas voltaram para as pendências.').then((ok) => ok && setExcluindo(null))}>
+                                    Excluir
+                                  </button>
+                                  <button type="button" className="cc-btn cc-sutil" onClick={() => setExcluindo(null)}>Cancelar</button>
+                                </span>
+                              )}
                           </td>
                         </tr>
                         {aberto === g.id && (
@@ -243,6 +258,12 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
             <button type="button" className="cc-btn cc-primario" disabled={!grupoDestino || !selecionadas.size || ocupado}
               onClick={() => atrelar(Number(grupoDestino), [...selecionadas])}>
               Atrelar
+            </button>
+            <input id="cc-ramo" placeholder="ou nível 4 (ex.: 01.03.02.02)" value={ramo} onChange={(e) => setRamo(e.target.value)} />
+            {ramoValido && <span className="cc-muted">{ramoQtd} etapa(s) fora de grupo neste ramo</span>}
+            <button type="button" className="cc-btn" disabled={!grupoDestino || !ramoValido || ocupado}
+              onClick={() => atrelar(Number(grupoDestino), [ramo.trim()]).then(() => setRamo(''))}>
+              Atrelar ramo inteiro
             </button>
             <span className="cc-separador">ou</span>
             <select id="cc-novo-grupo-tipo" value={novoTipo} onChange={(e) => setNovoTipo(e.target.value as Tipo)}>

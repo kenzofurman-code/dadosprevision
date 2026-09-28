@@ -103,8 +103,10 @@ export function sugestoesPorNome(pendencias, etapasPadrao) {
 function paraNumero(valor) {
   if (valor === null || valor === undefined || String(valor).trim() === '') return { vazio: true }
   if (typeof valor === 'number') return { numero: valor }
-  const t = String(valor).trim().replace(/\s/g, '')
-  const normal = t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t
+  const t = String(valor).trim().replace(/^R\$/i, '').replace(/\s/g, '')
+  // pt-BR: "1.234" e "12.345.678,90" usam ponto como milhar; "1.5" continua decimal.
+  const milhar = /^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(t)
+  const normal = milhar || t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t
   const n = Number(normal)
   return Number.isFinite(n) ? { numero: n } : { invalido: true }
 }

@@ -124,6 +124,17 @@ test('lerCustoProjetado: planilha simples sem NÍVEL soma códigos repetidos e a
   assert.deepEqual(r.erros, [])
 })
 
+test('lerCustoProjetado: ponto como milhar em texto pt-BR (CSV) não vira decimal', () => {
+  const r = lerCustoProjetado([
+    ['ETAPA', 'CUSTO PROJETADO'],
+    ['01.01.01.01.001', '1.234'],
+    ['01.01.01.01.002', 'R$ 12.345.678,90'],
+    ['01.01.01.01.003', '1.5'],
+  ])
+  assert.deepEqual(r.itens.map((i) => i.custo_projetado), [1234, 12345678.9, 1.5])
+  assert.deepEqual(r.erros, [])
+})
+
 test('lerCustoProjetado: sem as colunas necessárias devolve erro claro', () => {
   const r = lerCustoProjetado([['A', 'B'], [1, 2]])
   assert.deepEqual(r.erros, [{ linha: 0, motivo: 'colunas "CÓDIGO" (ou "ETAPA") e "CUSTO PROJETADO" não encontradas' }])
