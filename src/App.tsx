@@ -40,6 +40,7 @@ import type { LucideIcon } from 'lucide-react'
 import './App.css'
 import { CurvasView } from './CurvasView'
 import { MegaView } from './MegaView'
+import { ContratacoesConfig } from './components/contratacoes/ContratacoesConfig'
 
 type DataView =
   | 'projects'
@@ -56,7 +57,7 @@ type DataView =
   | 'dados_mega'
   | 'gestao_a_vista'
 
-type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix' | 'panel5' | 'milestones'
+type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix' | 'panel5' | 'milestones' | 'contratacoes'
 type GestaoTablePanel = 'panel1' | 'panel2' | 'panel3'
 type ReorderableGestaoPanel = GestaoTablePanel | 'panel4'
 
@@ -3929,6 +3930,15 @@ function App() {
                   <span>Painel 5: Tabela de Serviços</span>
                 </button>
 
+                <button
+                  type="button"
+                  className={`gestao-panel-tab-btn ${gestaoPanelTab === 'contratacoes' ? 'active' : ''}`}
+                  onClick={() => setGestaoPanelTab('contratacoes')}
+                >
+                  <ListChecks size={14} />
+                  <span>Painel 6: Contratações</span>
+                </button>
+
                 <div className="gestao-top-actions">
                   <button
                     type="button"
@@ -4646,6 +4656,12 @@ function App() {
               {/* ---------------------------------------------------- */}
               {/* SUB-ABA: PAINEL 5 (TABELA PARA EXCEL)                */}
               {/* ---------------------------------------------------- */}
+              {gestaoPanelTab === 'contratacoes' && (
+                selectedProject
+                  ? <ContratacoesConfig projectId={selectedProject} />
+                  : <div className="gestao-card"><p>Selecione um projeto para configurar as contratações.</p></div>
+              )}
+
               {gestaoPanelTab === 'panel5' && (
                 <div className={a4LayoutMode ? 'a4-landscape-container' : ''}>
                   <div className={`${a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-card'} gestao-print-source`}>
