@@ -1,0 +1,2883 @@
+{
+  "origem": "NIZZA - GESTÃO DAS CONTRATAÇÕES.rv02.xlsx",
+  "grupos": [
+    {
+      "ordem": 1,
+      "tipo": "MATERIAL",
+      "item": "INFRAESTRUTURA",
+      "insumos": "AÇO RETO, CORTE E DOBRA, ARAMES, PREGOS E TELAS",
+      "pacote_servicos": "CONTENÇÃO",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.03.02.02.006",
+          "nivel": 5,
+          "nome": "AÇO CA50"
+        },
+        {
+          "codigo": "01.03.02.03.010",
+          "nivel": 5,
+          "nome": "AÇO CA50"
+        },
+        {
+          "codigo": "01.03.05.02.002",
+          "nivel": 5,
+          "nome": "FORMA PARA FUNDAÇÃO"
+        }
+      ]
+    },
+    {
+      "ordem": 2,
+      "tipo": "MATERIAL",
+      "item": "INFRAESTRUTURA",
+      "insumos": "CONCRETO, BOMBEAMENTO, AGREGADOS CONCRETOS ESPECIAIS FUNDAÇÃO",
+      "pacote_servicos": "CONTENÇÃO",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 35
+      },
+      "etapas": [
+        {
+          "codigo": "01.03.02.02.009",
+          "nivel": 5,
+          "nome": "CONCRETO BOMBEADO 25MPA"
+        },
+        {
+          "codigo": "01.03.02.03.012",
+          "nivel": 5,
+          "nome": "CONCRETO BOMBEADO 30MPA"
+        }
+      ]
+    },
+    {
+      "ordem": 3,
+      "tipo": "MATERIAL",
+      "item": "INFRAESTRUTURA",
+      "insumos": "FORMAS",
+      "pacote_servicos": "CONTENÇÃO",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.03.05.02.002",
+          "nivel": 5,
+          "nome": "FORMA PARA FUNDAÇÃO"
+        }
+      ]
+    },
+    {
+      "ordem": 4,
+      "tipo": "MATERIAL",
+      "item": "HIDRÁULICA",
+      "insumos": "TUBULAÇÕES E CAIXAS DRENAGEM",
+      "pacote_servicos": "INFRAESTRUTURA LASTRO",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.01.02.001",
+          "nivel": 5,
+          "nome": "EXECUCAO DE DRENAGEM DE PISO"
+        }
+      ]
+    },
+    {
+      "ordem": 5,
+      "tipo": "MATERIAL",
+      "item": "ELÉTRICA",
+      "insumos": "REBAR SPDA",
+      "pacote_servicos": "ESTRUTURA",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.03.02.005",
+          "nivel": 5,
+          "nome": "SISTEMA DE PROTEÇÃO CONTRA DESCARGAS ATMOSFÉRICAS - SPDA"
+        }
+      ]
+    },
+    {
+      "ordem": 6,
+      "tipo": "MATERIAL",
+      "item": "ESTRUTURA",
+      "insumos": "AÇO RETO, CORTE E DOBRA, ARAMES, PREGOS E TELAS",
+      "pacote_servicos": "ESTRUTURA",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 35
+      },
+      "etapas": [
+        {
+          "codigo": "01.03.02.02.006",
+          "nivel": 5,
+          "nome": "AÇO CA50"
+        }
+      ]
+    },
+    {
+      "ordem": 7,
+      "tipo": "MATERIAL",
+      "item": "ESTRUTURA",
+      "insumos": "CONCRETO, BOMBEAMENTO, AGREGADOS CONCRETOS ESPECIAIS ESTRUTURA",
+      "pacote_servicos": "ESTRUTURA",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 35
+      },
+      "etapas": [
+        {
+          "codigo": "01.04.01.05",
+          "nivel": 4,
+          "nome": "CONCRETO"
+        }
+      ]
+    },
+    {
+      "ordem": 8,
+      "tipo": "MATERIAL",
+      "item": "ESTRUTURA",
+      "insumos": "FORMAS E EPS",
+      "pacote_servicos": "ESTRUTURA",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.04.01.01.001",
+          "nivel": 5,
+          "nome": "FORMA COMPENSADO PLASTIFICADO 18MM - REAPROVEITAMENTO 6X"
+        },
+        {
+          "codigo": "01.04.01.01.002",
+          "nivel": 5,
+          "nome": "FORMA COMPENSADO RESINADA 17MM - REAPROVEITAMENTO 5X"
+        },
+        {
+          "codigo": "01.04.01.01.004",
+          "nivel": 5,
+          "nome": "FORMA PARA PILAR REDONDO"
+        },
+        {
+          "codigo": "01.04.01.01.005",
+          "nivel": 5,
+          "nome": "FORMA METÁLICA"
+        },
+        {
+          "codigo": "01.04.01.02.002",
+          "nivel": 5,
+          "nome": "FORMA PLASTIFICADA 18MM (GARANTIA 18 USOS)"
+        }
+      ]
+    },
+    {
+      "ordem": 9,
+      "tipo": "MATERIAL",
+      "item": "ESTRUTURA",
+      "insumos": "ESCORAMENTO",
+      "pacote_servicos": "ESTRUTURA",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 50
+      },
+      "etapas": [
+        {
+          "codigo": "01.04.01.01.003",
+          "nivel": 5,
+          "nome": "ESCORAMENTO E CIMBRAMENTO METÁLICO"
+        },
+        {
+          "codigo": "01.04.01.02.004",
+          "nivel": 5,
+          "nome": "ESCORAMENTO E CIMBRAMENTO METÁLICO"
+        }
+      ]
+    },
+    {
+      "ordem": 10,
+      "tipo": "MATERIAL",
+      "item": "EQUIPAMENTOS",
+      "insumos": "BALANCIM",
+      "pacote_servicos": null,
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 80
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 11,
+      "tipo": "MATERIAL",
+      "item": "EQUIPAMENTOS",
+      "insumos": "ANDAIME INTERNO",
+      "pacote_servicos": "EMBOÇO/GL",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 20
+      },
+      "etapas": [
+        {
+          "codigo": "01.01.03.03.006",
+          "nivel": 5,
+          "nome": "ANDAIMES DIVERSOS USOS"
+        }
+      ]
+    },
+    {
+      "ordem": 12,
+      "tipo": "MATERIAL",
+      "item": "EQUIPAMENTOS",
+      "insumos": "CREMALHEIRA",
+      "pacote_servicos": "CREMALHEIRA",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 80
+      },
+      "etapas": [
+        {
+          "codigo": "01.01.03.03.004",
+          "nivel": 5,
+          "nome": "ELEVADOR CREMALHEIRA"
+        }
+      ]
+    },
+    {
+      "ordem": 13,
+      "tipo": "MATERIAL",
+      "item": "EQUIPAMENTOS",
+      "insumos": "GRUA / MINI-GRUA",
+      "pacote_servicos": "GRUA",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 80
+      },
+      "etapas": [
+        {
+          "codigo": "01.01.03.03",
+          "nivel": 4,
+          "nome": "EQUIPAMENTOS E TRANSPORTE VERTICAL"
+        }
+      ]
+    },
+    {
+      "ordem": 14,
+      "tipo": "MATERIAL",
+      "item": "EQUIPAMENTOS",
+      "insumos": "ANDAIME FACHADEIRO",
+      "pacote_servicos": "BALANCIM",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 50
+      },
+      "etapas": [
+        {
+          "codigo": "01.01.03.03.005",
+          "nivel": 5,
+          "nome": "ANDAIME FACHADEIROS / MULTIDIRECIONAL"
+        }
+      ]
+    },
+    {
+      "ordem": 15,
+      "tipo": "MATERIAL",
+      "item": "EQUIPAMENTOS",
+      "insumos": "MULTI-GUINCHO",
+      "pacote_servicos": "EMBOÇO/GL",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.01.03.03.003",
+          "nivel": 5,
+          "nome": "GUINCHO DE COLUNA"
+        }
+      ]
+    },
+    {
+      "ordem": 16,
+      "tipo": "MATERIAL",
+      "item": "SST",
+      "insumos": "ÁREA DE VIVÊNCIA",
+      "pacote_servicos": "SERVIÇOS PRELIMINARES",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.01.02.02.002",
+          "nivel": 5,
+          "nome": "BARRACAO E ESCRITORIO DE OBRA EXTERNO"
+        }
+      ]
+    },
+    {
+      "ordem": 17,
+      "tipo": "MATERIAL",
+      "item": "SST",
+      "insumos": "PROTEÇÕES DE PERIFERIA",
+      "pacote_servicos": "ESTRUTURA",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.01.02.06.003",
+          "nivel": 5,
+          "nome": "GUARDA-CORPO DE CONCRETAGEM"
+        }
+      ]
+    },
+    {
+      "ordem": 18,
+      "tipo": "MATERIAL",
+      "item": "SST",
+      "insumos": "BANDEIJÃO E LINHAS DE VIDA",
+      "pacote_servicos": "ESTRUTURA",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.01.03.03.008",
+          "nivel": 5,
+          "nome": "BANDEJÃO FIXO"
+        },
+        {
+          "codigo": "01.01.03.03.009",
+          "nivel": 5,
+          "nome": "BANDEJÃO MÓVEL"
+        }
+      ]
+    },
+    {
+      "ordem": 19,
+      "tipo": "MATERIAL",
+      "item": "SST",
+      "insumos": "ESTRUTURA E TELA FACHADEIRA",
+      "pacote_servicos": "BALANCIM",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.01.03.03.010",
+          "nivel": 5,
+          "nome": "ENTELAMENTO FACHADEIRO DE EDIFICAÇÕES"
+        }
+      ]
+    },
+    {
+      "ordem": 20,
+      "tipo": "MATERIAL",
+      "item": "ALVENARIA",
+      "insumos": "BLOCOS E TIJOLOS",
+      "pacote_servicos": "ALVENARIA",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.05.01.01",
+          "nivel": 4,
+          "nome": "ALVENARIAS CERÂMICA"
+        }
+      ]
+    },
+    {
+      "ordem": 21,
+      "tipo": "MATERIAL",
+      "item": "ALVENARIA",
+      "insumos": "ARGAMASSA E CHAPISCO",
+      "pacote_servicos": "ALVENARIA",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.05.01.01",
+          "nivel": 4,
+          "nome": "ALVENARIAS CERÂMICA"
+        }
+      ]
+    },
+    {
+      "ordem": 22,
+      "tipo": "MATERIAL",
+      "item": "ELÉTRICA",
+      "insumos": "FIAÇÃO ELÉTRICA CORREDORES E SUBSOLOS",
+      "pacote_servicos": "INSTALAÇÕES 1",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 0
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.03.02.006",
+          "nivel": 5,
+          "nome": "FIAÇÃO E CABLAGEM"
+        }
+      ]
+    },
+    {
+      "ordem": 23,
+      "tipo": "MATERIAL",
+      "item": "COMPLEMENTOS",
+      "insumos": "CHURRASQUEIRAS PRÉ MOLDADAS",
+      "pacote_servicos": "ALVENARIA",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 0
+      },
+      "etapas": [
+        {
+          "codigo": "01.10.01.01",
+          "nivel": 4,
+          "nome": "LAREIRAS E CHURRASQUEIRAS"
+        }
+      ]
+    },
+    {
+      "ordem": 24,
+      "tipo": "MATERIAL",
+      "item": "COMPLEMENTOS",
+      "insumos": "DUTOS DE CHURRASQUEIRA",
+      "pacote_servicos": "ALVENARIA",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 0
+      },
+      "etapas": [
+        {
+          "codigo": "01.10.01.01.001",
+          "nivel": 5,
+          "nome": "CHURRASQUEIRAS"
+        }
+      ]
+    },
+    {
+      "ordem": 25,
+      "tipo": "MATERIAL",
+      "item": "ELEVADORES",
+      "insumos": "ELEVADORES",
+      "pacote_servicos": "ELEVADOR INTERNO",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 380
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.05.01.001",
+          "nivel": 5,
+          "nome": "ELEVADOR DEFINITIVO DE OBRA"
+        }
+      ]
+    },
+    {
+      "ordem": 26,
+      "tipo": "MATERIAL",
+      "item": "ELEVADORES",
+      "insumos": "PLATAFORMA PNE",
+      "pacote_servicos": "BOMBAS E INST. ESPECIAIS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 80
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 27,
+      "tipo": "MATERIAL",
+      "item": "ESQUADRIAS ALUMÍNIO",
+      "insumos": "CONTRAMARCO",
+      "pacote_servicos": "CONTRAMARCOS",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.05.02.02.007",
+          "nivel": 5,
+          "nome": "FIXAÇÃO E PREENCHIMENTO DE CONTRAMARCOS"
+        }
+      ]
+    },
+    {
+      "ordem": 28,
+      "tipo": "MATERIAL",
+      "item": "PPCI",
+      "insumos": "PORTA CORTA FOGO",
+      "pacote_servicos": "CONTRAMARCOS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.05.02.04.016",
+          "nivel": 5,
+          "nome": "PORTAS CORTA-FOGO"
+        }
+      ]
+    },
+    {
+      "ordem": 29,
+      "tipo": "MATERIAL",
+      "item": "GÁS",
+      "insumos": "INFRA GÁS PAVIMENTOS",
+      "pacote_servicos": "INSTALAÇÕES 1",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.01.05.001",
+          "nivel": 5,
+          "nome": "INSTALACOES DE GAS"
+        }
+      ]
+    },
+    {
+      "ordem": 30,
+      "tipo": "MATERIAL",
+      "item": "HIDRÁULICA",
+      "insumos": "PRUMADA AF",
+      "pacote_servicos": "INSTALAÇÕES 1",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.01.06.001",
+          "nivel": 5,
+          "nome": "MEDIDOR INDIVIDUAL DE ÁGUA"
+        }
+      ]
+    },
+    {
+      "ordem": 31,
+      "tipo": "MATERIAL",
+      "item": "HIDRÁULICA",
+      "insumos": "TUBULAÇÕES E CONEXÕES AQ E AF",
+      "pacote_servicos": "INSTALAÇÕES 1",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.01.03.002",
+          "nivel": 5,
+          "nome": "TUBULAÇÃO DE ÁGUA FRIA. MATERIAL - PVC"
+        },
+        {
+          "codigo": "01.08.01.03.003",
+          "nivel": 5,
+          "nome": "TUBULAÇÃO DE ÁGUA QUENTE. MATERIAL - SISTEMA PPR"
+        },
+        {
+          "codigo": "01.08.01.03.004",
+          "nivel": 5,
+          "nome": "TUBULAÇÃO DE ÁGUA QUENTE. MATERIAL - SISTEMA AQUATERM"
+        },
+        {
+          "codigo": "01.08.02.02",
+          "nivel": 4,
+          "nome": "BASES DE METAIS SANITARIOS"
+        }
+      ]
+    },
+    {
+      "ordem": 32,
+      "tipo": "MATERIAL",
+      "item": "HIDRÁULICA",
+      "insumos": "TUBULAÇÕES E CONEXÕES ESGOTO",
+      "pacote_servicos": "INSTALAÇÕES 1",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.01.03.001",
+          "nivel": 5,
+          "nome": "TUBULAÇÕES DE ESGOTO/VENTILAÇÃO E ÁGUAS PLUVIAIS. MATERIAL - PVC"
+        }
+      ]
+    },
+    {
+      "ordem": 33,
+      "tipo": "MATERIAL",
+      "item": "HIDRÁULICA",
+      "insumos": "TUBULAÇÕES E CONEXÕES PLUVIAL",
+      "pacote_servicos": "INSTALAÇÕES 1",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.01.03.001",
+          "nivel": 5,
+          "nome": "TUBULAÇÕES DE ESGOTO/VENTILAÇÃO E ÁGUAS PLUVIAIS. MATERIAL - PVC"
+        }
+      ]
+    },
+    {
+      "ordem": 34,
+      "tipo": "MATERIAL",
+      "item": "HIDRÁULICA",
+      "insumos": "RESERVATÓRIOS EM FIBRA",
+      "pacote_servicos": "INSTALAÇÕES 1",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.01.06.002",
+          "nivel": 5,
+          "nome": "RESERVATÓRIO EM FIBRA"
+        }
+      ]
+    },
+    {
+      "ordem": 35,
+      "tipo": "MATERIAL",
+      "item": "ELÉTRICA",
+      "insumos": "TUBULAÇÕES E CAIXAS ELÉTRICAS",
+      "pacote_servicos": "INSTALAÇÕES 1",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.03.02.004",
+          "nivel": 5,
+          "nome": "INFRAESTRUTURA PRUMADAS/TUBULAÇÕES ELÉTRICAS E CAIXINHAS DE INSTALAÇÕES ELÉTRICAS/COMUNICAÇÃO E DADOS"
+        }
+      ]
+    },
+    {
+      "ordem": 36,
+      "tipo": "MATERIAL",
+      "item": "ELÉTRICA",
+      "insumos": "QUADROS ELÉTRICOS",
+      "pacote_servicos": "ALVENARIA",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.03.02.007",
+          "nivel": 5,
+          "nome": "QUADROS E DISJUNTORES. CHAVE SECCINADORA. CENTRAL DE MEDIÇÃO"
+        }
+      ]
+    },
+    {
+      "ordem": 37,
+      "tipo": "MATERIAL",
+      "item": "CONTRAPISO",
+      "insumos": "MANTA ACÚSTICA",
+      "pacote_servicos": "CONTRAPISO",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 20
+      },
+      "etapas": [
+        {
+          "codigo": "01.06.03.02.001",
+          "nivel": 5,
+          "nome": "FORNECIMENTO E COLOCACAO DE MANTA ACUSTICA PARA PISO"
+        }
+      ]
+    },
+    {
+      "ordem": 38,
+      "tipo": "MATERIAL",
+      "item": "CONTRAPISO",
+      "insumos": "AGREGADOS / ARGAM. PRONTA",
+      "pacote_servicos": "CONTRAPISO",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.02.04.001",
+          "nivel": 5,
+          "nome": "ENCHIMENTO REGULARIZACAO E CORTE DE CONTRAPISO (INT + EXT)"
+        }
+      ]
+    },
+    {
+      "ordem": 39,
+      "tipo": "MATERIAL",
+      "item": "CONTRAPISO",
+      "insumos": "PISO AQUECIDO",
+      "pacote_servicos": "CONTRAPISO",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 50
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.05.05.011",
+          "nivel": 5,
+          "nome": "PISO AQUECIDO"
+        }
+      ]
+    },
+    {
+      "ordem": 40,
+      "tipo": "MATERIAL",
+      "item": "FACHADA",
+      "insumos": "PASTILHAS FACHADA",
+      "pacote_servicos": "PORCELANATO EXT",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 140
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.03.03",
+          "nivel": 4,
+          "nome": "REVESTIMENTOS EXTERNOS. FACHADA"
+        }
+      ]
+    },
+    {
+      "ordem": 41,
+      "tipo": "MATERIAL",
+      "item": "AR CONDICIONADO",
+      "insumos": "TUB. FRIGORIGENA E CX APOLAR",
+      "pacote_servicos": "DRYWALL 1",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.04.01.001",
+          "nivel": 5,
+          "nome": "MATERIAL E MÃO-DE-OBRA PARA INFRAESTRUTURA FRIGORIGENA AR CONDICIONADO"
+        }
+      ]
+    },
+    {
+      "ordem": 42,
+      "tipo": "MATERIAL",
+      "item": "DRYWALL",
+      "insumos": "ESTRUTURA, PLACAS, ELEMENTOS DE FIXAÇÃO, CHAPAS REFORÇO, ISOLANTES TÉRMICOS E ACÚSTICOS",
+      "pacote_servicos": "DRYWALL 1",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 20
+      },
+      "etapas": [
+        {
+          "codigo": "01.05.01.03",
+          "nivel": 4,
+          "nome": "PAINÉIS DIVISÓRIOS EM DRYWALL"
+        }
+      ]
+    },
+    {
+      "ordem": 43,
+      "tipo": "MATERIAL",
+      "item": "REVEST. CERÂMICO",
+      "insumos": "ARGAMASSA COLANTE",
+      "pacote_servicos": "REVEST. CERÂMICO",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 80
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.03.01",
+          "nivel": 4,
+          "nome": "REVESTIMENTOS PAREDES INTERNAS"
+        },
+        {
+          "codigo": "01.07.02.04.002",
+          "nivel": 5,
+          "nome": "ENCHIMENTO REGULARIZACAO E CORTE DE CONTRAPISO. ESCADA 3CM"
+        },
+        {
+          "codigo": "01.07.02.04.003",
+          "nivel": 5,
+          "nome": "ENCHIMENTO PISO"
+        },
+        {
+          "codigo": "01.07.02.04.004",
+          "nivel": 5,
+          "nome": "PISO CIMENTADO LISO DESEMPENADO"
+        }
+      ]
+    },
+    {
+      "ordem": 44,
+      "tipo": "MATERIAL",
+      "item": "REVEST. CERÂMICO",
+      "insumos": "AZULEJOS PRIVATIVOS",
+      "pacote_servicos": "REVEST. CERÂMICO",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 80
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.03.01",
+          "nivel": 4,
+          "nome": "REVESTIMENTOS PAREDES INTERNAS"
+        }
+      ]
+    },
+    {
+      "ordem": 45,
+      "tipo": "MATERIAL",
+      "item": "REVEST. CERÂMICO",
+      "insumos": "AZULEJOS ÁREAS COMUNS",
+      "pacote_servicos": "REVEST. CERÂMICO",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 80
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.03.01",
+          "nivel": 4,
+          "nome": "REVESTIMENTOS PAREDES INTERNAS"
+        }
+      ]
+    },
+    {
+      "ordem": 46,
+      "tipo": "MATERIAL",
+      "item": "REVEST. CERÂMICO",
+      "insumos": "PORCELANATOS PRIVATIVOS",
+      "pacote_servicos": "REVEST. CERÂMICO",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 80
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.04.03.001",
+          "nivel": 5,
+          "nome": "SOLEIRA EM GRANITO"
+        }
+      ]
+    },
+    {
+      "ordem": 47,
+      "tipo": "MATERIAL",
+      "item": "REVEST. CERÂMICO",
+      "insumos": "PORCELANATOS ÁREAS COMUNS",
+      "pacote_servicos": "REVEST. CERÂMICO",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 80
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.04.03.001",
+          "nivel": 5,
+          "nome": "SOLEIRA EM GRANITO"
+        }
+      ]
+    },
+    {
+      "ordem": 48,
+      "tipo": "MATERIAL",
+      "item": "REVEST. CERÂMICO",
+      "insumos": "REJUNTES E ADITIVOS",
+      "pacote_servicos": "REVEST. CERÂMICO",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.03.01",
+          "nivel": 4,
+          "nome": "REVESTIMENTOS PAREDES INTERNAS"
+        }
+      ]
+    },
+    {
+      "ordem": 49,
+      "tipo": "MATERIAL",
+      "item": "REVEST. CERÂMICO",
+      "insumos": "PERSONALIZAÇÕES",
+      "pacote_servicos": "REVEST. CERÂMICO",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 80
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 50,
+      "tipo": "MATERIAL",
+      "item": "FACHADA",
+      "insumos": "PORCELANATO",
+      "pacote_servicos": "REVEST. CERÂMICO",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 140
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.03.03",
+          "nivel": 4,
+          "nome": "REVESTIMENTOS EXTERNOS. FACHADA"
+        }
+      ]
+    },
+    {
+      "ordem": 51,
+      "tipo": "MATERIAL",
+      "item": "IMPERMEABILIZAÇÃO",
+      "insumos": "ARGAMASSAS POLIMÉRICAS",
+      "pacote_servicos": "IMPERMEABILIZAÇÃO INT",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.06.02.06",
+          "nivel": 4,
+          "nome": "IMPERMEABILIZAÇÃO DE BOX DE BANHEIRO"
+        }
+      ]
+    },
+    {
+      "ordem": 52,
+      "tipo": "MATERIAL",
+      "item": "FORRO",
+      "insumos": "FORRO, TABICAS E ACABAMENTOS",
+      "pacote_servicos": "FORROS",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.05.01",
+          "nivel": 4,
+          "nome": "FORRO DE GESSO EM PLACAS"
+        },
+        {
+          "codigo": "01.07.05.02",
+          "nivel": 4,
+          "nome": "FORROS EM DRYWALL"
+        }
+      ]
+    },
+    {
+      "ordem": 53,
+      "tipo": "MATERIAL",
+      "item": "IMPERMEABILIZAÇÃO",
+      "insumos": "ASFALTO E MANTA ASFÁLTICA",
+      "pacote_servicos": "IMPERM. EXT 2",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.06.02.09",
+          "nivel": 4,
+          "nome": "IMPERMEABILIZAÇÃO DE LAJES DESCOBERTAS"
+        },
+        {
+          "codigo": "01.06.02.11",
+          "nivel": 4,
+          "nome": "IMPERMEABILIZAÇÃO DE FLOREIRAS JARDINS ESPELHOS E FONTES SOBRE LAJE"
+        }
+      ]
+    },
+    {
+      "ordem": 54,
+      "tipo": "MATERIAL",
+      "item": "ESQUADRIAS ALUMÍNIO",
+      "insumos": "ESQUADRIAS",
+      "pacote_servicos": "ESQUADRIAS",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 140
+      },
+      "etapas": [
+        {
+          "codigo": "01.05.02.02.001",
+          "nivel": 5,
+          "nome": "ESQUADRIAS DE ALUMÍNIO CONVENCIONAIS"
+        },
+        {
+          "codigo": "01.05.02.02.002",
+          "nivel": 5,
+          "nome": "ESQUADRIAS ALUMÍNIO TIPO VENEZIANA"
+        },
+        {
+          "codigo": "01.05.02.02.003",
+          "nivel": 5,
+          "nome": "ESQUADRIAS DE ALUMÍNIO EM PELE DE VIDRO (STRUCTURAL GLAIZING)"
+        },
+        {
+          "codigo": "01.05.02.02.005",
+          "nivel": 5,
+          "nome": "MURO DE VIDRO LAMINADO C/ ALUMÍNIO"
+        },
+        {
+          "codigo": "01.05.02.02.006",
+          "nivel": 5,
+          "nome": "BRISES EM ALUMÍNIO"
+        }
+      ]
+    },
+    {
+      "ordem": 55,
+      "tipo": "MATERIAL",
+      "item": "ESQUADRIAS ALUMÍNIO",
+      "insumos": "GUARDA-CORPOS DE VIDRO",
+      "pacote_servicos": "ESQUADRIAS",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 140
+      },
+      "etapas": [
+        {
+          "codigo": "01.05.02.02.004",
+          "nivel": 5,
+          "nome": "PEITORIS / GUARDA-CORPOS"
+        }
+      ]
+    },
+    {
+      "ordem": 56,
+      "tipo": "MATERIAL",
+      "item": "FACHADA",
+      "insumos": "TEXTURA EXTERNA",
+      "pacote_servicos": "TEXTURA FACHADA",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.06.07",
+          "nivel": 4,
+          "nome": "PINTURA EXTERNA"
+        }
+      ]
+    },
+    {
+      "ordem": 57,
+      "tipo": "MATERIAL",
+      "item": "SERRALHERIA",
+      "insumos": "GUARDA CORPOS E GRADIS",
+      "pacote_servicos": "SACADAS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 140
+      },
+      "etapas": [
+        {
+          "codigo": "01.05.02.04.012",
+          "nivel": 5,
+          "nome": "GUARDA-CORPO EM FERRO"
+        }
+      ]
+    },
+    {
+      "ordem": 58,
+      "tipo": "MATERIAL",
+      "item": "SERRALHERIA",
+      "insumos": "BRISES E ESTRUTURAS METÁLICAS",
+      "pacote_servicos": "SACADAS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 140
+      },
+      "etapas": [
+        {
+          "codigo": "01.05.02.04.017",
+          "nivel": 5,
+          "nome": "PLATAFORMAS METÁLICAS"
+        },
+        {
+          "codigo": "01.05.02.04.018",
+          "nivel": 5,
+          "nome": "RESERVATÓRIO METÁLICO"
+        },
+        {
+          "codigo": "01.05.02.04.019",
+          "nivel": 5,
+          "nome": "ESTRUTURAS METÁLICAS (PAREDE VERDE. ACM. ETC)"
+        },
+        {
+          "codigo": "01.05.02.04.020",
+          "nivel": 5,
+          "nome": "ESTRUTURA METÁLICA PARA ESCADA"
+        },
+        {
+          "codigo": "01.05.02.04.021",
+          "nivel": 5,
+          "nome": "ESTRUTURA METÁLICA PARA PLATAFORMA TÉCNICA"
+        }
+      ]
+    },
+    {
+      "ordem": 59,
+      "tipo": "MATERIAL",
+      "item": "PORTAS",
+      "insumos": "PORTAS EM MADEIRA",
+      "pacote_servicos": "PORTAS",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 110
+      },
+      "etapas": [
+        {
+          "codigo": "01.05.02.01",
+          "nivel": 4,
+          "nome": "EM MADEIRA"
+        }
+      ]
+    },
+    {
+      "ordem": 60,
+      "tipo": "MATERIAL",
+      "item": "PORTAS",
+      "insumos": "FERRAGENS",
+      "pacote_servicos": "PORTAS",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 110
+      },
+      "etapas": [
+        {
+          "codigo": "01.05.02.05",
+          "nivel": 4,
+          "nome": "FERRAGENS"
+        }
+      ]
+    },
+    {
+      "ordem": 61,
+      "tipo": "MATERIAL",
+      "item": "ELÉTRICA",
+      "insumos": "QUADROS E TUBOS ENTRADA",
+      "pacote_servicos": "ENTRADA DE ENERGIA",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 20
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.03.02.007",
+          "nivel": 5,
+          "nome": "QUADROS E DISJUNTORES. CHAVE SECCINADORA. CENTRAL DE MEDIÇÃO"
+        }
+      ]
+    },
+    {
+      "ordem": 62,
+      "tipo": "MATERIAL",
+      "item": "PINTURA",
+      "insumos": "TINTAS",
+      "pacote_servicos": "PINTURA 1",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 10
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.06.02",
+          "nivel": 4,
+          "nome": "PINTURA COM TINTA LATEX PVA INTERNA"
+        },
+        {
+          "codigo": "01.07.06.03.001",
+          "nivel": 5,
+          "nome": "PINTURA ACRÍLICA EM PAREDES"
+        },
+        {
+          "codigo": "01.07.06.03.002",
+          "nivel": 5,
+          "nome": "REQUADRO PINTURA ACRÍLICA PAREDE"
+        },
+        {
+          "codigo": "01.07.06.03.003",
+          "nivel": 5,
+          "nome": "PINTURA ACRÍLICA FORRO GESSO"
+        },
+        {
+          "codigo": "01.07.06.03.004",
+          "nivel": 5,
+          "nome": "PINTURA ACRÍLICA EM DESTAQUES"
+        }
+      ]
+    },
+    {
+      "ordem": 63,
+      "tipo": "MATERIAL",
+      "item": "MÁRMORES E GRANITOS",
+      "insumos": "PEDRA NATURAL PISO E PAREDE",
+      "pacote_servicos": "ELEVADOR INTERNO",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 50
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.04.02",
+          "nivel": 4,
+          "nome": "REVESTIMENTO DE PISO"
+        }
+      ]
+    },
+    {
+      "ordem": 64,
+      "tipo": "MATERIAL",
+      "item": "HIDRÁULICA",
+      "insumos": "LOUÇAS",
+      "pacote_servicos": "ACABAMENTOS",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 80
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.02.01",
+          "nivel": 4,
+          "nome": "APARELHOS DE LOUCA EM GERAL"
+        }
+      ]
+    },
+    {
+      "ordem": 65,
+      "tipo": "MATERIAL",
+      "item": "HIDRÁULICA",
+      "insumos": "METAIS",
+      "pacote_servicos": "ACABAMENTOS",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 80
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.02.03",
+          "nivel": 4,
+          "nome": "ACABAMENTOS DE METAIS SANITARIOS"
+        }
+      ]
+    },
+    {
+      "ordem": 66,
+      "tipo": "MATERIAL",
+      "item": "HIDRÁULICA",
+      "insumos": "SPA / BANHEIRA",
+      "pacote_servicos": null,
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 20
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 67,
+      "tipo": "MATERIAL",
+      "item": "ELÉTRICA",
+      "insumos": "FIAÇÃO ENTRADA E LÓGICA",
+      "pacote_servicos": "ENTRADA DE ENERGIA",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 0
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.03.02.006",
+          "nivel": 5,
+          "nome": "FIAÇÃO E CABLAGEM"
+        }
+      ]
+    },
+    {
+      "ordem": 68,
+      "tipo": "MATERIAL",
+      "item": "PINTURA",
+      "insumos": "MASSA CORRIDA",
+      "pacote_servicos": "PINTURA 1",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.06.01",
+          "nivel": 4,
+          "nome": "APLICACAO DE MASSA CORRIDA INTERNA"
+        }
+      ]
+    },
+    {
+      "ordem": 69,
+      "tipo": "MATERIAL",
+      "item": "ELÉTRICA",
+      "insumos": "FIAÇÃO ELÉTRICA APARTAMENTOS",
+      "pacote_servicos": "DRYWALL 2",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 0
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.03.02.006",
+          "nivel": 5,
+          "nome": "FIAÇÃO E CABLAGEM"
+        }
+      ]
+    },
+    {
+      "ordem": 70,
+      "tipo": "MATERIAL",
+      "item": "OUTRAS INSTALAÇÕES",
+      "insumos": "EXAUSTORES CHURRASQUEIRAS",
+      "pacote_servicos": "INSTALAÇÕES 2",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.10.01.01.001",
+          "nivel": 5,
+          "nome": "CHURRASQUEIRAS"
+        }
+      ]
+    },
+    {
+      "ordem": 71,
+      "tipo": "MATERIAL",
+      "item": "OUTRAS INSTALAÇÕES",
+      "insumos": "EXAUSTORES BANHEIROS",
+      "pacote_servicos": "INSTALAÇÕES 2",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.04.03.001",
+          "nivel": 5,
+          "nome": "EXAUSTÃO BANHEIROS"
+        }
+      ]
+    },
+    {
+      "ordem": 72,
+      "tipo": "MATERIAL",
+      "item": "SERRALHERIA",
+      "insumos": "GUARDA CORPOS ESCADAS",
+      "pacote_servicos": "ESCADAS",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 80
+      },
+      "etapas": [
+        {
+          "codigo": "01.05.02.04.004",
+          "nivel": 5,
+          "nome": "CORRIMAO DE FERRO INTERNO"
+        }
+      ]
+    },
+    {
+      "ordem": 73,
+      "tipo": "MATERIAL",
+      "item": "LIMPEZA",
+      "insumos": "MATERIAIS DE LIMPEZA",
+      "pacote_servicos": "DESENGROSSO",
+      "prazos": {
+        "levantamento": 5,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.09.01.01.001",
+          "nivel": 5,
+          "nome": "LIMPEZA FINAL DE OBRA"
+        }
+      ]
+    },
+    {
+      "ordem": 74,
+      "tipo": "MATERIAL",
+      "item": "MÁRMORES E GRANITOS",
+      "insumos": "PINGADEIRAS",
+      "pacote_servicos": "PINGADEIRAS",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 50
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.04.06.001",
+          "nivel": 5,
+          "nome": "PEITORIL GRANITO JANELA"
+        }
+      ]
+    },
+    {
+      "ordem": 75,
+      "tipo": "MATERIAL",
+      "item": "MÁRMORES E GRANITOS",
+      "insumos": "SACADAS",
+      "pacote_servicos": "REVEST. CERÂMICO",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 50
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.04.06.002",
+          "nivel": 5,
+          "nome": "PEITORIL GRANITO GUARDA CORPO"
+        }
+      ]
+    },
+    {
+      "ordem": 76,
+      "tipo": "MATERIAL",
+      "item": "MÁRMORES E GRANITOS",
+      "insumos": "TAMPOS",
+      "pacote_servicos": "ACABAMENTOS",
+      "prazos": {
+        "levantamento": 30,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 50
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.04.08",
+          "nivel": 4,
+          "nome": "BANCADA DE PIA E LAVATORIO"
+        }
+      ]
+    },
+    {
+      "ordem": 77,
+      "tipo": "MATERIAL",
+      "item": "PISOS ESPECIAIS",
+      "insumos": "LAMINADOS E RODAPÉS",
+      "pacote_servicos": "PISOS ESPECIAIS",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 50
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.05.05.012",
+          "nivel": 5,
+          "nome": "PISO LAMINADO"
+        }
+      ]
+    },
+    {
+      "ordem": 78,
+      "tipo": "MATERIAL",
+      "item": "PISOS ESPECIAIS",
+      "insumos": "PISOS VINILICOS",
+      "pacote_servicos": "PISOS ESPECIAIS",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 50
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.05.05.003",
+          "nivel": 5,
+          "nome": "PISO VINÍLICO"
+        }
+      ]
+    },
+    {
+      "ordem": 79,
+      "tipo": "MATERIAL",
+      "item": "PISOS ESPECIAIS",
+      "insumos": "PISOS EMBORRACHADOS",
+      "pacote_servicos": "PISOS ESPECIAIS",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 20
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.05.05.006",
+          "nivel": 5,
+          "nome": "PISO EMBORRACHADO"
+        }
+      ]
+    },
+    {
+      "ordem": 80,
+      "tipo": "MATERIAL",
+      "item": "PISOS ESPECIAIS",
+      "insumos": "RODAPÉS",
+      "pacote_servicos": "PISOS ESPECIAIS",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 20
+      },
+      "etapas": [
+        {
+          "codigo": "01.07.05.05.015",
+          "nivel": 5,
+          "nome": "RODAPES DIVERSOS"
+        }
+      ]
+    },
+    {
+      "ordem": 81,
+      "tipo": "MATERIAL",
+      "item": "PAVIMENTAÇÃO",
+      "insumos": "PAVER, PISO TÁTIL, GUIAS E MEIO FIO",
+      "pacote_servicos": "PAVIMENTAÇÃO",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.09.02.03.002",
+          "nivel": 5,
+          "nome": "CALCADA EM PAVER. E=6CM SOBRE AREIA COM NIVELAMENTO E COMPACT. DE BASE"
+        }
+      ]
+    },
+    {
+      "ordem": 82,
+      "tipo": "MATERIAL",
+      "item": "SERRALHERIA",
+      "insumos": "PORTÕES PEDESTRES E CARROS",
+      "pacote_servicos": "SERRALHERIA 3",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 80
+      },
+      "etapas": [
+        {
+          "codigo": "01.05.02.04.015",
+          "nivel": 5,
+          "nome": "PORTÕES"
+        }
+      ]
+    },
+    {
+      "ordem": 83,
+      "tipo": "MATERIAL",
+      "item": "SERRALHERIA",
+      "insumos": "GUARDA CORPOS ÁREA COMUM",
+      "pacote_servicos": "SERRALHERIA 3",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 80
+      },
+      "etapas": [
+        {
+          "codigo": "01.05.02.04.005",
+          "nivel": 5,
+          "nome": "CORRIMAO DE FERRO EXTERNO"
+        }
+      ]
+    },
+    {
+      "ordem": 84,
+      "tipo": "MATERIAL",
+      "item": "ELÉTRICA",
+      "insumos": "DISJUNTORES",
+      "pacote_servicos": "INSTALAÇÕES 2",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 50
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.03.02.007",
+          "nivel": 5,
+          "nome": "QUADROS E DISJUNTORES. CHAVE SECCINADORA. CENTRAL DE MEDIÇÃO"
+        }
+      ]
+    },
+    {
+      "ordem": 85,
+      "tipo": "MATERIAL",
+      "item": "PPCI",
+      "insumos": "EXTINTOR, MANGUEIRAS E PLACAS",
+      "pacote_servicos": "INSTALAÇÕES 3",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 10
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.01.03.006",
+          "nivel": 5,
+          "nome": "ACABAMENTOS DE PREVENÇÃO CONTRA INCÊNDIO. MATERIAL"
+        }
+      ]
+    },
+    {
+      "ordem": 86,
+      "tipo": "MATERIAL",
+      "item": "OUTRAS INSTALAÇÕES",
+      "insumos": "GERADOR E TRANSFORMADORES",
+      "pacote_servicos": "BOMBAS E INST. ESPECIAIS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 80
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.03.04.001",
+          "nivel": 5,
+          "nome": "GRUPO GERADOR"
+        }
+      ]
+    },
+    {
+      "ordem": 87,
+      "tipo": "MATERIAL",
+      "item": "ELÉTRICA",
+      "insumos": "ACABAMENTOS ELÉTRICOS",
+      "pacote_servicos": "INSTALAÇÕES 3",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 0
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.03.02.008",
+          "nivel": 5,
+          "nome": "ACABAMENTOS ELÉTRICOS E TELEFÔNICOS"
+        }
+      ]
+    },
+    {
+      "ordem": 88,
+      "tipo": "MATERIAL",
+      "item": "PAVIMENTAÇÃO",
+      "insumos": "AGREGADOS",
+      "pacote_servicos": "PAVIMENTAÇÃO",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.09.02.03.002",
+          "nivel": 5,
+          "nome": "CALCADA EM PAVER. E=6CM SOBRE AREIA COM NIVELAMENTO E COMPACT. DE BASE"
+        }
+      ]
+    },
+    {
+      "ordem": 89,
+      "tipo": "MATERIAL",
+      "item": "ELÉTRICA",
+      "insumos": "ILUMINAÇÃO",
+      "pacote_servicos": "INSTALAÇÕES 3",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 50
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.03.02.009",
+          "nivel": 5,
+          "nome": "LUMINÁRIAS ÁREAS COMUNS"
+        }
+      ]
+    },
+    {
+      "ordem": 90,
+      "tipo": "MATERIAL",
+      "item": "ELÉTRICA",
+      "insumos": "POSTES E QUADROS PARA ENTRADA",
+      "pacote_servicos": "ENTRADA DE ENERGIA",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 20
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.03.02.001",
+          "nivel": 5,
+          "nome": "ENTRADA DE ENERGIA DEFINITIVA. POSTES. ACESSÓRIOS. QDG"
+        }
+      ]
+    },
+    {
+      "ordem": 91,
+      "tipo": "MATERIAL",
+      "item": "ELÉTRICA",
+      "insumos": "SUBESTAÇÃO",
+      "pacote_servicos": "BOMBAS E INST. ESPECIAIS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 80
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.03.02.003",
+          "nivel": 5,
+          "nome": "SUBESTAÇÃO ELÉTRICA"
+        }
+      ]
+    },
+    {
+      "ordem": 92,
+      "tipo": "MATERIAL",
+      "item": "PPCI",
+      "insumos": "TUBOS, CONEXÕES E CAIXAS",
+      "pacote_servicos": "QUADROS E ABRIGOS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 10
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.01.03.005",
+          "nivel": 5,
+          "nome": "TUBULAÇÕES DE PREVENÇÃO CONTRA INCÊNDIOS. MATERIAL"
+        }
+      ]
+    },
+    {
+      "ordem": 93,
+      "tipo": "MATERIAL",
+      "item": "COBERTURAS",
+      "insumos": "CALHAS E RUFOS",
+      "pacote_servicos": "RUFOS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.06.01.03",
+          "nivel": 4,
+          "nome": "CALHAS E RUFOS"
+        }
+      ]
+    },
+    {
+      "ordem": 94,
+      "tipo": "MATERIAL",
+      "item": "ELÉTRICA",
+      "insumos": "SPDA COBERTURAS",
+      "pacote_servicos": "INSTALAÇÕES ÁTICO",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 20
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.03.02.005",
+          "nivel": 5,
+          "nome": "SISTEMA DE PROTEÇÃO CONTRA DESCARGAS ATMOSFÉRICAS - SPDA"
+        }
+      ]
+    },
+    {
+      "ordem": 95,
+      "tipo": "MATERIAL",
+      "item": "HIDRÁULICA",
+      "insumos": "BANHEIRAS E SPAS",
+      "pacote_servicos": null,
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 20
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 96,
+      "tipo": "MATERIAL",
+      "item": "OUTRAS INSTALAÇÕES",
+      "insumos": "BOMBAS",
+      "pacote_servicos": "BOMBAS E INST. ESPECIAIS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 10
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.02.05",
+          "nivel": 4,
+          "nome": "EQUIPAMENTOS"
+        }
+      ]
+    },
+    {
+      "ordem": 97,
+      "tipo": "MATERIAL",
+      "item": "HIDRÁULICA",
+      "insumos": "AQUECEDORES DE PASSAGEM",
+      "pacote_servicos": "INSTALAÇÕES 2",
+      "prazos": {
+        "levantamento": 20,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 20
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.01.05.003",
+          "nivel": 5,
+          "nome": "AQUECEDORES A GÁS E RECIRCULADORES"
+        }
+      ]
+    },
+    {
+      "ordem": 98,
+      "tipo": "MATERIAL",
+      "item": "OUTRAS INSTALAÇÕES",
+      "insumos": "APARELHOS AR COND.",
+      "pacote_servicos": "BOMBAS E INST. ESPECIAIS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 20
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.04.01.002",
+          "nivel": 5,
+          "nome": "MATERIAL E MÃO-DE-OBRA PARA EQUIPAMENTOS DE AR CONDICIONADO"
+        }
+      ]
+    },
+    {
+      "ordem": 99,
+      "tipo": "MATERIAL",
+      "item": "ANCORAGEM DEFINITIVA",
+      "insumos": "ANCORAGEM DEFINITIVA",
+      "pacote_servicos": "INSTALAÇÕES ÁTICO",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.05.02.04.008",
+          "nivel": 5,
+          "nome": "GANCHOS DEFINITIVOS DE MANUTENÇÃO DE FACHADA"
+        }
+      ]
+    },
+    {
+      "ordem": 100,
+      "tipo": "MATERIAL",
+      "item": "OUTRAS INSTALAÇÕES",
+      "insumos": "TUBOS E ACESSÓRIOS PISCINA",
+      "pacote_servicos": "BOMBAS E INST. ESPECIAIS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 20
+      },
+      "etapas": [
+        {
+          "codigo": "01.08.02.05",
+          "nivel": 4,
+          "nome": "EQUIPAMENTOS"
+        }
+      ]
+    },
+    {
+      "ordem": 101,
+      "tipo": "MATERIAL",
+      "item": "PAISAGISMO",
+      "insumos": "DECKS E PERGOLADOS",
+      "pacote_servicos": "PAISAGISMO",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 0
+      },
+      "etapas": [
+        {
+          "codigo": "01.10.01.03.003",
+          "nivel": 5,
+          "nome": "DECK EM MADEIRA"
+        }
+      ]
+    },
+    {
+      "ordem": 102,
+      "tipo": "MATERIAL",
+      "item": "PAISAGISMO",
+      "insumos": "PLAYGROUND",
+      "pacote_servicos": "PAISAGISMO",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 20
+      },
+      "etapas": [
+        {
+          "codigo": "01.09.02.06.004",
+          "nivel": 5,
+          "nome": "EQUIPAMENTOS DE RECREAÇÃO PLAYGROUND"
+        }
+      ]
+    },
+    {
+      "ordem": 103,
+      "tipo": "MATERIAL",
+      "item": "PAISAGISMO",
+      "insumos": "GRAMA, TERRA, PLANTAS E MUDAS",
+      "pacote_servicos": "PAISAGISMO",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 15,
+        "negociacao": 15,
+        "emissao": 10,
+        "entrega": 5
+      },
+      "etapas": [
+        {
+          "codigo": "01.10.01.02",
+          "nivel": 4,
+          "nome": "PAISAGISMO"
+        }
+      ]
+    },
+    {
+      "ordem": 104,
+      "tipo": "MAO_DE_OBRA",
+      "item": "TOPOGRAFIA",
+      "insumos": null,
+      "pacote_servicos": "SERVIÇOS PRELIMINARES",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 105,
+      "tipo": "MAO_DE_OBRA",
+      "item": "DEMOLIÇÃO",
+      "insumos": null,
+      "pacote_servicos": "SERVIÇOS PRELIMINARES",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 106,
+      "tipo": "MAO_DE_OBRA",
+      "item": "LIMPEZA DE TERRENO",
+      "insumos": null,
+      "pacote_servicos": "SERVIÇOS PRELIMINARES",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 107,
+      "tipo": "MAO_DE_OBRA",
+      "item": "TERRAPLANAGEM",
+      "insumos": null,
+      "pacote_servicos": "ESCAVAÇÃO/ATERRO",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 108,
+      "tipo": "MAO_DE_OBRA",
+      "item": "ÁREA DE VIVÊNCIA",
+      "insumos": null,
+      "pacote_servicos": "SERVIÇOS PRELIMINARES",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 109,
+      "tipo": "MAO_DE_OBRA",
+      "item": "FUNDAÇÃO",
+      "insumos": null,
+      "pacote_servicos": "FUNDAÇÃO",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 110,
+      "tipo": "MAO_DE_OBRA",
+      "item": "ESTRUTURA",
+      "insumos": null,
+      "pacote_servicos": "ESTRUTURA",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 111,
+      "tipo": "MAO_DE_OBRA",
+      "item": "INSTALAÇÕES ELÉTRICAS",
+      "insumos": null,
+      "pacote_servicos": "INSTALAÇÕES 1",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 112,
+      "tipo": "MAO_DE_OBRA",
+      "item": "INSTALAÇÕES HIDRAULICAS",
+      "insumos": null,
+      "pacote_servicos": "INSTALAÇÕES 1",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 113,
+      "tipo": "MAO_DE_OBRA",
+      "item": "ALVENARIA",
+      "insumos": null,
+      "pacote_servicos": "ALVENARIA",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 114,
+      "tipo": "MAO_DE_OBRA",
+      "item": "CHURRASQUEIRAS",
+      "insumos": null,
+      "pacote_servicos": "ALVENARIA",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 115,
+      "tipo": "MAO_DE_OBRA",
+      "item": "CONTRAMARCO",
+      "insumos": null,
+      "pacote_servicos": "CONTRAMARCOS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 116,
+      "tipo": "MAO_DE_OBRA",
+      "item": "ESQUADRIAS",
+      "insumos": null,
+      "pacote_servicos": "ESQUADRIAS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 117,
+      "tipo": "MAO_DE_OBRA",
+      "item": "GÁS",
+      "insumos": null,
+      "pacote_servicos": "INSTALAÇÕES 1",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 118,
+      "tipo": "MAO_DE_OBRA",
+      "item": "EMBOÇO INTERNO",
+      "insumos": null,
+      "pacote_servicos": "EMBOÇO/GL",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 119,
+      "tipo": "MAO_DE_OBRA",
+      "item": "CONTRAPISO",
+      "insumos": null,
+      "pacote_servicos": "CONTRAPISO",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 120,
+      "tipo": "MAO_DE_OBRA",
+      "item": "PISO AQUECIDO",
+      "insumos": null,
+      "pacote_servicos": "CONTRAPISO",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 121,
+      "tipo": "MAO_DE_OBRA",
+      "item": "DRY WALL",
+      "insumos": null,
+      "pacote_servicos": "DRYWALL 1",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 122,
+      "tipo": "MAO_DE_OBRA",
+      "item": "AR CONDICIONADO",
+      "insumos": null,
+      "pacote_servicos": "DRYWALL 1",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 123,
+      "tipo": "MAO_DE_OBRA",
+      "item": "MONTAGEM DE ANDAIME",
+      "insumos": null,
+      "pacote_servicos": "BALANCIM",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 124,
+      "tipo": "MAO_DE_OBRA",
+      "item": "EMBOÇO EXTERNO",
+      "insumos": null,
+      "pacote_servicos": "EMBOÇO EXT.",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 125,
+      "tipo": "MAO_DE_OBRA",
+      "item": "REVESTIMENTO CERÂMICO FACHADA",
+      "insumos": null,
+      "pacote_servicos": "PORCELANATO EXT",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 126,
+      "tipo": "MAO_DE_OBRA",
+      "item": "MÁRMORES E GRANITOS",
+      "insumos": null,
+      "pacote_servicos": "PINGADEIRAS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 127,
+      "tipo": "MAO_DE_OBRA",
+      "item": "IMPERMEABILIZAÇÃO",
+      "insumos": null,
+      "pacote_servicos": "IMPERMEABILIZAÇÃO INT",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 128,
+      "tipo": "MAO_DE_OBRA",
+      "item": "FORRO DE GESSO",
+      "insumos": null,
+      "pacote_servicos": "FORROS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 129,
+      "tipo": "MAO_DE_OBRA",
+      "item": "REVESTIMENTO CERÂMICO",
+      "insumos": null,
+      "pacote_servicos": "REVEST. CERÂMICO",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 130,
+      "tipo": "MAO_DE_OBRA",
+      "item": "PINTURA EXTERNA",
+      "insumos": null,
+      "pacote_servicos": "TEXTURA FACHADA",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 131,
+      "tipo": "MAO_DE_OBRA",
+      "item": "PINTURA INTERNA",
+      "insumos": null,
+      "pacote_servicos": "PINTURA 1",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 132,
+      "tipo": "MAO_DE_OBRA",
+      "item": "LIMPEZA GROSSA E FINA",
+      "insumos": null,
+      "pacote_servicos": "LIMPEZA",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 133,
+      "tipo": "MAO_DE_OBRA",
+      "item": "SERRALHERIA",
+      "insumos": null,
+      "pacote_servicos": "SERRALHERIA 1",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 134,
+      "tipo": "MAO_DE_OBRA",
+      "item": "FORRO DE MADEIRA",
+      "insumos": null,
+      "pacote_servicos": "FORROS",
+      "prazos": {
+        "levantamento": 0,
+        "solicitacao": 0,
+        "negociacao": 0,
+        "emissao": 0,
+        "entrega": 0
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 135,
+      "tipo": "MAO_DE_OBRA",
+      "item": "ACM",
+      "insumos": null,
+      "pacote_servicos": "ACM",
+      "prazos": {
+        "levantamento": 0,
+        "solicitacao": 0,
+        "negociacao": 0,
+        "emissao": 0,
+        "entrega": 0
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 136,
+      "tipo": "MAO_DE_OBRA",
+      "item": "PORTAS DE MADEIRA",
+      "insumos": null,
+      "pacote_servicos": "PORTAS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 137,
+      "tipo": "MAO_DE_OBRA",
+      "item": "LOUÇAS E METAIS",
+      "insumos": null,
+      "pacote_servicos": "ACABAMENTOS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 138,
+      "tipo": "MAO_DE_OBRA",
+      "item": "PISO LAMINADO",
+      "insumos": null,
+      "pacote_servicos": "PISOS ESPECIAIS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 139,
+      "tipo": "MAO_DE_OBRA",
+      "item": "PISO VINÍLICO",
+      "insumos": null,
+      "pacote_servicos": "PISOS ESPECIAIS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 140,
+      "tipo": "MAO_DE_OBRA",
+      "item": "PAVIMENTAÇÃO",
+      "insumos": null,
+      "pacote_servicos": "PISOS EXTERNOS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 141,
+      "tipo": "MAO_DE_OBRA",
+      "item": "CALHAS E RUFOS",
+      "insumos": null,
+      "pacote_servicos": "RUFOS",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 142,
+      "tipo": "MAO_DE_OBRA",
+      "item": "AUTOMAÇÃO",
+      "insumos": null,
+      "pacote_servicos": "INSTALAÇÕES 2",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    },
+    {
+      "ordem": 143,
+      "tipo": "MAO_DE_OBRA",
+      "item": "PAISAGISMO",
+      "insumos": null,
+      "pacote_servicos": "PAISAGISMO",
+      "prazos": {
+        "levantamento": 15,
+        "solicitacao": 0,
+        "negociacao": 10,
+        "emissao": 20,
+        "entrega": 15
+      },
+      "etapas": []
+    }
+  ]
+}
