@@ -25,6 +25,10 @@ import {
   getMegaTable,
 } from './db.js'
 import { syncProjects, syncRestrictions } from './sync.js'
+import {
+  obterConfig, aplicarPadrao, salvarGrupo, excluirGrupo, atrelarEtapas,
+  soltarEtapa, confirmarEtapa, previaCusto, importarCusto,
+} from './contratacoes-db.js'
 
 dotenv.config()
 
@@ -263,6 +267,52 @@ app.get('/api/mega/data', async (req, res) => {
     res.status(500).json({ error: err.message || 'Erro ao consultar tabela do Mega' })
   }
 })
+
+// ---- Gestão de Contratações --------------------------------------------
+const exigirProjeto = (valor) => {
+  const id = String(valor || '').trim()
+  if (!id) throw Object.assign(new Error('projectId é obrigatório.'), { status: 400 })
+  return id
+}
+const rota = (fn) => async (req, res) => {
+  try {
+    res.json({ ok: true, ...(await fn(req, res)) })
+  } catch (err) {
+    if (!err.status) console.error(`Erro em ${req.method} ${req.path}:`, err)
+    res.status(err.status || 500).json({ error: err.message || 'Erro na Gestão de Contratações' })
+  }
+}
+
+app.get('/api/contratacoes/config', rota((req) => obterConfig(exigirProjeto(req.query.projectId))))
+app.post('/api/contratacoes/aplicar-padrao', rota((req) =>
+  aplicarPadrao(exigirProjeto(req.body?.projectId), { restaurar: Boolean(req.body?.restaurar) })))
+app.post('/api/contratacoes/grupos', rota((req) =>
+  salvarGrupo(exigirProjeto(req.body?.projectId), req.body?.grupo || {})))
+app.delete('/api/contratacoes/grupos/:id', rota(async (req) => {
+  await excluirGrupo(exigirProjeto(req.query.projectId), Number(req.params.id))
+  return {}
+}))
+app.post('/api/contratacoes/grupos/:id/etapas', rota(async (req, res) => {
+  const r = await atrelarEtapas(exigirProjeto(req.body?.projectId), Number(req.params.id),
+    Array.isArray(req.body?.codigos) ? req.body.codigos : [], { mover: Boolean(req.body?.mover) })
+  if (r.conflitos.length) res.status(409)
+  return r
+}))
+app.delete('/api/contratacoes/etapas/:codigo', rota(async (req) => {
+  await soltarEtapa(exigirProjeto(req.query.projectId), req.params.codigo)
+  return {}
+}))
+app.post('/api/contratacoes/etapas/:codigo/confirmar', rota(async (req) => {
+  await confirmarEtapa(exigirProjeto(req.body?.projectId), req.params.codigo)
+  return {}
+}))
+app.post('/api/contratacoes/custo/previa', rota((req) =>
+  previaCusto(exigirProjeto(req.body?.projectId), Array.isArray(req.body?.matriz) ? req.body.matriz : [])))
+app.post('/api/contratacoes/custo/importar', rota((req) =>
+  importarCusto(exigirProjeto(req.body?.projectId), {
+    referencia: req.body?.referencia, arquivo: req.body?.arquivo,
+    matriz: Array.isArray(req.body?.matriz) ? req.body.matriz : [],
+  })))
 
 // Sync endpoint
 app.post('/api/sync-prevision', async (req, res) => {
