@@ -466,3 +466,75 @@ CREATE INDEX IF NOT EXISTS idx_responsaveis_projeto ON responsaveis(projeto_id);
 CREATE INDEX IF NOT EXISTS idx_cff_itens_projeto ON cff_itens(projeto_id, nivel);
 CREATE INDEX IF NOT EXISTS idx_pesos_orcamento_projeto ON pesos_orcamento(projeto_id);
 CREATE INDEX IF NOT EXISTS idx_analiticos_projeto ON analiticos(projeto_id);
+
+-- ---------------------------------------------------------------------------
+-- Gestão de Contratações (ver docs/superpowers/specs/2026-09-28-gestao-contratacoes-design.md)
+-- projeto_id NULL = padrão; obra recebe cópia do padrão.
+CREATE TABLE IF NOT EXISTS contratacao_grupos (
+  id SERIAL PRIMARY KEY,
+  projeto_id TEXT,
+  padrao_grupo_id INTEGER,
+  tipo TEXT NOT NULL CHECK (tipo IN ('MATERIAL', 'MAO_DE_OBRA')),
+  item TEXT NOT NULL,
+  insumos TEXT,
+  pacote_servicos TEXT,
+  ordem INTEGER NOT NULL DEFAULT 0,
+  prazo_levantamento INTEGER NOT NULL DEFAULT 0,
+  prazo_solicitacao INTEGER NOT NULL DEFAULT 0,
+  prazo_negociacao INTEGER NOT NULL DEFAULT 0,
+  prazo_emissao INTEGER NOT NULL DEFAULT 0,
+  prazo_entrega INTEGER NOT NULL DEFAULT 0,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_contratacao_grupos_projeto ON contratacao_grupos (projeto_id);
+
+-- Padrão guarda o código como na planilha (nível 4 ou 5); obra guarda nível 5 expandido.
+CREATE TABLE IF NOT EXISTS contratacao_grupo_etapas (
+  id SERIAL PRIMARY KEY,
+  grupo_id INTEGER NOT NULL REFERENCES contratacao_grupos (id) ON DELETE CASCADE,
+  projeto_id TEXT,
+  codigo_etapa TEXT NOT NULL,
+  nivel INTEGER NOT NULL,
+  situacao TEXT NOT NULL DEFAULT 'CONFIRMADO' CHECK (situacao IN ('CONFIRMADO', 'SUGERIDO')),
+  nome_padrao TEXT,
+  nome_obra TEXT,
+  origem_nivel4 TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_contratacao_etapa_obra
+  ON contratacao_grupo_etapas (projeto_id, codigo_etapa) WHERE projeto_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS custo_projetado_importacoes (
+  id SERIAL PRIMARY KEY,
+  projeto_id TEXT NOT NULL,
+  referencia DATE NOT NULL,
+  arquivo TEXT,
+  total NUMERIC NOT NULL DEFAULT 0,
+  importado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_custo_projetado_imp_projeto ON custo_projetado_importacoes (projeto_id, importado_em DESC);
+
+CREATE TABLE IF NOT EXISTS custo_projetado_itens (
+  importacao_id INTEGER NOT NULL REFERENCES custo_projetado_importacoes (id) ON DELETE CASCADE,
+  codigo_etapa TEXT NOT NULL,
+  custo_projetado NUMERIC NOT NULL,
+  PRIMARY KEY (importacao_id, codigo_etapa)
+);
+
+CREATE TABLE IF NOT EXISTS aprovacao_alcadas (
+  id SERIAL PRIMARY KEY,
+  tipo_documento TEXT NOT NULL,
+  ordem INTEGER NOT NULL,
+  valor_minimo NUMERIC NOT NULL DEFAULT 0,
+  aprovador TEXT NOT NULL,
+  substituto TEXT,
+  UNIQUE (tipo_documento, ordem)
+);
+INSERT INTO aprovacao_alcadas (tipo_documento, ordem, valor_minimo, aprovador, substituto) VALUES
+  ('Pedido de Compra', 1, 0, 'Luis Bronqueti', NULL),
+  ('Pedido de Compra', 2, 50000, 'Rafael Medeiros', 'Ricardo Kitamura'),
+  ('Pedido de Compra', 3, 100000, 'Filipe Biscaia Demeterco', NULL),
+  ('Contrato de Cotação e Materiais', 1, 0, 'Luis Bronqueti', 'Natalia Barbosa A'),
+  ('Contrato de Cotação e Materiais', 2, 50000, 'Rafael Medeiros', 'Ricardo Kitamura'),
+  ('Contrato de Cotação e Materiais', 3, 100000, 'Filipe Biscaia Demeterco', NULL)
+ON CONFLICT (tipo_documento, ordem) DO NOTHING;

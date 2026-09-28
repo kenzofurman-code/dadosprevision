@@ -62,6 +62,9 @@ export async function initDb() {
   const schemaPath = path.join(__dirname, 'schema.sql')
   const schemaSql = fs.readFileSync(schemaPath, 'utf8')
   await query(schemaSql)
+  const { carregarPadraoSeVazio } = await import('./contratacoes-db.js')
+  const grupos = await carregarPadraoSeVazio()
+  if (grupos) console.log(`Padrão de grupos de contratação carregado: ${grupos} grupos.`)
   console.log('Esquema PostgreSQL verificado e pronto com sucesso.')
 }
 
