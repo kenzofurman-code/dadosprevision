@@ -13,7 +13,8 @@
     "seed:firestore": "node scripts/seed-firestore.mjs",
     "sync:local": "node scripts/sync-prevision-local.mjs",
     "sync:restrictions": "node scripts/sync-prevision-local.mjs restrictions",
-    "sync:analytics": "node scripts/sync-prevision-local.mjs analytics"
+    "sync:analytics": "node scripts/sync-prevision-local.mjs analytics",
+    "test:server": "node --test \"server/**/*.test.js\""
   },
   "dependencies": {
     "cors": "^2.8.6",
