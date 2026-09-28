@@ -53,8 +53,11 @@ export function resolverEtapasPadrao(gruposPadrao, orcamento) {
   for (const g of [...gruposPadrao].sort((a, b) => a.ordem - b.ordem)) {
     for (const e of g.etapas) {
       const codigo = etapaParaMega(e.codigo)
-      if (!codigo || !orcamento.has(codigo)) continue
-      const bate = normalizarNome(e.nome) === normalizarNome(orcamento.get(codigo))
+      if (!codigo) continue
+      // O orçamento da Prevision pode não trazer o nível 4; aí o ramo entra
+      // pelos filhos, como SUGERIDO, porque não há nome para comparar.
+      if (!orcamento.has(codigo) && nivelDoCodigo(codigo) !== 4) continue
+      const bate = orcamento.has(codigo) && normalizarNome(e.nome) === normalizarNome(orcamento.get(codigo))
       const situacao = bate ? 'CONFIRMADO' : 'SUGERIDO'
       if (nivelDoCodigo(codigo) === 4) {
         for (const filho of filhosNivel5(codigo, orcamento)) {

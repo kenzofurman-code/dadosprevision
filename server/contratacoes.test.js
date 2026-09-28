@@ -60,6 +60,19 @@ test('resolverEtapasPadrao: nível 5 explícito vence a expansão do nível 4', 
   assert.equal(porCodigo['01.03.02.02.009'].ordem, 2)
 })
 
+// O orçamento da Prevision só traz nível 5: o nível 4 do padrão expande pelos
+// filhos, e como não dá para comparar o nome do ramo, entra para confirmar.
+test('resolverEtapasPadrao: nível 4 ausente no orçamento expande pelos filhos como SUGERIDO', () => {
+  const soNivel5 = new Map([...orcamento].filter(([c]) => c.split('.').length === 5))
+  const { vinculos } = resolverEtapasPadrao([
+    { ordem: 1, etapas: [{ codigo: '01.03.02.02', nivel: 4, nome: 'ARMAÇÃO' }] },
+  ], soNivel5)
+  assert.deepEqual(vinculos.map((v) => [v.codigo_etapa, v.situacao, v.origem_nivel4]), [
+    ['01.03.02.02.006', 'SUGERIDO', '01.03.02.02'],
+    ['01.03.02.02.009', 'SUGERIDO', '01.03.02.02'],
+  ])
+})
+
 test('expandirParaNivel5 abre nível 4 e mantém nível 5 existente', () => {
   assert.deepEqual(expandirParaNivel5(['01.03.02.02', '01.03.05.02.002', '09.09.09.09.009'], orcamento), [
     { codigo_etapa: '01.03.02.02.006', origem_nivel4: '01.03.02.02' },
