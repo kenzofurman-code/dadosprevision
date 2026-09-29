@@ -42,6 +42,7 @@ import './App.css'
 import { CurvasView } from './CurvasView'
 import { MegaView } from './MegaView'
 import { DiarioView } from './DiarioView'
+import { DiarioIndicadores } from './components/diario/DiarioIndicadores'
 import { ContratacoesConfig } from './components/contratacoes/ContratacoesConfig'
 import { ContratacoesMacro } from './components/contratacoes/ContratacoesMacro'
 
@@ -61,7 +62,7 @@ type DataView =
   | 'dados_diario'
   | 'gestao_a_vista'
 
-type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix' | 'panel5' | 'milestones' | 'contratacoes'
+type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix' | 'panel5' | 'milestones' | 'contratacoes' | 'diario'
 type GestaoTablePanel = 'panel1' | 'panel2' | 'panel3'
 type ReorderableGestaoPanel = GestaoTablePanel | 'panel4'
 
@@ -3956,6 +3957,14 @@ function App() {
                   <ListChecks size={14} />
                   <span>Painel 6: Contratações</span>
                 </button>
+                <button
+                  type="button"
+                  className={`gestao-panel-tab-btn ${gestaoPanelTab === 'diario' ? 'active' : ''}`}
+                  onClick={() => setGestaoPanelTab('diario')}
+                >
+                  <ListChecks size={14} />
+                  <span>Painel 7: Indicadores diários</span>
+                </button>
 
                 <div className="gestao-top-actions">
                   <button
@@ -4679,6 +4688,8 @@ function App() {
                   ? <ContratacoesMacro projectId={selectedProject} onConfigurar={() => { handleOpenGroupOrderModal(); setSettingsClassificationTab('contratacoes') }} />
                   : <div className="gestao-card"><p>Selecione um projeto para ver as contratações.</p></div>
               )}
+
+              {gestaoPanelTab === 'diario' && <DiarioIndicadores />}
 
               {gestaoPanelTab === 'panel5' && (
                 <div className={a4LayoutMode ? 'a4-landscape-container' : ''}>
