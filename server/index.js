@@ -29,6 +29,12 @@ import {
   obterConfig, aplicarPadrao, salvarGrupo, excluirGrupo, atrelarEtapas,
   soltarEtapa, confirmarEtapa, previaCusto, importarCusto, obterMacro,
 } from './contratacoes-db.js'
+import {
+  repoDiario, consultarDiario, obrasDiario, resumoDiario, obterRelatorioDiario, indicadoresDiario,
+} from './diario-db.js'
+import { criarCliente } from './diario-client.js'
+import { executarSincronizacaoDiario } from './diario-sync.js'
+import { validarData } from './diario-consulta.js'
 
 dotenv.config()
 
@@ -315,6 +321,32 @@ app.post('/api/contratacoes/custo/importar', rota((req) =>
     matriz: Array.isArray(req.body?.matriz) ? req.body.matriz : [],
   })))
 
+// ---- Diário de Obra ------------------------------------------------------
+const texto = (v) => String(v ?? '').trim()
+
+app.get('/api/diario/obras', rota(async () => ({ obras: await obrasDiario() })))
+app.get('/api/diario/summary', rota(async (req) => ({ summary: await resumoDiario(texto(req.query.obra)) })))
+app.get('/api/diario/data', rota((req) => {
+  const tabela = texto(req.query.table)
+  if (!tabela) throw Object.assign(new Error('Parâmetro table é obrigatório.'), { status: 400 })
+  return consultarDiario(tabela, {
+    obra: texto(req.query.obra),
+    search: texto(req.query.search),
+    page: Number(req.query.page) || 0,
+    pageSize: Number(req.query.limit) || 50,
+  })
+}))
+app.get('/api/diario/relatorios/:id', rota(async (req) => {
+  const detalhe = await obterRelatorioDiario(texto(req.params.id))
+  if (!detalhe) throw Object.assign(new Error('Relatório não encontrado.'), { status: 404 })
+  return detalhe
+}))
+app.get('/api/diario/indicadores', rota((req) => indicadoresDiario({
+  obra: texto(req.query.obra),
+  dataInicio: validarData(req.query.dataInicio, 'dataInicio'),
+  dataFim: validarData(req.query.dataFim, 'dataFim'),
+})))
+
 // Sync endpoint
 app.post('/api/sync-prevision', async (req, res) => {
   try {
@@ -364,6 +396,21 @@ async function start() {
         }
       })
       console.log(`Agendador CRON ativo com regra: ${schedule}`)
+    }
+
+    // Diário de Obra: só agenda se houver token. Padrão 21:00 (depois da sincronização da Prevision, às 20:00).
+    const tokenDiario = process.env.TOKEN_DIARIO
+    const scheduleDiario = process.env.CRON_SCHEDULE_DIARIO || '0 21 * * *'
+    if (tokenDiario && cron.validate(scheduleDiario)) {
+      cron.schedule(scheduleDiario, () => {
+        console.log(`[CRON] Sincronizando Diário de Obra (${new Date().toISOString()})...`)
+        executarSincronizacaoDiario({ client: criarCliente({ token: tokenDiario }), repo: repoDiario, log: console.log })
+          .then((r) => console.log(`[CRON] Diário: ${r.ignorado ? 'já em execução' : `${r.status}, ${r.novos} novos, ${r.alterados} alterados, ${r.removidos} removidos, ${r.erros.length} erros`}`))
+          .catch((err) => console.error('[CRON] Erro na sincronização do Diário:', err.message))
+      })
+      console.log(`Agendador do Diário de Obra ativo com regra: ${scheduleDiario}`)
+    } else if (!tokenDiario) {
+      console.log('TOKEN_DIARIO não definido: sincronização do Diário de Obra desativada.')
     }
 
     app.listen(PORT, '0.0.0.0', () => {

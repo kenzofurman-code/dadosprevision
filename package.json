@@ -14,6 +14,7 @@
     "sync:local": "node scripts/sync-prevision-local.mjs",
     "sync:restrictions": "node scripts/sync-prevision-local.mjs restrictions",
     "sync:analytics": "node scripts/sync-prevision-local.mjs analytics",
+    "sync:diario": "node scripts/sync-diario-local.mjs",
     "test:server": "node --test \"server/**/*.test.js\""
   },
   "dependencies": {

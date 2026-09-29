@@ -77,3 +77,11 @@ Consulte [deploy.md](deploy.md) para instalação, atualização, proxy Nginx, H
 ## Firebase e Vercel (legado)
 
 Os arquivos em `api/`, os utilitários Firebase e os scripts `sync:*` permanecem para compatibilidade com a implantação anterior. Eles usam Firestore, `FIREBASE_SERVICE_ACCOUNT_BASE64` e funções da Vercel, mas não fazem parte do caminho principal Docker/PostgreSQL. Novas implantações devem usar a stack da VPS descrita acima.
+
+## Diário de Obra
+
+O app sincroniza os diários de obra (RDO) da API do App Diário de Obra para o schema `diario` do Postgres.
+Requer `TOKEN_DIARIO` no `.env` (gerado no sistema do Diário em Cadastros > Empresa > Gerar token).
+A sincronização roda pelo cron do servidor (`CRON_SCHEDULE_DIARIO`, padrão 21:00) e é incremental: baixa só o que é novo ou mudou.
+Primeira carga (~20 min por causa do limite de 150 req/min): `docker compose exec app node scripts/sync-diario-local.mjs`
+ou, no desenvolvimento, `npm run sync:diario`. A aba **Dados Diário** consulta o banco; os indicadores estão na Gestão à Vista.
