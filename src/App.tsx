@@ -7,6 +7,7 @@ import {
   CalendarCheck,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
   ChartNoAxesCombined,
   Copy,
   Database,
@@ -40,6 +41,7 @@ import type { LucideIcon } from 'lucide-react'
 import './App.css'
 import { CurvasView } from './CurvasView'
 import { MegaView } from './MegaView'
+import { DiarioView } from './DiarioView'
 import { ContratacoesConfig } from './components/contratacoes/ContratacoesConfig'
 import { ContratacoesMacro } from './components/contratacoes/ContratacoesMacro'
 
@@ -56,6 +58,7 @@ type DataView =
   | 'dashboard'
   | 'curvas'
   | 'dados_mega'
+  | 'dados_diario'
   | 'gestao_a_vista'
 
 type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix' | 'panel5' | 'milestones' | 'contratacoes'
@@ -601,6 +604,7 @@ const columns: Record<DataView, Column[]> = {
   ],
   curvas: [],
   dados_mega: [],
+  dados_diario: [],
   gestao_a_vista: [],
 }
 
@@ -1023,7 +1027,7 @@ function App() {
   const [curveBaselines, setCurveBaselines] = useState<DataRecord[]>([])
   const [gestaoMilestones, setGestaoMilestones] = useState<DataRecord[]>([])
   const [activeView, setActiveView] = useState<DataView>('gestao_a_vista')
-  const lastDataView = useRef<Exclude<DataView, 'gestao_a_vista' | 'curvas' | 'dados_mega'>>('projects')
+  const lastDataView = useRef<Exclude<DataView, 'gestao_a_vista' | 'curvas' | 'dados_mega' | 'dados_diario'>>('projects')
   const [activityMode, setActivityMode] = useState<ActivityMode>('planning')
   const [budgetMode, setBudgetMode] = useState<BudgetMode>('reports')
   const [dashboardMode, setDashboardMode] = useState<DashboardMode>('general')
@@ -3343,6 +3347,7 @@ function App() {
     printWindow.focus()
   }
 
+  const isTelaExterna = activeView === 'dados_mega' || activeView === 'dados_diario'
   const isMilestoneDashboard = activeView === 'gestao_a_vista' && gestaoPanelTab === 'milestones'
   const activeTab = isMilestoneDashboard
     ? { label: 'Dashboard de Marcos', icon: Flag }
@@ -3350,6 +3355,8 @@ function App() {
       ? { label: 'Curvas', icon: TrendingUp }
       : activeView === 'dados_mega'
         ? { label: 'Dados Mega', icon: Layers3 }
+        : activeView === 'dados_diario'
+          ? { label: 'Dados Diário', icon: ClipboardList }
         : tabs.find((tab) => tab.key === activeView) || tabs[0]
   const currentColumns =
     activeView === 'activities'
@@ -3365,7 +3372,7 @@ function App() {
               : columns[activeView]
 
   function changeView(view: DataView) {
-    if (view !== 'gestao_a_vista' && view !== 'curvas' && view !== 'dados_mega') lastDataView.current = view
+    if (view !== 'gestao_a_vista' && view !== 'curvas' && view !== 'dados_mega' && view !== 'dados_diario') lastDataView.current = view
     setActiveView(view)
     setPage(0)
     setSearch('')
@@ -3486,7 +3493,7 @@ function App() {
             Dashboard de Marcos
           </button>
           <button
-            className={`header-view-button ${activeView !== 'gestao_a_vista' && activeView !== 'curvas' && activeView !== 'dados_mega' ? 'active' : ''}`}
+            className={`header-view-button ${activeView !== 'gestao_a_vista' && activeView !== 'curvas' && activeView !== 'dados_mega' && activeView !== 'dados_diario' ? 'active' : ''}`}
             type="button"
             onClick={() => changeView(lastDataView.current)}
           >
@@ -3500,6 +3507,14 @@ function App() {
           >
             <Layers3 size={16} />
             Dados Mega
+          </button>
+          <button
+            className={`header-view-button ${activeView === 'dados_diario' ? 'active' : ''}`}
+            type="button"
+            onClick={() => changeView('dados_diario')}
+          >
+            <ClipboardList size={16} />
+            Dados Diário
           </button>
           <button type="button" onClick={synchronize} disabled={synchronizing}>
             <Database size={16} />
@@ -3520,7 +3535,7 @@ function App() {
         </div>
       </header>
 
-      {activeView !== 'curvas' && activeView !== 'dados_mega' && (
+      {activeView !== 'curvas' && !isTelaExterna && (
         <section className="summary" aria-label="Resumo da carteira">
           <div>
             <span>{integerFormatter.format(totals.projects)}</span>
@@ -3541,7 +3556,7 @@ function App() {
         </section>
       )}
 
-      {activeView !== 'gestao_a_vista' && activeView !== 'curvas' && activeView !== 'dados_mega' && (
+      {activeView !== 'gestao_a_vista' && activeView !== 'curvas' && !isTelaExterna && (
         <nav className="data-tabs" aria-label="Dados Prevision">
           {tabs
             .filter((tab) => tab.key !== 'gestao_a_vista')
@@ -3564,7 +3579,7 @@ function App() {
       )}
 
       <section className="workspace">
-        {activeView !== 'dados_mega' && (
+        {!isTelaExterna && (
           <div className="toolbar">
           <div className="view-title">
             <activeTab.icon size={18} />
@@ -3864,9 +3879,11 @@ function App() {
           <div className={`feedback ${error ? 'error' : 'success'}`}>{error || message}</div>
         )}
 
-        <div className={`table-panel ${activeView === 'dashboard' && dashboardMode === 'cff' ? 'cff-panel' : activeView === 'gestao_a_vista' ? 'gestao-panel' : activeView === 'dados_mega' ? 'mega-panel' : ''}`} aria-live="polite">
+        <div className={`table-panel ${activeView === 'dashboard' && dashboardMode === 'cff' ? 'cff-panel' : activeView === 'gestao_a_vista' ? 'gestao-panel' : isTelaExterna ? 'mega-panel' : ''}`} aria-live="polite">
           {activeView === 'dados_mega' ? (
             <MegaView />
+          ) : activeView === 'dados_diario' ? (
+            <DiarioView />
           ) : loading ? (
             <div className="state-message">
               <RefreshCw size={20} className="spin" />
@@ -5642,7 +5659,7 @@ function App() {
           )}
         </div>
 
-        {activeView !== 'projects' && activeView !== 'gestao_a_vista' && activeView !== 'curvas' && activeView !== 'dados_mega' && (
+        {activeView !== 'projects' && activeView !== 'gestao_a_vista' && activeView !== 'curvas' && !isTelaExterna && (
           <footer className="pagination">
             <span>
               Página {page + 1} · {visibleRecords.length} registros exibidos
