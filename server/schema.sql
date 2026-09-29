@@ -538,3 +538,13 @@ INSERT INTO aprovacao_alcadas (tipo_documento, ordem, valor_minimo, aprovador, s
   ('Contrato de Cotação e Materiais', 2, 50000, 'Rafael Medeiros', 'Ricardo Kitamura'),
   ('Contrato de Cotação e Materiais', 3, 100000, 'Filipe Biscaia Demeterco', NULL)
 ON CONFLICT (tipo_documento, ordem) DO NOTHING;
+
+-- Revisão 2026-09-29: lead time (solicitação → entrega em obra) e levantamento.
+ALTER TABLE contratacao_grupos ADD COLUMN IF NOT EXISTS lead_time INTEGER;
+ALTER TABLE contratacao_grupos ADD COLUMN IF NOT EXISTS levantamento INTEGER;
+UPDATE contratacao_grupos
+   SET lead_time = CASE WHEN tipo = 'MATERIAL'
+                        THEN prazo_solicitacao + prazo_negociacao + prazo_emissao + prazo_entrega
+                        ELSE prazo_entrega + prazo_negociacao + prazo_emissao END,
+       levantamento = prazo_levantamento
+ WHERE lead_time IS NULL;

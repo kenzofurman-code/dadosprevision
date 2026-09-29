@@ -1,6 +1,6 @@
 export type Tipo = 'MATERIAL' | 'MAO_DE_OBRA'
 export interface EtapaGrupo { codigo_etapa: string; situacao: 'CONFIRMADO' | 'SUGERIDO'; nome_padrao: string | null; nome_obra: string | null; origem_nivel4: string | null; custo_projetado: number | null }
-export interface Grupo { id?: number; tipo: Tipo; item: string; insumos: string | null; pacote_servicos: string | null; ordem: number; prazo_levantamento: number; prazo_solicitacao: number; prazo_negociacao: number; prazo_emissao: number; prazo_entrega: number; etapas?: EtapaGrupo[] }
+export interface Grupo { id?: number; tipo: Tipo; item: string; insumos: string | null; pacote_servicos: string | null; ordem: number; lead_time: number; levantamento: number; etapas?: EtapaGrupo[] }
 export interface Pendencia { codigo_etapa: string; nome: string; custo_projetado: number | null; sugestao: { grupo_id: number; item: string; codigo_padrao: string } | null }
 export interface Config { aplicado: boolean; grupos: Grupo[]; pendencias: Pendencia[]; importacao: { referencia: string; total: string; importado_em: string; arquivo: string | null } | null; orcamentoTotal: number }
 export interface Previa { itens: { codigo_etapa: string; custo_projetado: number }[]; total: number; ignoradas: number; erros: { linha: number; motivo: string }[]; foraDoOrcamento: string[]; totalAnterior: number | null }

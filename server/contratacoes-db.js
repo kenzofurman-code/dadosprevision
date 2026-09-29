@@ -32,6 +32,12 @@ export async function carregarPadraoSeVazio() {
       }
     }
   })
+  // O UPDATE do schema.sql roda antes da carga; aqui o padrão recém-carregado ganha o lead time.
+  await query(`UPDATE contratacao_grupos SET
+      lead_time = CASE WHEN tipo = 'MATERIAL' THEN prazo_solicitacao + prazo_negociacao + prazo_emissao + prazo_entrega
+                       ELSE prazo_entrega + prazo_negociacao + prazo_emissao END,
+      levantamento = prazo_levantamento
+    WHERE lead_time IS NULL`)
   return PADRAO.grupos.length
 }
 
@@ -127,10 +133,10 @@ export async function aplicarPadrao(projetoId, { restaurar = false } = {}) {
     for (const g of padrao) {
       const { rows: [novo] } = await q(
         `INSERT INTO contratacao_grupos (projeto_id, padrao_grupo_id, tipo, item, insumos, pacote_servicos, ordem,
-           prazo_levantamento, prazo_solicitacao, prazo_negociacao, prazo_emissao, prazo_entrega)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+           prazo_levantamento, prazo_solicitacao, prazo_negociacao, prazo_emissao, prazo_entrega, lead_time, levantamento)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
         [projetoId, g.id, g.tipo, g.item, g.insumos, g.pacote_servicos, g.ordem, g.prazo_levantamento,
-          g.prazo_solicitacao, g.prazo_negociacao, g.prazo_emissao, g.prazo_entrega],
+          g.prazo_solicitacao, g.prazo_negociacao, g.prazo_emissao, g.prazo_entrega, g.lead_time, g.levantamento],
       )
       idPorOrdem.set(g.ordem, novo.id)
     }
@@ -146,13 +152,13 @@ export async function aplicarPadrao(projetoId, { restaurar = false } = {}) {
   })
 }
 
-const CAMPOS_GRUPO = ['tipo', 'item', 'insumos', 'pacote_servicos', 'ordem', 'prazo_levantamento',
-  'prazo_solicitacao', 'prazo_negociacao', 'prazo_emissao', 'prazo_entrega']
+const CAMPOS_GRUPO = ['tipo', 'item', 'insumos', 'pacote_servicos', 'ordem', 'lead_time', 'levantamento']
+const CAMPOS_NUMERICOS = new Set(['ordem', 'lead_time', 'levantamento'])
 
 export async function salvarGrupo(projetoId, grupo) {
   if (!grupo.item || !String(grupo.item).trim()) throw Object.assign(new Error('Informe o nome do grupo.'), { status: 400 })
   if (!['MATERIAL', 'MAO_DE_OBRA'].includes(grupo.tipo)) throw Object.assign(new Error('Tipo deve ser MATERIAL ou MAO_DE_OBRA.'), { status: 400 })
-  const valores = CAMPOS_GRUPO.map((c) => (c.startsWith('prazo_') || c === 'ordem' ? Math.max(0, Number(grupo[c]) || 0) : grupo[c] ?? null))
+  const valores = CAMPOS_GRUPO.map((c) => (CAMPOS_NUMERICOS.has(c) ?Math.max(0, Number(grupo[c]) || 0) : grupo[c] ?? null))
   if (grupo.id) {
     const sets = CAMPOS_GRUPO.map((c, i) => `${c} = $${i + 3}`).join(', ')
     const { rowCount } = await query(

@@ -6,14 +6,12 @@ import './ContratacoesConfig.css'
 const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
 const fmt = (v: number | null | undefined) => (v === null || v === undefined ? '—' : moeda.format(v))
 const TIPO_LABEL: Record<Tipo, string> = { MATERIAL: 'Material', MAO_DE_OBRA: 'Mão de obra' }
-type CampoPrazo = 'prazo_levantamento' | 'prazo_solicitacao' | 'prazo_negociacao' | 'prazo_emissao' | 'prazo_entrega'
+type CampoPrazo = 'lead_time' | 'levantamento'
 const PRAZOS: { campo: CampoPrazo; label: string }[] = [
-  { campo: 'prazo_levantamento', label: 'Levant.' }, { campo: 'prazo_solicitacao', label: 'Solicit.' },
-  { campo: 'prazo_negociacao', label: 'Negoc.' }, { campo: 'prazo_emissao', label: 'Emissão' },
-  { campo: 'prazo_entrega', label: 'Entrega' },
+  { campo: 'lead_time', label: 'Lead time' }, { campo: 'levantamento', label: 'Levantamento' },
 ]
 const novoGrupo = (tipo: Tipo, ordem: number): Grupo => ({ tipo, item: '', insumos: null, pacote_servicos: null, ordem,
-  prazo_levantamento: 15, prazo_solicitacao: 15, prazo_negociacao: 15, prazo_emissao: 10, prazo_entrega: 5 })
+  lead_time: 45, levantamento: 15 })
 
 type Aba = 'grupos' | 'pendencias' | 'custo'
 
@@ -177,7 +175,7 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
             <div key={tipo} className="cc-bloco">
               <h4>{TIPO_LABEL[tipo]}</h4>
               <table className="cc-tabela">
-                <thead><tr><th>Grupo</th><th>Pacote</th><th>Prazos (dias)</th><th className="cc-num">Etapas</th><th className="cc-num">Projetado</th><th></th></tr></thead>
+                <thead><tr><th>Grupo</th><th>Pacote</th><th className="cc-num">Lead time (dias)</th><th className="cc-num">Etapas</th><th className="cc-num">Projetado</th><th></th></tr></thead>
                 <tbody>
                   {config.grupos.filter((g) => g.tipo === tipo).map((g) => {
                     const etapas = g.etapas || []
@@ -192,7 +190,7 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
                             {aConfirmar ? <span className="cc-chip cc-sugerido">{aConfirmar} a confirmar</span> : null}
                           </td>
                           <td>{g.pacote_servicos || '—'}</td>
-                          <td className="cc-mono">{PRAZOS.map((p) => g[p.campo]).join(' / ')}</td>
+                          <td className="cc-num">{g.lead_time}</td>
                           <td className="cc-num">{etapas.length || <span className="cc-chip cc-alerta">sem etapas</span>}</td>
                           <td className="cc-num">{config.importacao ? fmt(projetado) : '—'}</td>
                           <td className="cc-acoes-linha" onClick={(e) => e.stopPropagation()}>
