@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 import { query, withTransaction } from './db.js'
 import {
   etapaParaMega, nivelDoCodigo, resolverEtapasPadrao, expandirParaNivel5,
-  sugestoesPorNome, lerCustoProjetado, calcularMacro,
+  sugestoesPorNome, lerCustoProjetado, calcularMacro, hojeNoBrasil,
 } from './contratacoes.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -250,18 +250,22 @@ async function obraDoProjeto(projetoId) {
 async function valoresPorEtapa(obra) {
   const [itens, realizado] = await Promise.all([
     query(
-      `WITH etapa_item AS (
+      `WITH etapa_distinta AS (
          SELECT DISTINCT codigo_solicitacao, sequencial_item, codigo_etapa
          FROM mega.solicitacoes_por_etapa WHERE obra = $1 AND codigo_etapa IS NOT NULL
+       ), etapa_item AS (
+         -- Item ligado a várias etapas: o Mega não diz quanto vai para cada uma,
+         -- então o valor é dividido igualmente (senão conta mais de uma vez).
+         SELECT *, COUNT(*) OVER (PARTITION BY codigo_solicitacao, sequencial_item) AS n_etapas FROM etapa_distinta
        ), item AS (
          SELECT solicitacao, sequencia, MAX(valor_total) AS valor,
                 BOOL_OR(cod_pedido IS NOT NULL) AS tem_pedido, BOOL_OR(cod_contrato IS NOT NULL) AS tem_contrato
          FROM mega.visualizacao_itens WHERE obra = $1 GROUP BY solicitacao, sequencia
        )
        SELECT e.codigo_etapa,
-              SUM(COALESCE(i.valor, 0)) AS solicitado,
-              SUM(COALESCE(i.valor, 0)) FILTER (WHERE i.tem_pedido) AS pedido,
-              SUM(COALESCE(i.valor, 0)) FILTER (WHERE i.tem_contrato) AS contratado
+              SUM(COALESCE(i.valor, 0) / e.n_etapas) AS solicitado,
+              SUM(COALESCE(i.valor, 0) / e.n_etapas) FILTER (WHERE i.tem_pedido) AS pedido,
+              SUM(COALESCE(i.valor, 0) / e.n_etapas) FILTER (WHERE i.tem_contrato) AS contratado
        FROM etapa_item e
        JOIN item i ON i.solicitacao::text = e.codigo_solicitacao::text AND i.sequencia::text = e.sequencial_item::text
        GROUP BY e.codigo_etapa`, [obra]),
@@ -303,7 +307,7 @@ async function inicioPorEtapa(projetoId) {
   return mapa
 }
 
-export async function obterMacro(projetoId, hoje = new Date().toISOString().slice(0, 10)) {
+export async function obterMacro(projetoId, hoje = hojeNoBrasil()) {
   const obra = await obraDoProjeto(projetoId)
   if (!obra) return { obra: null, motivo: 'Este projeto não tem obra do Mega vinculada.' }
   const importacao = await ultimaImportacao(projetoId)

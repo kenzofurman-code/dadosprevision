@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   normalizarNome, nivelDoCodigo, etapaParaMega, resolverEtapasPadrao,
-  expandirParaNivel5, sugestoesPorNome, lerCustoProjetado, calcularMacro, subtrairDias,
+  expandirParaNivel5, sugestoesPorNome, lerCustoProjetado, calcularMacro, subtrairDias, hojeNoBrasil,
 } from './contratacoes.js'
 
 test('normalizarNome ignora acento, caixa e espaços extras', () => {
@@ -201,4 +201,9 @@ test('macro: resumo soma a obra e conta sinais', () => {
   })
   assert.deepEqual([r.resumo.projetado, r.resumo.lancado, r.resumo.falta], [150, 20, 130])
   assert.equal(r.resumo.porSinal.SEM_DATA, 2)
+})
+
+test('hojeNoBrasil usa o fuso de São Paulo, não UTC', () => {
+  assert.equal(hojeNoBrasil(new Date('2026-09-30T01:30:00Z')), '2026-09-29')
+  assert.equal(hojeNoBrasil(new Date('2026-09-30T12:00:00Z')), '2026-09-30')
 })

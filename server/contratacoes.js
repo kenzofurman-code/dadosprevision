@@ -204,3 +204,8 @@ export function calcularMacro({ grupos, projetado, valores, inicio, hoje }) {
   const total = (f) => linhas.reduce((s, l) => s + l[f], 0)
   return { grupos: linhas, resumo: { projetado: total('projetado'), lancado: total('lancado'), falta: total('falta'), porSinal } }
 }
+
+// Data de hoje (AAAA-MM-DD) no fuso das obras; em UTC viraria o dia às 21h.
+export function hojeNoBrasil(agora = new Date()) {
+  return agora.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' })
+}
