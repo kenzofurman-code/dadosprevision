@@ -4,9 +4,15 @@ Data: 2026-09-29
 
 ## Objetivo
 
-Nova aba **Dados Diário** com os diários de obra (RDO) de todas as obras, extraídos da API externa do
-App Diário de Obra. Primeira versão: **histórico/consulta** e **indicadores**. Fica para depois:
-cruzar com projetos da Prevision e obras do Mega.
+Trazer os diários de obra (RDO) de todas as obras, extraídos da API externa do App Diário de Obra, em duas
+entregas:
+
+1. Aba **Dados Diário** — tela de consulta ao banco, no mesmo padrão das telas de dados do Mega
+   (`dados_mega`): tabelas navegáveis, filtro por obra, busca, paginação, colunas configuráveis.
+2. Painel de **indicadores diários de obras** dentro da **Gestão à Vista** (efetivo, clima/dias parados,
+   ocorrências, preenchimento).
+
+Fica para depois: cruzar obras do Diário com projetos da Prevision e obras do Mega.
 
 ## Fonte de dados (verificado em 2026-09-29 com o token real)
 
@@ -63,21 +69,34 @@ cruzar com projetos da Prevision e obras do Mega.
   original é preservado.
 
 ### 3. API — `/api/diario/*`
-- `GET /obras` — obras com totais e última data.
-- `GET /relatorios?obra&dataInicio&dataFim&status&page&limit` — lista paginada.
-- `GET /relatorios/:id` — diário completo (filhas + fotos).
-- `GET /indicadores?obra&dataInicio&dataFim` — agregados: efetivo por dia (e por empreiteira/função),
-  clima e dias parados, ocorrências por tag, preenchimento (por status, dias sem diário, atraso de aprovação).
-- Filtros validados; `obra` opcional (todas).
+Consulta (aba Dados Diário), no padrão de `/api/mega/*`:
+- `GET /obras` — obras do Diário com totais e última data.
+- `GET /summary?obra` — contagens por tabela e data da última carga.
+- `GET /data?table&obra&page&limit&search` — tabela paginada; `table` numa lista fixa (relatórios, atividades,
+  mão de obra, equipamentos, ocorrências, fotos, cargas); busca e ordenação por whitelist de colunas.
+- `GET /relatorios/:id` — diário completo (filhas + fotos), usado no modal de detalhe.
 
-### 4. Tela — `src/DiarioView.tsx` + `src/components/diario/*`
-- Aba **Dados Diário** ao lado de Dados Mega (mesmo padrão de `dados_mega` em `App.tsx`).
-- Filtro global: obra (uma/todas) e período.
-- Seção Indicadores: cartões e gráficos SVG (padrão dos gráficos existentes), quatro grupos:
-  efetivo por dia, clima e dias parados, ocorrências, preenchimento.
-- Seção Histórico: lista de diários; detalhe com atividades, efetivo, equipamentos, clima, ocorrências,
-  comentários e fotos (miniatura que abre a original).
-- Estilo segue tokens e CSS existentes.
+Indicadores (Gestão à Vista):
+- `GET /indicadores?obra&dataInicio&dataFim` — agregados: efetivo por dia (e por empreiteira/função), clima e
+  dias parados, ocorrências por tag, preenchimento (por status, dias sem diário, atraso de aprovação).
+- `obra` opcional (todas); filtros validados.
+
+### 4. Telas
+**4a. Aba Dados Diário — `src/DiarioView.tsx` + `src/components/diario/*`**
+- Registrada como `dados_diario` ao lado de `dados_mega` em `App.tsx`, replicando o padrão do `MegaView`:
+  sub-abas por tabela, seletor de obra, busca, paginação, escolha de colunas e visões salvas (reaproveitando o
+  que for genérico do Mega sem refatorá-lo; o que for específico do Mega é duplicado de forma enxuta).
+- Cada linha de relatório abre um modal com o diário completo: atividades, efetivo, equipamentos, clima,
+  ocorrências, comentários e fotos (miniatura abre a original).
+
+**4b. Gestão à Vista — painel "Indicadores diários"**
+- Nova sub-aba do painel (novo valor em `GestaoPanelTab`, ao lado de `contratacoes`), componente próprio em
+  `src/components/diario/DiarioIndicadores.tsx`.
+- Os painéis da Gestão à Vista são por projeto Prevision, e obra do Diário ainda não está ligada a projeto;
+  por isso este painel tem seletor de obra do Diário e período próprios (padrão: todas as obras, últimos 30 dias).
+  Quando o cruzamento existir, o seletor pode passar a seguir o projeto selecionado.
+- Quatro grupos: efetivo por dia, clima e dias parados, ocorrências, preenchimento. Cartões e gráficos SVG no
+  padrão dos gráficos existentes.
 
 ### 5. Infra
 - `.env.example`: `TOKEN_DIARIO`, `CRON_SCHEDULE_DIARIO`.
@@ -89,7 +108,7 @@ cruzar com projetos da Prevision e obras do Mega.
 - `node --test` em `server/diario-*.test.js`: mapeamento do JSON → linhas (com fixtures pequenas tiradas dos
   JSONs reais), relatório novo × alterado × removido, duas ocorrências na mesma data, 429 com repetição, falha
   de uma obra sem derrubar as outras, normalização de empreiteira, cálculo dos indicadores.
-- Interface verificada no navegador com dados reais; `npm run build` e `npm run lint` limpos.
+- Interface (aba Dados Diário e painel da Gestão à Vista) verificada no navegador com dados reais; `npm run build` e `npm run lint` limpos.
 
 ## Fora de escopo
 Cruzamento com Prevision/Mega; controle de material e checklist (vazios); edição de dados; download de mídia;
