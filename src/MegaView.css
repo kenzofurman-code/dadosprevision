@@ -840,7 +840,6 @@
 
 .mega-column-item input[type="checkbox"] {
   margin-top: 3px;
-  accent-color: var(--primary-color, #1e40af);
   cursor: pointer;
 }
 

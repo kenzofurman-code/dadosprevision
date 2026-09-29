@@ -803,10 +803,7 @@
 }
 
 .curvas-setting-visible input {
-  width: 15px;
-  height: 15px;
   padding: 0;
-  accent-color: #173f38;
 }
 
 .curvas-setting-swatch {

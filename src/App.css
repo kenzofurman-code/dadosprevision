@@ -172,7 +172,7 @@ button:disabled {
 .project-filter-list { display: grid; gap: 2px; max-height: 360px; overflow: auto; padding: 6px; border: 1px solid #e0e8e4; border-radius: 8px; background: #fbfdfc; }
 .project-filter-item { display: flex; align-items: center; gap: 9px; padding: 8px; border-radius: 6px; color: #29443d; font-size: 13px; cursor: pointer; }
 .project-filter-item:hover { background: #edf5f2; }
-.project-filter-item input { accent-color: #16715f; }
+
 .project-filter-empty { padding: 12px 8px; color: #788984; font-size: 12px; }
 .project-filter-modal-footer { justify-content: flex-end; border-top: 1px solid #e1e8e5; border-bottom: 0; }
 
@@ -1552,7 +1552,6 @@ td strong {
   height: 14px;
   min-width: 14px;
   margin: 0;
-  accent-color: #38bdf8;
 }
 
 .gestao-service-drag {
@@ -2011,12 +2010,7 @@ td strong {
 }
 
 .matrix-item-label input[type='checkbox'] {
-  width: 16px;
-  height: 16px;
-  min-width: 16px;
-  flex: 0 0 16px;
   margin: 0;
-  accent-color: #173f38;
 }
 
 .matrix-item-label span {
