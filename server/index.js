@@ -27,7 +27,7 @@ import {
 import { syncProjects, syncRestrictions } from './sync.js'
 import {
   obterConfig, aplicarPadrao, salvarGrupo, excluirGrupo, atrelarEtapas,
-  soltarEtapa, confirmarEtapa, previaCusto, importarCusto,
+  soltarEtapa, confirmarEtapa, previaCusto, importarCusto, obterMacro,
 } from './contratacoes-db.js'
 
 dotenv.config()
@@ -283,6 +283,7 @@ const rota = (fn) => async (req, res) => {
   }
 }
 
+app.get('/api/contratacoes/macro', rota((req) => obterMacro(exigirProjeto(req.query.projectId))))
 app.get('/api/contratacoes/config', rota((req) => obterConfig(exigirProjeto(req.query.projectId))))
 app.post('/api/contratacoes/aplicar-padrao', rota((req) =>
   aplicarPadrao(exigirProjeto(req.body?.projectId), { restaurar: Boolean(req.body?.restaurar) })))

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 import { query, withTransaction } from './db.js'
 import {
   etapaParaMega, nivelDoCodigo, resolverEtapasPadrao, expandirParaNivel5,
-  sugestoesPorNome, lerCustoProjetado,
+  sugestoesPorNome, lerCustoProjetado, calcularMacro,
 } from './contratacoes.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -236,4 +236,89 @@ export async function importarCusto(projetoId, { referencia, arquivo, matriz }) 
     }
     return { id: imp.id, total: lido.total, itens: lido.itens.length }
   })
+}
+
+async function obraDoProjeto(projetoId) {
+  const { rows } = await query('SELECT obra FROM mega.obra_projeto WHERE id_prevision = $1 LIMIT 1', [projetoId])
+  return rows[0]?.obra || null
+}
+
+// Valores por etapa (formato Mega). Solicitado = valor do item da solicitação;
+// pedido/contratado = o mesmo valor dos itens que já têm pedido/contrato (o total
+// do Pedido de Compra repete o total do pedido em cada item e não serve para somar);
+// realizado = apropriação por cod_estruturado.
+async function valoresPorEtapa(obra) {
+  const [itens, realizado] = await Promise.all([
+    query(
+      `WITH etapa_item AS (
+         SELECT DISTINCT codigo_solicitacao, sequencial_item, codigo_etapa
+         FROM mega.solicitacoes_por_etapa WHERE obra = $1 AND codigo_etapa IS NOT NULL
+       ), item AS (
+         SELECT solicitacao, sequencia, MAX(valor_total) AS valor,
+                BOOL_OR(cod_pedido IS NOT NULL) AS tem_pedido, BOOL_OR(cod_contrato IS NOT NULL) AS tem_contrato
+         FROM mega.visualizacao_itens WHERE obra = $1 GROUP BY solicitacao, sequencia
+       )
+       SELECT e.codigo_etapa,
+              SUM(COALESCE(i.valor, 0)) AS solicitado,
+              SUM(COALESCE(i.valor, 0)) FILTER (WHERE i.tem_pedido) AS pedido,
+              SUM(COALESCE(i.valor, 0)) FILTER (WHERE i.tem_contrato) AS contratado
+       FROM etapa_item e
+       JOIN item i ON i.solicitacao::text = e.codigo_solicitacao::text AND i.sequencia::text = e.sequencial_item::text
+       GROUP BY e.codigo_etapa`, [obra]),
+    query(
+      `SELECT raw_data->>'cod_estruturado' AS codigo_etapa, SUM(COALESCE(valor_apropriacao, 0)) AS realizado
+       FROM mega.analise_realizado WHERE obra = $1 AND raw_data ? 'cod_estruturado' GROUP BY 1`, [obra]),
+  ])
+  const mapa = new Map()
+  const pega = (c) => {
+    if (!mapa.has(c)) mapa.set(c, { solicitado: 0, pedido: 0, contratado: 0, realizado: 0 })
+    return mapa.get(c)
+  }
+  for (const r of itens.rows) {
+    const c = etapaParaMega(r.codigo_etapa)
+    if (!c) continue
+    const v = pega(c)
+    v.solicitado += Number(r.solicitado) || 0
+    v.pedido += Number(r.pedido) || 0
+    v.contratado += Number(r.contratado) || 0
+  }
+  for (const r of realizado.rows) {
+    const c = etapaParaMega(r.codigo_etapa)
+    if (c) pega(c).realizado += Number(r.realizado) || 0
+  }
+  return mapa
+}
+
+// Menor início no cronograma por etapa, via orçamento (pesos_orcamento.id_atividade).
+async function inicioPorEtapa(projetoId) {
+  const { rows } = await query(
+    `SELECT p.codigo, TO_CHAR(MIN(a.data_inicio), 'YYYY-MM-DD') AS inicio
+     FROM pesos_orcamento p JOIN atividades a ON a.projeto_id = p.projeto_id AND a.id_prevision = p.id_atividade
+     WHERE p.projeto_id = $1 AND a.data_inicio IS NOT NULL GROUP BY p.codigo`, [projetoId])
+  const mapa = new Map()
+  for (const r of rows) {
+    const c = etapaParaMega(r.codigo)
+    if (c && (!mapa.has(c) || r.inicio < mapa.get(c))) mapa.set(c, r.inicio)
+  }
+  return mapa
+}
+
+export async function obterMacro(projetoId, hoje = new Date().toISOString().slice(0, 10)) {
+  const obra = await obraDoProjeto(projetoId)
+  if (!obra) return { obra: null, motivo: 'Este projeto não tem obra do Mega vinculada.' }
+  const importacao = await ultimaImportacao(projetoId)
+  const [projetado, valores, inicio, gruposRes, etapasRes] = await Promise.all([
+    custosDaImportacao(importacao?.id),
+    valoresPorEtapa(obra),
+    inicioPorEtapa(projetoId),
+    query('SELECT id, tipo, item, insumos, lead_time FROM contratacao_grupos WHERE projeto_id = $1 ORDER BY ordem, id', [projetoId]),
+    query('SELECT grupo_id, codigo_etapa FROM contratacao_grupo_etapas WHERE projeto_id = $1', [projetoId]),
+  ])
+  const etapasDo = new Map()
+  for (const e of etapasRes.rows) {
+    if (!etapasDo.has(e.grupo_id)) etapasDo.set(e.grupo_id, [])
+    etapasDo.get(e.grupo_id).push(e.codigo_etapa)
+  }
+  const grupos = gruposRes.rows.map((g) => ({ ...g, lead_time: Number(g.lead_time) || 0, etapas: etapasDo.get(g.id) || [] }))
+  return { obra, importacao, ...calcularMacro({ grupos, projetado, valores, inicio, hoje }) }
 }
