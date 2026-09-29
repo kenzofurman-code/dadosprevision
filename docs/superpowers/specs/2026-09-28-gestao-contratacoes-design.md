@@ -177,3 +177,31 @@ explícita do usuário no momento.
 - Alçadas por quantidade/estoque (solicitações) — só sequência típica.
 - Campos manuais da aba Mão de Obra (responsável, ação prevista).
 - Obras além do POTY (a estrutura já suporta; ativação depois).
+
+## 11. Revisão de 2026-09-29 (após uso da etapa 1)
+
+Decisões do usuário que **substituem** trechos anteriores desta spec:
+
+- **Local:** o Painel 6 "Contratações" é o painel de acompanhamento (macro e
+  micro). A configuração da etapa 1 (grupos, etapas fora de grupo, importação
+  do custo projetado) muda para as **configurações da Gestão à Vista**.
+- **Prazos → lead time:** cada grupo tem `lead_time` (dias corridos da
+  solicitação até a entrega em obra) e `levantamento` (informativo, fora do
+  cálculo). Padrão: soma das fases da planilha do Nizza — material:
+  solicitação + negociação + emissão OC + entrega (45 dias); mão de obra:
+  entrega do QC + negociação + emissão do contrato. Editável por grupo. Os 5
+  prazos por fase saem da tela.
+- **Macro (substitui "fase feita por cobertura" e "atraso por fase"):** por
+  grupo, custo projetado; % do projetado solicitado, pedido, contratado e
+  realizado; lançado; falta lançar; início (1ª etapa no cronograma);
+  data-limite de solicitação = início − lead time. Sinalizador:
+  atrasado (passou da data-limite sem 100% solicitado), atenção (≤ 7 dias),
+  pendência (lançado 95–100% ou > 100%: rever projeção ou dados), no prazo,
+  concluído (100% realizado), sem projeção / sem data. Resumo da obra no topo.
+- **Micro:** por etapa (código, nome, %), uma linha por item: solicitação
+  (nº, data), insumo, quantidade, trilha de aprovações (pessoa e data por
+  passo), mapa de cotação, pedido/contrato (nº, fornecedor, valor), data da
+  nota, com quem está parado e há quantos dias, lead time real × do grupo.
+- **Checkbox:** padrão minimalista (pequeno, neutro) no site inteiro.
+- **Entrega:** etapa 2 = macro + mudança da configuração + checkbox;
+  etapa 3 = micro.
