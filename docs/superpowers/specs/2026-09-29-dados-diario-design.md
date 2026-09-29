@@ -33,9 +33,14 @@ Fica para depois: cruzar obras do Diário com projetos da Prevision e obras do M
 
 - Sincronizar para o Postgres (schema `diario`) em carga periódica; a tela consulta o banco, nunca a API.
 - Tabelas normalizadas para o que os indicadores usam + JSON bruto do relatório (nenhum campo se perde).
-- Dia parado = tag de ocorrência ("Dia parado" e correlatas), sem regra de negócio adicional.
+- Três sinais de dia ruim, gravados no relatório na sincronização, sem regra de negócio adicional:
+  **dia parado** = alguma ocorrência com tag que começa com "PARALISAÇÃO" (as tags reais são
+  "PARALISAÇÃO – CHUVA (ACIMA 5 mm)", "PARALISAÇÃO – OUTROS", "PARALISAÇÃO – FISCALIZAÇÃO"; não existe tag
+  "Dia parado"); **dia chuvoso** = algum período ativo com clima "Chuvoso"; **dia impraticável** = algum
+  período ativo com condição "Impraticável".
 - "Dia sem diário" = dias corridos entre a primeira e a última data da obra sem relatório, sem descontar
   domingo/feriado; exibido como número informativo.
+- `horarioDeTrabalho` vem sempre nulo em todos os 2.099 relatórios: não é modelado (fica só no `raw`).
 - Relatórios em qualquer status (preenchendo, revisão, aprovado) entram; o status é filtro/indicador.
 
 ## Componentes
@@ -56,7 +61,7 @@ Fica para depois: cruzar obras do Diário com projetos da Prevision e obras do M
 ### 2. Banco — schema `diario` (criado no `initDb`, dono exclusivo deste sync)
 - `obra` (id da API, nome, status, totais, dados cadastrais, `modified`).
 - `relatorio` (`relatorio_id` PK, obra, `data` date, `data_fim`, `numero`, `dia_semana`, status id/descrição,
-  clima manhã/tarde/noite + condição + ativo, `indice_pluviometrico`, horário de trabalho, criado/modificado
+  clima manhã/tarde/noite + condição + ativo, `indice_pluviometrico`, `dia_parado`/`dia_chuvoso`/`dia_impraticavel`, criado/modificado
   por, `modified` da API, `removido_em`, `raw` jsonb).
 - `mao_obra` (relatório, função, quantidade, empreiteira, empreiteira normalizada).
 - `equipamento` (relatório, descrição, quantidade).
@@ -78,14 +83,14 @@ Consulta (aba Dados Diário), no padrão de `/api/mega/*`:
 
 Indicadores (Gestão à Vista):
 - `GET /indicadores?obra&dataInicio&dataFim` — agregados: efetivo por dia (e por empreiteira/função), clima e
-  dias parados, ocorrências por tag, preenchimento (por status, dias sem diário, atraso de aprovação).
+  dias parados, ocorrências por tag, preenchimento (por status, dias sem diário, pendentes de aprovação há mais de 7 dias).
 - `obra` opcional (todas); filtros validados.
 
 ### 4. Telas
 **4a. Aba Dados Diário — `src/DiarioView.tsx` + `src/components/diario/*`**
 - Registrada como `dados_diario` ao lado de `dados_mega` em `App.tsx`, replicando o padrão do `MegaView`:
-  sub-abas por tabela, seletor de obra, busca, paginação, escolha de colunas e visões salvas (reaproveitando o
-  que for genérico do Mega sem refatorá-lo; o que for específico do Mega é duplicado de forma enxuta).
+  sub-abas por tabela, seletor de obra, busca, paginação e escolha de colunas (reusa o `MegaColumnModal`, cujas
+  props são genéricas; a seleção fica no navegador). Visões salvas ficam para uma próxima versão.
 - Cada linha de relatório abre um modal com o diário completo: atividades, efetivo, equipamentos, clima,
   ocorrências, comentários e fotos (miniatura abre a original).
 
@@ -108,6 +113,8 @@ Indicadores (Gestão à Vista):
 - `node --test` em `server/diario-*.test.js`: mapeamento do JSON → linhas (com fixtures pequenas tiradas dos
   JSONs reais), relatório novo × alterado × removido, duas ocorrências na mesma data, 429 com repetição, falha
   de uma obra sem derrubar as outras, normalização de empreiteira, cálculo dos indicadores.
+- SQL (consulta e indicadores) é verificado contra um Postgres descartável em Docker (não há Postgres local
+  permanente); a montagem das consultas e os cálculos são funções puras testadas com `node --test`.
 - Interface (aba Dados Diário e painel da Gestão à Vista) verificada no navegador com dados reais; `npm run build` e `npm run lint` limpos.
 
 ## Fora de escopo
