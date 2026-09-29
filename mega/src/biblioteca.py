@@ -140,6 +140,7 @@ class Operador:
         segundos_sem_palavras = 0
         segundos_com_launcher = 0
         ultimo_clique_taskbar = 0
+        tentativas_restaurar = 0
         while time.time() < limite:
             img = self.tela()
             if self.responder_sessao_duplicada(img=img):
@@ -160,21 +161,25 @@ class Operador:
             # Se a janela estiver minimizada (tela com menos de 15 palavras e sem ancoras)
             # e o item "Mega ERP" estiver na barra de tarefas (Y >= 840):
             # Clicar no botao da barra de tarefas para restaurar a tela (com debounce de 8s).
-            if len(palavras) < 15 and (time.time() - ultimo_clique_taskbar > 8):
+            # CORRIGIDO 2026-09-29: antes clicava de novo 2s depois (+ Alt+Tab) se a
+            # tela ainda nao tinha desenhado; o 2o clique no item da barra MINIMIZA de
+            # novo e a janela ficava abrindo e fechando ate o timeout (obras 340 e 410).
+            # Agora: um gesto por tentativa, espera a tela desenhar, e alterna entre
+            # clicar no item e Alt+Tab nas tentativas seguintes.
+            if len(palavras) < 15 and (time.time() - ultimo_clique_taskbar > 15):
                 caixa_erp_tb = self.v.achar_texto("Mega ERP", img=img)
                 if caixa_erp_tb and caixa_erp_tb.y >= 840:
-                    self.log("   'Mega ERP' detectado na barra de tarefas com tela minimizada; clicando para focar/restaurar")
-                    cx, cy = centro(caixa_erp_tb)
+                    tentativas_restaurar += 1
                     try:
-                        self.pagina.mouse.click(cx, cy)
-                        ultimo_clique_taskbar = time.time()
-                        time.sleep(2)
-                        img_chk = self.tela()
-                        palavras_chk = [p for p in self.v.palavras_todas(img_chk) if p["conf"] >= 50]
-                        if len(palavras_chk) < 15:
+                        if tentativas_restaurar % 2 == 1:
+                            self.log("   'Mega ERP' minimizado na barra de tarefas; clicando uma vez para restaurar")
+                            cx, cy = centro(caixa_erp_tb)
                             self.pagina.mouse.click(cx, cy)
-                            time.sleep(1)
+                        else:
+                            self.log("   janela ainda minimizada; tentando Alt+Tab")
                             self.tecla("Alt+Tab", pausa=1.0)
+                        ultimo_clique_taskbar = time.time()
+                        time.sleep(6)
                     except Exception:
                         pass
 
@@ -585,6 +590,7 @@ class Operador:
                     inicio = time.time()
                     limite = inicio + 75    # com retentativa, nao vale esperar mais
                     snap_5s = False
+                    voltas = 0
                     while time.time() < limite:
                         # Diagnostico (2026-09-27): a janela as vezes nunca abre e a
                         # captura de falha so vem depois dos Escapes. Registrar a tela
@@ -593,8 +599,13 @@ class Operador:
                             snap_5s = True
                             self._snap_diag_salvar(destino, "5s")
                         img = self.tela()
-                        palavras = [p["texto"].lower() for p in self.v._palavras(img, escala=1.0)]
-                        texto_tela = " ".join(palavras)
+                        # CORRIGIDO 2026-09-29: com uma so leitura (escala 1.0) o OCR as
+                        # vezes nao le a janela, que JA esta aberta (capturas de 5s/75s da
+                        # obra 650). Leitura rapida a cada volta; a completa (todas as
+                        # variantes, bem mais pesada) a cada 3a volta.
+                        voltas += 1
+                        leitura = self.v.palavras_todas(img) if voltas % 3 == 0 else self.v._palavras(img, escala=1.0)
+                        texto_tela = " ".join(p["texto"].lower() for p in leitura)
                         if any(k in texto_tela for k in ("salvar como", "salvar", "ocultar pastas", "pastas")):
                             apareceu = True
                             break
