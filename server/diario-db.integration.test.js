@@ -7,8 +7,11 @@ import {
 import { mapearObra, mapearRelatorio } from './diario-map.js'
 
 // Só roda contra um banco descartável: nunca apaga dados de um banco real.
+// db.js dá prioridade a DATABASE_URL, então ela nunca é permitida aqui; o host precisa ser local.
+const hostLocal = !process.env.PGHOST || ['localhost', '127.0.0.1'].includes(process.env.PGHOST)
 const pular = process.env.DIARIO_TEST_DB !== '1' || !String(process.env.PGDATABASE || '').includes('teste')
-const opcoes = { skip: pular && 'defina DIARIO_TEST_DB=1 e PGDATABASE com "teste"' }
+  || Boolean(process.env.DATABASE_URL) || !hostLocal
+const opcoes = { skip: pular && 'defina DIARIO_TEST_DB=1, PGDATABASE com "teste", PGHOST local e sem DATABASE_URL' }
 
 after(() => pool.end())
 
