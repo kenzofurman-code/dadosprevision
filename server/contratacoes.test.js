@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   normalizarNome, nivelDoCodigo, etapaParaMega, resolverEtapasPadrao,
-  expandirParaNivel5, sugestoesPorNome, lerCustoProjetado,
+  expandirParaNivel5, sugestoesPorNome, lerCustoProjetado, calcularMacro, subtrairDias,
 } from './contratacoes.js'
 
 test('normalizarNome ignora acento, caixa e espaços extras', () => {
@@ -139,4 +139,66 @@ test('lerCustoProjetado: sem as colunas necessárias devolve erro claro', () => 
   const r = lerCustoProjetado([['A', 'B'], [1, 2]])
   assert.deepEqual(r.erros, [{ linha: 0, motivo: 'colunas "CÓDIGO" (ou "ETAPA") e "CUSTO PROJETADO" não encontradas' }])
   assert.deepEqual(r.itens, [])
+})
+
+test('subtrairDias trabalha só com a data', () => {
+  assert.equal(subtrairDias('2026-10-10', 45), '2026-08-26')
+  assert.equal(subtrairDias('2026-10-10', 0), '2026-10-10')
+})
+
+const base = (etapas, lead = 30) => ({ id: 1, tipo: 'MATERIAL', item: 'G', insumos: null, lead_time: lead, etapas })
+const macro = (grupo, { proj = {}, val = {}, ini = {}, hoje = '2026-09-29' } = {}) =>
+  calcularMacro({ grupos: [grupo], projetado: new Map(Object.entries(proj)),
+    valores: new Map(Object.entries(val)), inicio: new Map(Object.entries(ini)), hoje }).grupos[0]
+const v = (solicitado, pedido = 0, contratado = 0, realizado = 0) => ({ solicitado, pedido, contratado, realizado })
+
+test('macro: sem projeção não divide por zero', () => {
+  const g = macro(base([]))
+  assert.equal(g.sinal, 'SEM_PROJECAO')
+  assert.equal(g.pct.solicitado, null)
+})
+
+test('macro: percentuais e lançado pela fase mais avançada', () => {
+  const g = macro(base(['a', 'b']), { proj: { a: 600, b: 400 }, val: { a: v(300, 300, 0, 100), b: v(0, 0, 0, 200) }, ini: { a: '2027-01-10' } })
+  assert.deepEqual([g.projetado, g.solicitado, g.pedido, g.realizado, g.lancado, g.falta], [1000, 300, 300, 300, 500, 500])
+  assert.equal(g.pct.lancado, 0.5)
+  assert.equal(g.sinal, 'NO_PRAZO')
+})
+
+test('macro: atrasado quando passou do limite sem 100% solicitado', () => {
+  const g = macro(base(['a'], 30), { proj: { a: 100 }, val: { a: v(50) }, ini: { a: '2026-10-20' } })
+  assert.equal(g.limite, '2026-09-20')
+  assert.equal(g.sinal, 'ATRASADO')
+})
+
+test('macro: atenção a 7 dias ou menos do limite', () => {
+  const g = macro(base(['a'], 30), { proj: { a: 100 }, val: { a: v(50) }, ini: { a: '2026-11-04' } })
+  assert.equal(g.limite, '2026-10-05')
+  assert.equal(g.dias_ate_limite, 6)
+  assert.equal(g.sinal, 'ATENCAO')
+})
+
+test('macro: tudo solicitado não fica atrasado mesmo após o limite', () => {
+  const g = macro(base(['a'], 30), { proj: { a: 100 }, val: { a: v(100, 100) }, ini: { a: '2026-10-01' } })
+  assert.equal(g.sinal, 'NO_PRAZO')
+})
+
+test('macro: pendência entre 95% e 100% e acima de 100%', () => {
+  assert.equal(macro(base(['a']), { proj: { a: 100 }, val: { a: v(96) }, ini: { a: '2027-01-01' } }).sinal, 'PENDENCIA')
+  assert.equal(macro(base(['a']), { proj: { a: 100 }, val: { a: v(130) }, ini: { a: '2027-01-01' } }).sinal, 'PENDENCIA')
+})
+
+test('macro: concluído com 100% realizado; sem data sem cronograma', () => {
+  assert.equal(macro(base(['a']), { proj: { a: 100 }, val: { a: v(100, 100, 0, 100) } }).sinal, 'CONCLUIDO')
+  assert.equal(macro(base(['a']), { proj: { a: 100 }, val: { a: v(10) } }).sinal, 'SEM_DATA')
+})
+
+test('macro: resumo soma a obra e conta sinais', () => {
+  const r = calcularMacro({
+    grupos: [base(['a']), { ...base(['b']), id: 2 }],
+    projetado: new Map([['a', 100], ['b', 50]]), valores: new Map([['a', v(20)]]),
+    inicio: new Map(), hoje: '2026-09-29',
+  })
+  assert.deepEqual([r.resumo.projetado, r.resumo.lancado, r.resumo.falta], [150, 20, 130])
+  assert.equal(r.resumo.porSinal.SEM_DATA, 2)
 })

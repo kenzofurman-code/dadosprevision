@@ -154,3 +154,53 @@ export function lerCustoProjetado(matriz) {
   const total = Math.round(itens.reduce((s, i) => s + i.custo_projetado, 0) * 100) / 100
   return { itens, total, ignoradas, erros }
 }
+
+export function subtrairDias(dataISO, dias) {
+  const d = new Date(`${String(dataISO).slice(0, 10)}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() - (Number(dias) || 0))
+  return d.toISOString().slice(0, 10)
+}
+
+const diasEntre = (de, ate) => Math.round((Date.parse(`${ate}T00:00:00Z`) - Date.parse(`${de}T00:00:00Z`)) / 86400000)
+const PRIORIDADE = ['ATRASADO', 'ATENCAO', 'PENDENCIA', 'NO_PRAZO', 'SEM_DATA', 'SEM_PROJECAO', 'CONCLUIDO']
+const FASES = ['solicitado', 'pedido', 'contratado', 'realizado']
+
+// Painel macro: por grupo, % do custo projetado em cada fase e sinalizador.
+// Data-limite de solicitação = menor início das etapas no cronograma - lead time.
+export function calcularMacro({ grupos, projetado, valores, inicio, hoje }) {
+  const linhas = grupos.map((g) => {
+    const soma = { projetado: 0, solicitado: 0, pedido: 0, contratado: 0, realizado: 0, lancado: 0 }
+    let menorInicio = null
+    for (const e of g.etapas) {
+      const val = valores.get(e) || {}
+      soma.projetado += projetado.get(e) || 0
+      for (const f of FASES) soma[f] += Number(val[f]) || 0
+      soma.lancado += Math.max(0, ...FASES.map((f) => Number(val[f]) || 0))
+      const ini = inicio.get(e)
+      if (ini && (!menorInicio || ini < menorInicio)) menorInicio = ini
+    }
+    const P = soma.projetado
+    const pct = Object.fromEntries([...FASES, 'lancado'].map((f) => [f, P > 0 ? soma[f] / P : null]))
+    const limite = menorInicio ? subtrairDias(menorInicio, g.lead_time) : null
+    const diasAteLimite = limite ? diasEntre(hoje, limite) : null
+    let sinal
+    if (P <= 0) sinal = 'SEM_PROJECAO'
+    else if (soma.lancado > P) sinal = 'PENDENCIA'
+    else if (soma.realizado >= P) sinal = 'CONCLUIDO'
+    else if (soma.lancado >= 0.95 * P && soma.lancado < P) sinal = 'PENDENCIA'
+    else if (!limite) sinal = 'SEM_DATA'
+    else if (soma.solicitado < P && diasAteLimite < 0) sinal = 'ATRASADO'
+    else if (soma.solicitado < P && diasAteLimite <= 7) sinal = 'ATENCAO'
+    else sinal = 'NO_PRAZO'
+    return {
+      id: g.id, tipo: g.tipo, item: g.item, insumos: g.insumos, lead_time: g.lead_time, etapas: g.etapas.length,
+      ...soma, falta: Math.max(0, P - soma.lancado), pct, inicio: menorInicio, limite, dias_ate_limite: diasAteLimite, sinal,
+    }
+  })
+  linhas.sort((a, b) => PRIORIDADE.indexOf(a.sinal) - PRIORIDADE.indexOf(b.sinal)
+    || String(a.limite ?? '9').localeCompare(String(b.limite ?? '9')))
+  const porSinal = Object.fromEntries(PRIORIDADE.map((s) => [s, 0]))
+  for (const l of linhas) porSinal[l.sinal]++
+  const total = (f) => linhas.reduce((s, l) => s + l[f], 0)
+  return { grupos: linhas, resumo: { projetado: total('projetado'), lancado: total('lancado'), falta: total('falta'), porSinal } }
+}
