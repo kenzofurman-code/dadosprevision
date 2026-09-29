@@ -2,6 +2,8 @@
 // `client` fala com a API e `repo` com o banco; ambos são injetados para permitir teste sem rede nem Postgres.
 import { mapearObra, mapearRelatorio } from './diario-map.js'
 
+const LIMITE_LISTA = 10000
+
 export async function sincronizarDiario({ client, repo, log = () => {} }) {
   const cargaId = await repo.iniciarCarga()
   const resumo = { obras: 0, novos: 0, alterados: 0, removidos: 0, erros: [] }
@@ -11,7 +13,7 @@ export async function sincronizarDiario({ client, repo, log = () => {} }) {
     await repo.salvarObra(mapearObra(item, detalhe))
     resumo.obras++
 
-    const lista = await client.get(`/obras/${item._id}/relatorios?ordem=asc&limite=10000`)
+    const lista = await client.get(`/obras/${item._id}/relatorios?ordem=asc&limite=${LIMITE_LISTA}`)
     if (!Array.isArray(lista)) throw new Error('Lista de relatórios em formato inesperado.')
     const conhecidos = await repo.modifiedPorRelatorio(item._id)
 
@@ -30,6 +32,8 @@ export async function sincronizarDiario({ client, repo, log = () => {} }) {
 
     if (lista.length === 0 && conhecidos.size > 0) {
       resumo.erros.push({ obra: item.nome, erro: 'API devolveu lista vazia para obra com relatórios; remoções ignoradas.' })
+    } else if (lista.length >= LIMITE_LISTA) {
+      resumo.erros.push({ obra: item.nome, erro: `Lista de relatórios atingiu o limite de ${LIMITE_LISTA}; remoções ignoradas.` })
     } else {
       resumo.removidos += await repo.marcarRemovidos(item._id, lista.map((r) => r._id))
     }

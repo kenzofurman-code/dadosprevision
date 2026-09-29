@@ -137,3 +137,13 @@ test('duas execuções simultâneas: a segunda é ignorada', async () => {
   liberar()
   assert.equal((await primeira).status, 'ok')
 })
+
+test('lista no limite de 10000 não marca remoções e vira erro', async () => {
+  const lista = Array.from({ length: 10000 }, (_, i) => item(`r${i}`))
+  const client = clienteFalso({ '/obras': [obraItem('O1')], '/obras/O1': {}, [LISTA('O1')]: lista })
+  const repo = repoFalso(Object.fromEntries(lista.map((r) => [r._id, 'm1'])))
+  const r = await sincronizarDiario({ client, repo })
+  assert.deepEqual(repo.reg.marcadosObras, [])
+  assert.equal(r.status, 'parcial')
+  assert.match(r.erros[0].erro, /limite/)
+})

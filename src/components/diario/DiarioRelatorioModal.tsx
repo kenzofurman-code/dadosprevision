@@ -22,13 +22,16 @@ export function DiarioRelatorioModal({ relatorioId, onClose }: { relatorioId: st
   }, [relatorioId])
 
   const efetivoPorEmpreiteira = useMemo(() => {
-    const grupos = new Map<string, { funcao: string | null; quantidade: number }[]>()
+    const grupos = new Map<string, { rotulo: string; itens: { funcao: string | null; quantidade: number }[] }>()
     for (const m of detalhe?.maoObra ?? []) {
-      const chave = m.empreiteira || 'Sem empreiteira'
-      grupos.set(chave, [...(grupos.get(chave) ?? []), m])
+      const chave = m.empreiteira_norm ?? 'SEM EMPREITEIRA'
+      const grupo = grupos.get(chave) ?? { rotulo: m.empreiteira || 'Sem empreiteira', itens: [] }
+      grupo.itens.push(m)
+      grupos.set(chave, grupo)
     }
-    return [...grupos.entries()].map(([empreiteira, itens]) => ({
-      empreiteira,
+    return [...grupos.entries()].map(([chave, { rotulo, itens }]) => ({
+      chave,
+      empreiteira: rotulo,
       itens,
       total: itens.reduce((t, i) => t + i.quantidade, 0),
     }))
@@ -103,10 +106,10 @@ export function DiarioRelatorioModal({ relatorioId, onClose }: { relatorioId: st
                     <thead><tr><th>Empreiteira / função</th><th className="dd-num">Quantidade</th></tr></thead>
                     <tbody>
                       {efetivoPorEmpreiteira.map((g) => (
-                        <Fragment key={g.empreiteira}>
+                        <Fragment key={g.chave}>
                           <tr><td><strong>{g.empreiteira}</strong></td><td className="dd-num"><strong>{fmtInteiro(g.total)}</strong></td></tr>
                           {g.itens.map((i, idx) => (
-                            <tr key={`${g.empreiteira}-${idx}`}><td style={{ paddingLeft: 20 }}>{i.funcao ?? '-'}</td><td className="dd-num">{fmtInteiro(i.quantidade)}</td></tr>
+                            <tr key={`${g.chave}-${idx}`}><td style={{ paddingLeft: 20 }}>{i.funcao ?? '-'}</td><td className="dd-num">{fmtInteiro(i.quantidade)}</td></tr>
                           ))}
                         </Fragment>
                       ))}

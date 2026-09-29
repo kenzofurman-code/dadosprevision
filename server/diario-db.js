@@ -144,7 +144,7 @@ export async function obterRelatorioDiario(id) {
   if (!rows.length) return null
   const filha = (sql) => query(sql, [id]).then((r) => r.rows)
   const [maoObra, equipamentos, ocorrencias, atividades, fotos] = await Promise.all([
-    filha('SELECT funcao, quantidade, empreiteira FROM diario.mao_obra WHERE relatorio_id = $1 ORDER BY id'),
+    filha('SELECT funcao, quantidade, empreiteira, empreiteira_norm FROM diario.mao_obra WHERE relatorio_id = $1 ORDER BY id'),
     filha('SELECT descricao, quantidade FROM diario.equipamento WHERE relatorio_id = $1 ORDER BY id'),
     filha('SELECT descricao, tags, paralisacao FROM diario.ocorrencia WHERE relatorio_id = $1 ORDER BY id'),
     filha('SELECT descricao, observacao, status, porcentagem, total_fotos FROM diario.atividade WHERE relatorio_id = $1 ORDER BY id'),

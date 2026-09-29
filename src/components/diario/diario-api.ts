@@ -29,7 +29,7 @@ export interface PaginaDiario {
 
 export interface RelatorioDetalhe {
   relatorio: Record<string, any> & { raw: Record<string, any> }
-  maoObra: { funcao: string | null; quantidade: number; empreiteira: string | null }[]
+  maoObra: { funcao: string | null; quantidade: number; empreiteira: string | null; empreiteira_norm: string | null }[]
   equipamentos: { descricao: string | null; quantidade: number }[]
   ocorrencias: { descricao: string | null; tags: string[]; paralisacao: boolean }[]
   atividades: { descricao: string | null; observacao: string | null; status: string | null; porcentagem: string | null; total_fotos: number }[]

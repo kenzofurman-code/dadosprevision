@@ -411,6 +411,8 @@ async function start() {
       console.log(`Agendador do Diário de Obra ativo com regra: ${scheduleDiario}`)
     } else if (!tokenDiario) {
       console.log('TOKEN_DIARIO não definido: sincronização do Diário de Obra desativada.')
+    } else {
+      console.warn(`CRON_SCHEDULE_DIARIO inválido ("${scheduleDiario}"): sincronização do Diário de Obra não agendada.`)
     }
 
     app.listen(PORT, '0.0.0.0', () => {

@@ -11,6 +11,7 @@ export function criarCliente({
   porMinuto = 130,
   esperaApos429 = 65000,
   tentativas429 = 5,
+  timeoutMs = 60000,
 } = {}) {
   if (!token) throw new Error('TOKEN_DIARIO não configurado.')
   let marcas = []
@@ -28,7 +29,13 @@ export function criarCliente({
   async function get(caminho) {
     for (let tentativa = 0; ; tentativa++) {
       await respeitarLimite()
-      const res = await fetchImpl(base + caminho, { headers: { token } })
+      let res
+      try {
+        res = await fetchImpl(base + caminho, { headers: { token }, signal: AbortSignal.timeout(timeoutMs) })
+      } catch (err) {
+        if (err?.name === 'TimeoutError' || err?.name === 'AbortError') throw new Error(`Diário de Obra não respondeu em ${caminho}`)
+        throw err
+      }
       if (res.status === 429 && tentativa < tentativas429) {
         await dormir(esperaApos429)
         continue

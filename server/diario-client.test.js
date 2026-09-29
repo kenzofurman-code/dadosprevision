@@ -66,3 +66,20 @@ test('erro HTTP não vaza o token na mensagem', async () => {
     return true
   })
 })
+
+test('a requisição leva um AbortSignal de timeout', async () => {
+  const amb = ambiente([resposta(200, {})])
+  const cliente = criarCliente({ token: 'tk', ...amb.opcoes })
+  await cliente.get('/obras')
+  assert.ok(amb.chamadas[0].init.signal instanceof AbortSignal)
+})
+
+test('timeout vira mensagem própria sem vazar o token', async () => {
+  const erro = Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' })
+  const cliente = criarCliente({ token: 'segredo-123', fetchImpl: async () => { throw erro } })
+  await assert.rejects(() => cliente.get('/obras'), (err) => {
+    assert.match(err.message, /não respondeu em \/obras/)
+    assert.doesNotMatch(err.message, /segredo/)
+    return true
+  })
+})

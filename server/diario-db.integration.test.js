@@ -59,6 +59,7 @@ test('grava, consulta, indica, remove e restaura (SQL real)', opcoes, async () =
   const det = await obterRelatorioDiario('teste-rel-a')
   assert.equal(det.relatorio.obra_nome, 'Obra Um')
   assert.equal(det.maoObra.length, 2)
+  assert.equal(det.maoObra[0].empreiteira_norm, 'PEREIRA DECOL')
   assert.equal(det.relatorio.raw._id, 'teste-rel-a')
   assert.equal(await obterRelatorioDiario('nao-existe'), null)
 
