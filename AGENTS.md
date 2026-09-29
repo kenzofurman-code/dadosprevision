@@ -100,3 +100,7 @@ Detalhado em `mega/deploy/DEPLOY_VPS.md`. Resumo:
 - O schema `mega` é dono exclusivo do serviço `mega`; o schema `public` é
   dono exclusivo do serviço `app`. Nenhum dos dois escreve no schema do
   outro.
+- O schema `diario` é dono exclusivo do sincronizador do Diário de Obra (`server/diario-sync.js`, cron
+  `CRON_SCHEDULE_DIARIO`); nada mais escreve nele. A API do Diário é somente leitura e limitada a 150
+  requisições por minuto — a primeira carga (`npm run sync:diario`) leva ~20 min. `TOKEN_DIARIO` só vive no
+  `.env`. Testes de SQL do Diário: `DIARIO_TEST_DB=1` com um Postgres descartável cujo nome contenha "teste".
