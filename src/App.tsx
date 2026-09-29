@@ -41,6 +41,7 @@ import './App.css'
 import { CurvasView } from './CurvasView'
 import { MegaView } from './MegaView'
 import { ContratacoesConfig } from './components/contratacoes/ContratacoesConfig'
+import { ContratacoesMacro } from './components/contratacoes/ContratacoesMacro'
 
 type DataView =
   | 'projects'
@@ -1061,7 +1062,7 @@ function App() {
     }
   })
   const [isGroupOrderModalOpen, setIsGroupOrderModalOpen] = useState(false)
-  const [settingsClassificationTab, setSettingsClassificationTab] = useState<'groups' | 'floors'>('groups')
+  const [settingsClassificationTab, setSettingsClassificationTab] = useState<'groups' | 'floors' | 'contratacoes'>('groups')
   const [groupOrderDraft, setGroupOrderDraft] = useState<string[]>([])
   const [floorOrderDraft, setFloorOrderDraft] = useState<string[]>([])
   const [floorOrderSearch, setFloorOrderSearch] = useState('')
@@ -4658,8 +4659,8 @@ function App() {
               {/* ---------------------------------------------------- */}
               {gestaoPanelTab === 'contratacoes' && (
                 selectedProject
-                  ? <ContratacoesConfig projectId={selectedProject} />
-                  : <div className="gestao-card"><p>Selecione um projeto para configurar as contratações.</p></div>
+                  ? <ContratacoesMacro projectId={selectedProject} onConfigurar={() => { handleOpenGroupOrderModal(); setSettingsClassificationTab('contratacoes') }} />
+                  : <div className="gestao-card"><p>Selecione um projeto para ver as contratações.</p></div>
               )}
 
               {gestaoPanelTab === 'panel5' && (
@@ -5075,11 +5076,11 @@ function App() {
 
             {isGroupOrderModalOpen && (
               <div className="matrix-modal-backdrop" onClick={() => setIsGroupOrderModalOpen(false)}>
-                <div className="group-order-modal" onClick={(event) => event.stopPropagation()}>
+                <div className={`group-order-modal ${settingsClassificationTab === 'contratacoes' ? 'group-order-modal-largo' : ''}`} onClick={(event) => event.stopPropagation()}>
                   <div className="matrix-modal-header">
                     <div>
                       <h3>Configurações da Gestão à Vista</h3>
-                      <p>Classificação de grupos e pavimentos</p>
+                      <p>{settingsClassificationTab === 'contratacoes' ? 'Grupos de contratação e custo projetado' : 'Classificação de grupos e pavimentos'}</p>
                     </div>
                     <button
                       type="button"
@@ -5106,9 +5107,20 @@ function App() {
                       >
                         Classificação de Pavimentos
                       </button>
+                      <button
+                        type="button"
+                        className={settingsClassificationTab === 'contratacoes' ? 'active' : ''}
+                        onClick={() => setSettingsClassificationTab('contratacoes')}
+                      >
+                        Contratações
+                      </button>
                     </div>
 
-                    {settingsClassificationTab === 'groups' ? (
+                    {settingsClassificationTab === 'contratacoes' ? (
+                      selectedProject
+                        ? <ContratacoesConfig projectId={selectedProject} />
+                        : <div className="state-message">Selecione um projeto para configurar as contratações.</div>
+                    ) : settingsClassificationTab === 'groups' ? (
                       <>
                         <p>
                           Defina a prioridade dos grupos de{' '}
@@ -5193,14 +5205,16 @@ function App() {
                       <div className="state-message">Nenhum pavimento disponível para este projeto.</div>
                     )}
                   </div>
-                  <div className="matrix-modal-footer">
-                    <button type="button" className="matrix-btn" onClick={() => setIsGroupOrderModalOpen(false)}>
-                      Cancelar
-                    </button>
-                    <button type="button" className="matrix-btn btn-primary" onClick={handleSaveGroupOrder}>
-                      Salvar classificações
-                    </button>
-                  </div>
+                  {settingsClassificationTab !== 'contratacoes' && (
+                    <div className="matrix-modal-footer">
+                      <button type="button" className="matrix-btn" onClick={() => setIsGroupOrderModalOpen(false)}>
+                        Cancelar
+                      </button>
+                      <button type="button" className="matrix-btn btn-primary" onClick={handleSaveGroupOrder}>
+                        Salvar classificações
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

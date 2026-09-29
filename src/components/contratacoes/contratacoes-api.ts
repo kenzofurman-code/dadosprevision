@@ -5,6 +5,10 @@ export interface Pendencia { codigo_etapa: string; nome: string; custo_projetado
 export interface Config { aplicado: boolean; grupos: Grupo[]; pendencias: Pendencia[]; importacao: { referencia: string; total: string; importado_em: string; arquivo: string | null } | null; orcamentoTotal: number }
 export interface Previa { itens: { codigo_etapa: string; custo_projetado: number }[]; total: number; ignoradas: number; erros: { linha: number; motivo: string }[]; foraDoOrcamento: string[]; totalAnterior: number | null }
 export interface Conflito { codigo_etapa: string; grupo_id: number; item: string }
+export type Sinal = 'ATRASADO' | 'ATENCAO' | 'PENDENCIA' | 'NO_PRAZO' | 'SEM_DATA' | 'SEM_PROJECAO' | 'CONCLUIDO'
+type Pct = { solicitado: number | null; pedido: number | null; contratado: number | null; realizado: number | null; lancado: number | null }
+export interface LinhaMacro { id: number; tipo: Tipo; item: string; insumos: string | null; lead_time: number; etapas: number; projetado: number; solicitado: number; pedido: number; contratado: number; realizado: number; lancado: number; falta: number; pct: Pct; inicio: string | null; limite: string | null; dias_ate_limite: number | null; sinal: Sinal }
+export interface Macro { obra: string | null; motivo?: string; importacao: Config['importacao']; grupos: LinhaMacro[]; resumo: { projetado: number; lancado: number; falta: number; porSinal: Record<Sinal, number> } }
 
 async function chamar<T>(url: string, init?: RequestInit): Promise<{ status: number; data: T }> {
   const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } })
@@ -15,6 +19,7 @@ async function chamar<T>(url: string, init?: RequestInit): Promise<{ status: num
 const post = <T>(url: string, body: unknown) => chamar<T>(url, { method: 'POST', body: JSON.stringify(body) })
 
 export const api = {
+  macro: (projectId: string) => chamar<Macro>(`/api/contratacoes/macro?projectId=${encodeURIComponent(projectId)}`).then((r) => r.data),
   config: (projectId: string) => chamar<Config>(`/api/contratacoes/config?projectId=${encodeURIComponent(projectId)}`).then((r) => r.data),
   aplicarPadrao: (projectId: string, restaurar = false) => post<{ grupos: number; vinculos: number; sugeridos: number; conflitos: number }>('/api/contratacoes/aplicar-padrao', { projectId, restaurar }).then((r) => r.data),
   salvarGrupo: (projectId: string, grupo: Grupo) => post<{ id: number }>('/api/contratacoes/grupos', { projectId, grupo }).then((r) => r.data),

@@ -1,0 +1,26 @@
+.cm-card { background: var(--surface, #fff); border: 1px solid var(--border, #dde3e6); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.cm-resumo { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-end; }
+.cm-resumo > div:not(.cm-fichas) { display: flex; flex-direction: column; }
+.cm-resumo span { font-size: 12px; opacity: .65; }
+.cm-resumo strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.cm-fichas { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.cm-bloco h4 { margin: 4px 0 6px; }
+.cm-rolagem { overflow-x: auto; }
+.cm-tabela { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cm-tabela th, .cm-tabela td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border, #dde3e6); white-space: nowrap; }
+.cm-tabela td:first-child { white-space: normal; min-width: 220px; }
+.cm-tabela th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; opacity: .7; }
+.cm-num { text-align: right !important; font-variant-numeric: tabular-nums; }
+.cm-muted { opacity: .6; }
+.cm-erro { color: #b3261e; }
+.cm-aviso { margin: 0; padding: 8px 12px; border-radius: 6px; background: rgba(160, 98, 10, .08); }
+.cm-btn { font: inherit; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border, #dde3e6); background: transparent; color: inherit; cursor: pointer; }
+.cm-link { border: none; text-decoration: underline; }
+.cm-sinal { display: inline-block; font: inherit; font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid transparent; background: rgba(0, 0, 0, .05); color: inherit; }
+button.cm-sinal { cursor: pointer; }
+.cm-sinal.ativo { border-color: currentColor; }
+.cm-ATRASADO { background: rgba(179, 38, 30, .1); color: #b3261e; }
+.cm-ATENCAO { background: rgba(160, 98, 10, .12); color: #8a5300; }
+.cm-PENDENCIA { background: rgba(196, 90, 20, .1); color: #b3561a; }
+.cm-NO_PRAZO { background: rgba(47, 122, 74, .1); color: #2f7a4a; }
+.cm-CONCLUIDO { background: rgba(47, 122, 74, .18); color: #245f3a; }

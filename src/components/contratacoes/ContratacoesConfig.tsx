@@ -84,9 +84,16 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
     setOcupado(true); setErro(null); setPrevia(null)
     try {
       const wb = XLSX.read(await file.arrayBuffer())
-      const nomeAba = wb.SheetNames.find((n) => n.trim().toUpperCase() === 'CUSTOS') || wb.SheetNames[0]
-      const matriz = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[nomeAba], { header: 1, raw: true, defval: null })
-      setArquivo({ nome: file.name, matriz })
+      // Usa a primeira aba que tenha as colunas "CÓDIGO"/"ETAPA" e "CUSTO PROJETADO..." no cabeçalho
+      // (ex.: aba PROJEÇÃO da planilha de projeção de custo, ou CUSTOS).
+      const norm = (v: unknown) => String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim()
+      const matrizDe = (nome: string) => XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[nome], { header: 1, raw: true, defval: null })
+      const temColunas = (m: unknown[][]) => m.slice(0, 20).some((linha) =>
+        linha.some((c) => norm(c).startsWith('CUSTO PROJETADO')) && linha.some((c) => ['CODIGO', 'ETAPA'].includes(norm(c))))
+      const nomeAba = wb.SheetNames.find((n) => temColunas(matrizDe(n)))
+      if (!nomeAba) throw new Error('Nenhuma aba da planilha tem as colunas "CÓDIGO" e "CUSTO PROJETADO".')
+      const matriz = matrizDe(nomeAba)
+      setArquivo({ nome: `${file.name} · aba ${nomeAba}`, matriz })
       setPrevia(await api.previa(projectId, matriz))
     } catch (e) { setErro((e as Error).message) } finally { setOcupado(false) }
   }
@@ -320,7 +327,7 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
       {aba === 'custo' && (
         <div className="cc-secao">
           <p className="cc-muted">
-            Envie a planilha de custo projetado (.xlsx ou .csv). Se houver uma aba chamada CUSTOS, ela é usada.
+            Envie a planilha de custo projetado (.xlsx, .xlsm ou .csv). A aba com as colunas certas é encontrada sozinha.
             Precisa das colunas "CÓDIGO" (ou "ETAPA") e "CUSTO PROJETADO". Só as etapas de nível 5 entram.
           </p>
           {config.importacao && (
@@ -330,7 +337,7 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
             </p>
           )}
           <div className="cc-acoes">
-            <input id="cc-arquivo" type="file" accept=".xlsx,.xls,.csv" onChange={(e) => { const f = e.target.files?.[0]; if (f) lerArquivo(f) }} />
+            <input id="cc-arquivo" type="file" accept=".xlsx,.xlsm,.xls,.csv" onChange={(e) => { const f = e.target.files?.[0]; if (f) lerArquivo(f) }} />
             <label>Mês de referência <input id="cc-referencia" type="month" value={referencia} onChange={(e) => setReferencia(e.target.value)} /></label>
           </div>
           {previa && arquivo && (

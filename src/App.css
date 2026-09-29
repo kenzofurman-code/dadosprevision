@@ -3140,3 +3140,10 @@ td strong {
   padding-top: 14px;
   border-top: 1px solid #e2e8f0;
 }
+
+.group-order-modal.group-order-modal-largo {
+  width: min(100%, 1180px);
+}
+.group-order-modal-largo .group-order-body {
+  overflow-y: auto;
+}
