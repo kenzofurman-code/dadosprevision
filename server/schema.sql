@@ -548,3 +548,118 @@ UPDATE contratacao_grupos
                         ELSE prazo_entrega + prazo_negociacao + prazo_emissao END,
        levantamento = prazo_levantamento
  WHERE lead_time IS NULL;
+
+-- Diário de Obra (API externa): schema de dono exclusivo do sincronizador (server/diario-sync.js).
+CREATE SCHEMA IF NOT EXISTS diario;
+
+CREATE TABLE IF NOT EXISTS diario.carga (
+  id SERIAL PRIMARY KEY,
+  iniciada_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finalizada_em TIMESTAMPTZ,
+  status TEXT NOT NULL DEFAULT 'executando',
+  obras INTEGER NOT NULL DEFAULT 0,
+  novos INTEGER NOT NULL DEFAULT 0,
+  alterados INTEGER NOT NULL DEFAULT 0,
+  removidos INTEGER NOT NULL DEFAULT 0,
+  erros JSONB NOT NULL DEFAULT '[]'::jsonb
+);
+
+CREATE TABLE IF NOT EXISTS diario.obra (
+  obra_id TEXT PRIMARY KEY,
+  nome TEXT NOT NULL,
+  status_id INTEGER,
+  status TEXT,
+  grupo TEXT,
+  endereco TEXT,
+  numero_contrato TEXT,
+  data_inicio DATE,
+  data_fim DATE,
+  responsavel TEXT,
+  cliente TEXT,
+  total_relatorios INTEGER,
+  total_fotos INTEGER,
+  modified_api TEXT,
+  raw JSONB,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS diario.relatorio (
+  relatorio_id TEXT PRIMARY KEY,
+  obra_id TEXT NOT NULL REFERENCES diario.obra(obra_id),
+  data DATE NOT NULL,
+  data_fim DATE,
+  numero INTEGER,
+  dia_semana TEXT,
+  status_id INTEGER,
+  status TEXT,
+  clima_manha TEXT,
+  condicao_manha TEXT,
+  clima_tarde TEXT,
+  condicao_tarde TEXT,
+  clima_noite TEXT,
+  condicao_noite TEXT,
+  indice_pluviometrico NUMERIC,
+  dia_parado BOOLEAN NOT NULL DEFAULT false,
+  dia_chuvoso BOOLEAN NOT NULL DEFAULT false,
+  dia_impraticavel BOOLEAN NOT NULL DEFAULT false,
+  criado_por TEXT,
+  criado_em TIMESTAMP,
+  modificado_por TEXT,
+  modificado_em TIMESTAMP,
+  created_api TEXT,
+  modified_api TEXT,
+  link_pdf TEXT,
+  total_fotos INTEGER NOT NULL DEFAULT 0,
+  removido_em TIMESTAMPTZ,
+  raw JSONB NOT NULL,
+  sincronizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_diario_relatorio_obra_data ON diario.relatorio (obra_id, data);
+
+CREATE TABLE IF NOT EXISTS diario.mao_obra (
+  id BIGSERIAL PRIMARY KEY,
+  relatorio_id TEXT NOT NULL REFERENCES diario.relatorio(relatorio_id) ON DELETE CASCADE,
+  funcao TEXT,
+  quantidade INTEGER NOT NULL DEFAULT 0,
+  empreiteira TEXT,
+  empreiteira_norm TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_diario_mao_obra_relatorio ON diario.mao_obra (relatorio_id);
+
+CREATE TABLE IF NOT EXISTS diario.equipamento (
+  id BIGSERIAL PRIMARY KEY,
+  relatorio_id TEXT NOT NULL REFERENCES diario.relatorio(relatorio_id) ON DELETE CASCADE,
+  descricao TEXT,
+  quantidade INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_diario_equipamento_relatorio ON diario.equipamento (relatorio_id);
+
+CREATE TABLE IF NOT EXISTS diario.ocorrencia (
+  id BIGSERIAL PRIMARY KEY,
+  relatorio_id TEXT NOT NULL REFERENCES diario.relatorio(relatorio_id) ON DELETE CASCADE,
+  descricao TEXT,
+  tags TEXT[] NOT NULL DEFAULT '{}',
+  paralisacao BOOLEAN NOT NULL DEFAULT false
+);
+CREATE INDEX IF NOT EXISTS idx_diario_ocorrencia_relatorio ON diario.ocorrencia (relatorio_id);
+
+CREATE TABLE IF NOT EXISTS diario.atividade (
+  id BIGSERIAL PRIMARY KEY,
+  relatorio_id TEXT NOT NULL REFERENCES diario.relatorio(relatorio_id) ON DELETE CASCADE,
+  descricao TEXT,
+  observacao TEXT,
+  status TEXT,
+  porcentagem NUMERIC,
+  total_fotos INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_diario_atividade_relatorio ON diario.atividade (relatorio_id);
+
+CREATE TABLE IF NOT EXISTS diario.foto (
+  id BIGSERIAL PRIMARY KEY,
+  relatorio_id TEXT NOT NULL REFERENCES diario.relatorio(relatorio_id) ON DELETE CASCADE,
+  url TEXT NOT NULL,
+  url_miniatura TEXT,
+  descricao TEXT,
+  origem TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_diario_foto_relatorio ON diario.foto (relatorio_id);
