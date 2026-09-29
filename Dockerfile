@@ -15,6 +15,7 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY server ./server
 COPY lib ./lib
+COPY scripts/sync-diario-local.mjs ./scripts/sync-diario-local.mjs
 
 EXPOSE 3000
 CMD ["node", "server/index.js"]
