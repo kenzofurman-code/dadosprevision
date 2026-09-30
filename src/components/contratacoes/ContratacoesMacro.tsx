@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { api, type Macro, type Sinal, type Tipo } from './contratacoes-api'
+import { ContratacoesMicro } from './ContratacoesMicro'
 import './ContratacoesMacro.css'
 
 const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
@@ -16,10 +17,11 @@ export function ContratacoesMacro({ projectId, onConfigurar }: { projectId: stri
   const [macro, setMacro] = useState<Macro | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [filtro, setFiltro] = useState<Sinal | null>(null)
+  const [aberto, setAberto] = useState<number | null>(null)
 
   useEffect(() => {
     let vivo = true
-    setMacro(null); setErro(null); setFiltro(null)
+    setMacro(null); setErro(null); setFiltro(null); setAberto(null)
     api.macro(projectId).then((m) => { if (vivo) setMacro(m) }).catch((e) => { if (vivo) setErro((e as Error).message) })
     return () => { vivo = false }
   }, [projectId])
@@ -77,8 +79,9 @@ export function ContratacoesMacro({ projectId, onConfigurar }: { projectId: stri
                 </thead>
                 <tbody>
                   {doTipo.map((g) => (
-                    <tr key={g.id}>
-                      <td>{g.item}{g.insumos ? <span className="cm-muted"> · {g.insumos}</span> : null}</td>
+                    <Fragment key={g.id}>
+                    <tr className="cm-linha" onClick={() => setAberto(aberto === g.id ? null : g.id)} aria-expanded={aberto === g.id}>
+                      <td><span aria-hidden="true">{aberto === g.id ? '▾' : '▸'}</span> {g.item}{g.insumos ? <span className="cm-muted"> · {g.insumos}</span> : null}</td>
                       <td className="cm-num">{g.projetado ? moeda.format(g.projetado) : '—'}</td>
                       <td className="cm-num">{pctFmt(g.pct.solicitado)}</td>
                       <td className="cm-num">{pctFmt(g.pct.pedido)}</td>
@@ -89,6 +92,10 @@ export function ContratacoesMacro({ projectId, onConfigurar }: { projectId: stri
                       <td>{dataFmt(g.limite)} <span className="cm-muted">{limiteTexto(g.dias_ate_limite)}</span></td>
                       <td><span className={`cm-sinal cm-${g.sinal}`}>{SINAIS[g.sinal]}</span></td>
                     </tr>
+                    {aberto === g.id && (
+                      <tr className="cm-sub"><td colSpan={10}><ContratacoesMicro projectId={projectId} grupoId={g.id} /></td></tr>
+                    )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
