@@ -221,6 +221,7 @@ cadeia abaixo. Os vínculos vêm de `mega.visualizacao_itens`
 | 3 | Mapa de Cotação | nº do mapa de cotação |
 | 4 | Pedido de Compra **ou** Contrato de Cotação e Materiais / Contrato Livre | nº do pedido / contrato |
 | 5 | Aditivo de Contrato (opcional) | nº do contrato |
+| 6 | Medição de Contrato (mão de obra) | nº da medição, ligada ao contrato |
 
 Regras decididas:
 
@@ -228,9 +229,15 @@ Regras decididas:
   **quantas aprovações** cada passo exige; o sistema conta as aprovações de
   pessoas distintas registradas no Approvo. Nomes aparecem só na tela, como
   informação. Motivo: troca de equipe não pode quebrar a regra.
-- Quantidades sugeridas pela amostra (editáveis nas Configurações):
-  Solicitação 3, Estouro 1, Mapa 2, Pedido/Contrato 1 até R$ 50 mil e 2
-  acima (alçadas Bronqueti → Rafael/Kitamura → Biscaia), Aditivo 2.
+- **Quantidades por obra.** Fonte: "Fluxograma - Por Obra_r03.xlsx" (uma
+  aba por obra; mesma estrutura, só mudam os nomes). Padrão para obra nova:
+  Solicitação 2; Estouro 1 **só quando o estouro passa de R$ 100 mil**
+  (abaixo disso o passo não é exigido); Mapa de Cotação 1 (material e mão de
+  obra têm o mesmo número, só muda quem aprova); Pedido/Contrato 1 até
+  R$ 50 mil e 2 acima (alçadas Bronqueti → Rafael/Kitamura → Biscaia, que não
+  estão no fluxograma); Aditivo 2; Medição de Contrato 3 (último passo da mão
+  de obra). Cada obra ajusta nas Configurações (ex.: Solicitação varia de 1 a
+  3 aprovadores entre as obras).
 - Reprovação zera a contagem do passo: contam só as aprovações depois da
   última reprovação.
 - **Valor da Solicitação não é parâmetro.** É frequentemente genérico
