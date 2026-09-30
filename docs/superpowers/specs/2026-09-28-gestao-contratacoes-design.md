@@ -205,3 +205,39 @@ Decisões do usuário que **substituem** trechos anteriores desta spec:
 - **Checkbox:** padrão minimalista (pequeno, neutro) no site inteiro.
 - **Entrega:** etapa 2 = macro + mudança da configuração + checkbox;
   etapa 3 = micro.
+
+## 12. Trilha de aprovação pelo Approvo (levantamento de 2026-09-30)
+
+Dados já extraídos todo dia às 22h em `mega.approvo_documentos` e
+`mega.approvo_ocorrencias` (desde 01/2025, com aprovador, data/hora e
+aprovação/reprovação). Amostra de 8 trilhas da POTY (jan/2026) mostrou a
+cadeia abaixo. Os vínculos vêm de `mega.visualizacao_itens`
+(`solicitacao`, `cod_cotacao`, `cod_pedido`, `cod_contrato`).
+
+| Passo | Documento no Approvo | Número usado |
+|---|---|---|
+| 1 | Solicitação de Obra | nº da solicitação |
+| 2 | Estouro de Orçamento (opcional) | nº do mapa de cotação |
+| 3 | Mapa de Cotação | nº do mapa de cotação |
+| 4 | Pedido de Compra **ou** Contrato de Cotação e Materiais / Contrato Livre | nº do pedido / contrato |
+| 5 | Aditivo de Contrato (opcional) | nº do contrato |
+
+Regras decididas:
+
+- **Sem nomes de aprovadores na regra.** A configuração guarda só
+  **quantas aprovações** cada passo exige; o sistema conta as aprovações de
+  pessoas distintas registradas no Approvo. Nomes aparecem só na tela, como
+  informação. Motivo: troca de equipe não pode quebrar a regra.
+- Quantidades sugeridas pela amostra (editáveis nas Configurações):
+  Solicitação 3, Estouro 1, Mapa 2, Pedido/Contrato 1 até R$ 50 mil e 2
+  acima (alçadas Bronqueti → Rafael/Kitamura → Biscaia), Aditivo 2.
+- Reprovação zera a contagem do passo: contam só as aprovações depois da
+  última reprovação.
+- **Valor da Solicitação não é parâmetro.** É frequentemente genérico
+  (R$ 1, R$ 5…) porque o solicitante não preenche. Valor do item vem do Mega
+  (mapa/pedido/contrato). O valor do Estouro também não é valor do item (é o
+  estouro acumulado da etapa).
+- Pendências a verificar no plano: contratos sem aprovação no Approvo
+  (ex.: POTY 3136, 3166); tipo material × mão de obra vem do grupo
+  configurado, não de pedido × contrato.
+- Dados Mega ganha uma aba **Approvo** (Documentos e Ocorrências por obra).
