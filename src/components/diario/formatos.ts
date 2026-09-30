@@ -7,6 +7,19 @@ export function fmtInteiro(v: unknown): string {
   return vazio(v) || !Number.isFinite(Number(v)) ? '-' : inteiro.format(Number(v))
 }
 
+const umaCasa = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+
+// Média de pessoas: sempre com uma casa decimal ('10,0').
+export function fmtMedia(v: unknown): string {
+  return vazio(v) || !Number.isFinite(Number(v)) ? '-' : umaCasa.format(Number(v))
+}
+
+export function somarDias(iso: string, dias: number): string {
+  const d = new Date(`${iso}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + dias)
+  return d.toISOString().slice(0, 10)
+}
+
 export function fmtNumero(v: unknown): string {
   return vazio(v) || !Number.isFinite(Number(v)) ? '-' : decimal.format(Number(v))
 }

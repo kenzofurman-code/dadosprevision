@@ -38,6 +38,7 @@
 .dd-svg { width: 100%; height: auto; }
 .dd-barra { fill: #2f6f8f; }
 .dd-eixo { font-size: 10px; fill: currentColor; opacity: .65; }
+.dd-valor { font-size: 11px; font-weight: 600; fill: currentColor; }
 .dd-linha-eixo { stroke: currentColor; opacity: .3; }
 .dd-hbar-linha { display: grid; grid-template-columns: minmax(90px, 40%) 1fr 56px; align-items: center; gap: 8px; font-size: 12.5px; padding: 2px 0; }
 .dd-hbar-rotulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
