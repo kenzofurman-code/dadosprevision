@@ -198,6 +198,36 @@ export const TABLE_COLUMNS: Record<string, MegaColumnDef[]> = {
     { id: 'obra_nome', label: 'Nome da Obra', category: 'identificacao', type: 'text', defaultVisible: false, priority: 17 },
   ],
 
+  // APPROVO
+  approvo_documentos: [
+    { id: 'obra', label: 'Obra', category: 'identificacao', type: 'code', defaultVisible: true, priority: 1 },
+    { id: 'numero', label: 'Número', category: 'identificacao', type: 'code', defaultVisible: true, priority: 2 },
+    { id: 'tipo_documento', label: 'Tipo de documento', category: 'identificacao', type: 'text', defaultVisible: true, priority: 3 },
+    { id: 'data_documento', label: 'Data', category: 'datas', type: 'date', defaultVisible: true, priority: 4 },
+    { id: 'status', label: 'Status', category: 'status', type: 'badge', defaultVisible: true, priority: 5 },
+    { id: 'valor', label: 'Valor', category: 'valores', type: 'currency', align: 'right', defaultVisible: true, priority: 6 },
+    { id: 'solicitante', label: 'Solicitante', category: 'outros', type: 'text', defaultVisible: true, priority: 7 },
+    { id: 'data_envio_aprovacao', label: 'Envio p/ aprovação', category: 'datas', type: 'date', defaultVisible: true, priority: 8 },
+    { id: 'regra_aprovacao', label: 'Regra de aprovação', category: 'outros', type: 'text', defaultVisible: true, priority: 9 },
+    { id: 'agente', label: 'Agente', category: 'outros', type: 'text', defaultVisible: false, priority: 10 },
+    { id: 'projeto', label: 'Projeto', category: 'outros', type: 'text', defaultVisible: false, priority: 11 },
+    { id: 'data_extracao', label: 'Data Extração', category: 'datas', type: 'date', defaultVisible: false, priority: 12 },
+  ],
+
+  approvo_ocorrencias: [
+    { id: 'obra', label: 'Obra', category: 'identificacao', type: 'code', defaultVisible: true, priority: 1 },
+    { id: 'tipo_documento', label: 'Tipo de documento', category: 'identificacao', type: 'text', defaultVisible: true, priority: 2 },
+    { id: 'numero_documento', label: 'Número', category: 'identificacao', type: 'code', defaultVisible: true, priority: 3 },
+    { id: 'acao', label: 'Ação', category: 'status', type: 'badge', defaultVisible: true, priority: 4 },
+    { id: 'aprovador', label: 'Aprovador', category: 'outros', type: 'text', defaultVisible: true, priority: 5 },
+    { id: 'data_aprovacao', label: 'Data', category: 'datas', type: 'date', defaultVisible: true, priority: 6 },
+    { id: 'hora_aprovacao', label: 'Hora', category: 'datas', type: 'text', defaultVisible: true, priority: 7 },
+    { id: 'valor', label: 'Valor', category: 'valores', type: 'currency', align: 'right', defaultVisible: true, priority: 8 },
+    { id: 'motivo_operacao', label: 'Motivo', category: 'outros', type: 'text', defaultVisible: true, priority: 9 },
+    { id: 'solicitante', label: 'Solicitante', category: 'outros', type: 'text', defaultVisible: false, priority: 10 },
+    { id: 'data_extracao', label: 'Data Extração', category: 'datas', type: 'date', defaultVisible: false, priority: 11 },
+  ],
+
   // 4. PEDIDOS DE COMPRA
   pedidos_compra: [
     { id: 'obra', label: 'Obra', category: 'identificacao', type: 'code', defaultVisible: true, priority: 1 },

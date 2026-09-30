@@ -689,6 +689,18 @@ export async function getMegaConciliacao({ obra = '', projectId = '', page = 0, 
 }
 
 const MEGA_TABLE_MAP = {
+  approvo_documentos: {
+    table: 'mega.approvo_documentos',
+    hasObra: true,
+    orderBy: 'data_documento DESC NULLS LAST, numero DESC',
+    searchColumns: ['CAST(numero AS TEXT)', 'tipo_documento', 'status', 'solicitante', 'regra_aprovacao'],
+  },
+  approvo_ocorrencias: {
+    table: 'mega.approvo_ocorrencias',
+    hasObra: true,
+    orderBy: 'data_hora DESC NULLS LAST, id DESC',
+    searchColumns: ['CAST(numero_documento AS TEXT)', 'tipo_documento', 'aprovador', 'acao'],
+  },
   pedidos_compra: {
     table: 'mega.pedidos_compra',
     hasObra: true,

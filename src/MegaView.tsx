@@ -41,6 +41,7 @@ export type MegaTabKey =
   | 'pedidos_compra'
   | 'visualizacao_itens'
   | 'analise_saldo'
+  | 'approvo'
   | 'itens_solicitados'
   | 'solicitacoes_por_etapa'
   | 'cargas'
@@ -49,6 +50,7 @@ export type MegaTabKey =
   | 'follow_itenscontratos_historico'
 
 export type SaldoSubTab = 'pedidos' | 'contratos' | 'realizado'
+export type ApprovoSubTab = 'documentos' | 'ocorrencias'
 
 interface MegaObra {
   obra: string
@@ -102,6 +104,7 @@ function formatNumber(value: any) {
 export function MegaView() {
   const [activeTab, setActiveTab] = useState<MegaTabKey>('conciliacao_contratacoes')
   const [saldoSubTab, setSaldoSubTab] = useState<SaldoSubTab>('pedidos')
+  const [approvoSubTab, setApprovoSubTab] = useState<ApprovoSubTab>('documentos')
   const [obras, setObras] = useState<MegaObra[]>([])
   const [selectedObra, setSelectedObra] = useState<string>('340')
   const [summary, setSummary] = useState<MegaSummary | null>(null)
@@ -124,8 +127,9 @@ export function MegaView() {
     if (activeTab === 'analise_saldo') {
       return `analise_${saldoSubTab}`
     }
+    if (activeTab === 'approvo') return `approvo_${approvoSubTab}`
     return activeTab
-  }, [activeTab, saldoSubTab])
+  }, [activeTab, saldoSubTab, approvoSubTab])
 
   // Todas as colunas disponíveis para a tabela ativa
   const allColumns = useMemo(() => {
@@ -237,10 +241,12 @@ export function MegaView() {
         return 'follow_itenscontratos — Medições de contratos'
       case 'follow_itenscontratos_historico':
         return 'follow_itenscontratos — Histórico de cargas'
+      case 'approvo':
+        return approvoSubTab === 'documentos' ? 'Approvo — Documentos' : 'Approvo — Ocorrências'
       default:
         return 'Mega ERP'
     }
-  }, [activeTab, saldoSubTab, selectedObra])
+  }, [activeTab, saldoSubTab, approvoSubTab, selectedObra])
 
   // Carregar lista de obras
   const loadObras = useCallback(async () => {
@@ -338,6 +344,12 @@ export function MegaView() {
   // Resetar paginação ao trocar filtro ou aba
   const handleTabChange = (tab: MegaTabKey) => {
     setActiveTab(tab)
+    setPage(0)
+    setSearch('')
+  }
+
+  const handleApprovoSubTabChange = (sub: ApprovoSubTab) => {
+    setApprovoSubTab(sub)
     setPage(0)
     setSearch('')
   }
@@ -544,6 +556,15 @@ export function MegaView() {
 
           <button
             type="button"
+            className={`mega-tab-btn ${activeTab === 'approvo' ? 'active' : ''}`}
+            onClick={() => handleTabChange('approvo')}
+          >
+            <CheckCircle2 size={15} />
+            <span>Approvo</span>
+          </button>
+
+          <button
+            type="button"
             className={`mega-tab-btn ${activeTab === 'itens_solicitados' ? 'active' : ''}`}
             onClick={() => handleTabChange('itens_solicitados')}
           >
@@ -601,6 +622,25 @@ export function MegaView() {
             <span>Status das Cargas</span>
           </button>
         </div>
+
+        {activeTab === 'approvo' && (
+          <div className="mega-subnav">
+            <button
+              type="button"
+              className={`mega-subnav-btn ${approvoSubTab === 'documentos' ? 'active' : ''}`}
+              onClick={() => handleApprovoSubTabChange('documentos')}
+            >
+              Documentos
+            </button>
+            <button
+              type="button"
+              className={`mega-subnav-btn ${approvoSubTab === 'ocorrencias' ? 'active' : ''}`}
+              onClick={() => handleApprovoSubTabChange('ocorrencias')}
+            >
+              Ocorrências (aprovações)
+            </button>
+          </div>
+        )}
 
         {/* Se for Análise de Saldo, exibe o seletor das 3 abas */}
         {activeTab === 'analise_saldo' && (
