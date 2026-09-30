@@ -209,3 +209,45 @@ export function calcularMacro({ grupos, projetado, valores, inicio, hoje }) {
 export function hojeNoBrasil(agora = new Date()) {
   return agora.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' })
 }
+
+// Trilha de aprovação do Approvo (spec seção 12). A regra guarda só quantas
+// aprovações cada passo exige; nomes aparecem só na tela.
+export const REGRAS_PADRAO = { solicitacao: 2, estouro: 1, estouro_minimo: 100000, mapa: 1, compra_ate: 1, compra_acima: 2, alcada_valor: 50000, aditivo: 2, medicao: 3 }
+
+export function avaliarPasso({ passo, numero, doc, eventos = [], exigidas }) {
+  const iReprov = eventos.map((e) => e.acao).lastIndexOf('Reprovação')
+  const validos = eventos.slice(iReprov + 1).filter((e) => e.acao === 'Aprovação')
+  const nomes = new Map()
+  for (const e of validos) nomes.set(normalizarNome(e.aprovador), e.aprovador.trim())
+  const feitas = nomes.size
+  const ultimo = eventos.length ? eventos[eventos.length - 1].data_hora : null
+  let status
+  if (!doc && !eventos.length) status = 'NAO_INICIADO'
+  else if (iReprov === eventos.length - 1 && iReprov >= 0) status = 'REPROVADO'
+  else if (exigidas === 0) status = 'DISPENSADO'
+  else status = feitas >= exigidas ? 'APROVADO' : 'PENDENTE'
+  return { passo, numero, status, exigidas, feitas, aprovadores: [...nomes.values()], ultimo, valor: doc?.valor ?? null }
+}
+
+export function calcularTrilha({ item, docs, eventos, medicoes, regras }) {
+  const passo = (p, numero, exigidas) => avaliarPasso({ passo: p, numero, doc: docs.get(`${p}|${numero}`) || null, eventos: eventos.get(`${p}|${numero}`) || [], exigidas })
+  const valorDe = (p, n) => Number(docs.get(`${p}|${n}`)?.valor) || 0
+  const passos = [passo('SOLICITACAO', item.solicitacao, regras.solicitacao)]
+  const c = item.cotacao
+  if (c && (docs.has(`ESTOURO|${c}`) || eventos.has(`ESTOURO|${c}`))) {
+    passos.push(passo('ESTOURO', c, valorDe('ESTOURO', c) > regras.estouro_minimo ? regras.estouro : 0))
+  }
+  passos.push(c ? passo('MAPA', c, regras.mapa) : avaliarPasso({ passo: 'MAPA', numero: null, doc: null, eventos: [], exigidas: regras.mapa }))
+  const alcada = (p, n) => (valorDe(p, n) > regras.alcada_valor ? regras.compra_acima : regras.compra_ate)
+  if (item.contrato) {
+    passos.push(passo('CONTRATO', item.contrato, alcada('CONTRATO', item.contrato)))
+    if (docs.has(`ADITIVO|${item.contrato}`) || eventos.has(`ADITIVO|${item.contrato}`)) passos.push(passo('ADITIVO', item.contrato, regras.aditivo))
+    for (const m of medicoes) passos.push(passo('MEDICAO', m, regras.medicao))
+  } else if (item.pedido) {
+    passos.push(passo('PEDIDO', item.pedido, alcada('PEDIDO', item.pedido)))
+  } else {
+    passos.push(avaliarPasso({ passo: 'COMPRA', numero: null, doc: null, eventos: [], exigidas: regras.compra_ate }))
+  }
+  const parado_em = passos.find((p) => p.status === 'PENDENTE' || p.status === 'REPROVADO' || p.status === 'NAO_INICIADO') || null
+  return { passos, parado_em }
+}

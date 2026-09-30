@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   normalizarNome, nivelDoCodigo, etapaParaMega, resolverEtapasPadrao,
   expandirParaNivel5, sugestoesPorNome, lerCustoProjetado, calcularMacro, subtrairDias, hojeNoBrasil,
+  avaliarPasso, calcularTrilha, REGRAS_PADRAO,
 } from './contratacoes.js'
 
 test('normalizarNome ignora acento, caixa e espaços extras', () => {
@@ -206,4 +207,67 @@ test('macro: resumo soma a obra e conta sinais', () => {
 test('hojeNoBrasil usa o fuso de São Paulo, não UTC', () => {
   assert.equal(hojeNoBrasil(new Date('2026-09-30T01:30:00Z')), '2026-09-29')
   assert.equal(hojeNoBrasil(new Date('2026-09-30T12:00:00Z')), '2026-09-30')
+})
+
+const ev = (acao, aprovador, data_hora) => ({ acao, aprovador, data_hora })
+
+test('avaliarPasso conta aprovadores distintos e respeita reprovação', () => {
+  const eventos = [
+    ev('Aprovação', 'Valerio Kogima', '2026-01-05T10:00'),
+    ev('Aprovação', 'valerio kogima ', '2026-01-06T10:00'),
+    ev('Reprovação', 'Natalia Barbosa', '2026-01-07T10:00'),
+    ev('Aprovação', 'Natalia Barbosa', '2026-01-08T10:00'),
+  ]
+  const p = avaliarPasso({ passo: 'MAPA', numero: 548, doc: { valor: 1740 }, eventos, exigidas: 2 })
+  assert.equal(p.feitas, 1)
+  assert.equal(p.status, 'PENDENTE')
+  assert.deepEqual(p.aprovadores, ['Natalia Barbosa'])
+  assert.equal(p.ultimo, '2026-01-08T10:00')
+})
+
+test('avaliarPasso: último evento reprovação vira REPROVADO; sem doc e sem eventos vira NAO_INICIADO', () => {
+  const r = avaliarPasso({ passo: 'MAPA', numero: 1, doc: { valor: 1 }, eventos: [ev('Aprovação', 'A', '1'), ev('Reprovação', 'B', '2')], exigidas: 1 })
+  assert.equal(r.status, 'REPROVADO')
+  const n = avaliarPasso({ passo: 'CONTRATO', numero: 3136, doc: null, eventos: [], exigidas: 1 })
+  assert.equal(n.status, 'NAO_INICIADO')
+  const d = avaliarPasso({ passo: 'ESTOURO', numero: 9, doc: { valor: 50 }, eventos: [ev('Aprovação', 'A', '1')], exigidas: 0 })
+  assert.equal(d.status, 'DISPENSADO')
+})
+
+test('calcularTrilha monta a cadeia com estouro, alçada e medições', () => {
+  const docs = new Map([
+    ['SOLICITACAO|16778', { valor: 180 }],
+    ['ESTOURO|582', { valor: 1530262.91 }],
+    ['MAPA|582', { valor: 55433.7 }],
+    ['CONTRATO|3109', { valor: 55433.7 }],
+    ['MEDICAO|23650', { valor: 3250 }],
+  ])
+  const eventos = new Map([
+    ['SOLICITACAO|16778', [ev('Aprovação', 'Eduardo', '1'), ev('Aprovação', 'Emerson', '2')]],
+    ['ESTOURO|582', [ev('Aprovação', 'Emerson', '3')]],
+    ['MAPA|582', [ev('Aprovação', 'Natalia', '4')]],
+    ['CONTRATO|3109', [ev('Aprovação', 'Bronqueti', '5')]],
+  ])
+  const t = calcularTrilha({ item: { solicitacao: 16778, cotacao: 582, pedido: null, contrato: 3109 }, docs, eventos, medicoes: [23650], regras: REGRAS_PADRAO })
+  assert.deepEqual(t.passos.map((p) => [p.passo, p.status, p.exigidas]), [
+    ['SOLICITACAO', 'APROVADO', 2],
+    ['ESTOURO', 'APROVADO', 1],
+    ['MAPA', 'APROVADO', 1],
+    ['CONTRATO', 'PENDENTE', 2],
+    ['MEDICAO', 'PENDENTE', 3],
+  ])
+  assert.equal(t.parado_em.passo, 'CONTRATO')
+})
+
+test('calcularTrilha: estouro pequeno dispensado, pedido até a alçada, passos futuros não iniciados', () => {
+  const docs = new Map([['SOLICITACAO|1', { valor: 1 }], ['ESTOURO|2', { valor: 9542 }], ['MAPA|2', { valor: 196 }]])
+  const eventos = new Map([['SOLICITACAO|1', [ev('Aprovação', 'A', '1'), ev('Aprovação', 'B', '2')]], ['MAPA|2', [ev('Aprovação', 'N', '3')]]])
+  const t = calcularTrilha({ item: { solicitacao: 1, cotacao: 2, pedido: 3, contrato: null }, docs, eventos, medicoes: [], regras: REGRAS_PADRAO })
+  assert.deepEqual(t.passos.map((p) => [p.passo, p.status]), [
+    ['SOLICITACAO', 'APROVADO'], ['ESTOURO', 'DISPENSADO'], ['MAPA', 'APROVADO'], ['PEDIDO', 'NAO_INICIADO'],
+  ])
+  assert.equal(t.passos[3].exigidas, 1)
+  assert.equal(t.parado_em.passo, 'PEDIDO')
+  const s = calcularTrilha({ item: { solicitacao: 1, cotacao: null, pedido: null, contrato: null }, docs, eventos, medicoes: [], regras: REGRAS_PADRAO })
+  assert.deepEqual(s.passos.map((p) => [p.passo, p.status]), [['SOLICITACAO', 'APROVADO'], ['MAPA', 'NAO_INICIADO'], ['COMPRA', 'NAO_INICIADO']])
 })
