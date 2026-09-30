@@ -220,7 +220,8 @@ export function avaliarPasso({ passo, numero, doc, eventos = [], exigidas }) {
   const nomes = new Map()
   for (const e of validos) nomes.set(normalizarNome(e.aprovador), e.aprovador.trim())
   const feitas = nomes.size
-  const ultimo = eventos.length ? eventos[eventos.length - 1].data_hora : null
+  // Sem eventos, o passo está parado desde o envio para aprovação.
+  const ultimo = eventos.length ? eventos[eventos.length - 1].data_hora : (doc?.data_envio ?? null)
   let status
   if (!doc && !eventos.length) status = 'NAO_INICIADO'
   else if (iReprov === eventos.length - 1 && iReprov >= 0) status = 'REPROVADO'

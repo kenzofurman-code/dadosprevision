@@ -7,7 +7,8 @@ const NOMES: Record<string, string> = {
 }
 const STATUS: Record<StatusPasso, string> = { NAO_INICIADO: 'Não iniciado', PENDENTE: 'Pendente', APROVADO: 'Aprovado', REPROVADO: 'Reprovado', DISPENSADO: 'Dispensado' }
 const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
-const dataHora = (d: string | null) => (d ? new Date(d).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '')
+// Horário já vem no fuso das obras (AAAA-MM-DDTHH:MM); só reordena.
+const dataHora = (d: string | null) => (d ? `${d.slice(0, 10).split('-').reverse().join('/')}${d.length > 10 ? ` ${d.slice(11, 16)}` : ''}` : '')
 
 export function ContratacoesMicro({ projectId, grupoId }: { projectId: string; grupoId: number }) {
   const [itens, setItens] = useState<ItemMicro[] | null>(null)
@@ -33,11 +34,11 @@ export function ContratacoesMicro({ projectId, grupoId }: { projectId: string; g
           <ol className="cm-trilha">
             {it.passos.map((p, i) => (
               <li key={i} className={`cm-passo cm-p-${p.status}`} title={p.aprovadores.join(', ')}>
-                <span>{NOMES[p.passo]}{p.numero ? ` ${p.numero}` : ''}</span>
+                <span>{NOMES[p.passo]}{p.numero != null ? ` ${p.numero}` : ''}</span>
                 <span>{STATUS[p.status]}{p.exigidas ? ` · ${p.feitas}/${p.exigidas}` : ''}</span>
                 {p.aprovadores.length > 0 && <small>{p.aprovadores.join(', ')}</small>}
                 {p.ultimo && <small>{dataHora(p.ultimo)}</small>}
-                {p.status === 'NAO_INICIADO' && p.numero && <small>sem registro no Approvo</small>}
+                {p.status === 'NAO_INICIADO' && p.numero != null && <small>sem registro no Approvo</small>}
               </li>
             ))}
           </ol>

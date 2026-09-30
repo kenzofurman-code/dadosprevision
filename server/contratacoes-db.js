@@ -339,7 +339,7 @@ export async function salvarRegras(projetoId, regras) {
   const limpo = {}
   for (const c of CAMPOS_REGRA) {
     const n = Number(regras?.[c])
-    if (!Number.isFinite(n) || n < 0) throw Object.assign(new Error(`Valor inválido em ${c}`), { status: 400 })
+    if (!Number.isInteger(n) || n < 0) throw Object.assign(new Error(`Valor inválido em ${c}`), { status: 400 })
     limpo[c] = n
   }
   await query(
@@ -368,12 +368,12 @@ export async function obterMicro(projetoId, grupoId, hoje = hojeNoBrasil()) {
               MAX(v.cod_cotacao)::bigint AS cotacao, MAX(v.cod_pedido)::bigint AS pedido, MAX(v.cod_contrato)::bigint AS contrato,
               ARRAY_AGG(DISTINCT s.codigo_etapa) AS etapas
        FROM mega.visualizacao_itens v
-       JOIN mega.solicitacoes_por_etapa s ON s.obra = v.obra AND s.codigo_solicitacao::text = v.solicitacao::text AND s.sequencial_item::text = v.sequencia::text
+       JOIN mega.solicitacoes_por_etapa s ON s.obra = v.obra AND s.codigo_solicitacao = v.solicitacao AND s.sequencial_item = v.sequencia
        WHERE v.obra = $1 AND s.codigo_etapa IS NOT NULL
        GROUP BY v.solicitacao, v.sequencia`, [obra]),
-    query(`SELECT tipo_documento, numero, valor, data_envio_aprovacao FROM mega.approvo_documentos WHERE obra = $1`, [obra]),
+    query(`SELECT tipo_documento, numero, valor, TO_CHAR(data_envio_aprovacao, 'YYYY-MM-DD') AS data_envio FROM mega.approvo_documentos WHERE obra = $1`, [obra]),
     query(
-      `SELECT tipo_documento, numero_documento, acao, aprovador, COALESCE(data_hora, data_aprovacao::timestamp) AS data_hora
+      `SELECT tipo_documento, numero_documento, acao, aprovador, TO_CHAR(COALESCE(data_hora, data_aprovacao::timestamp), 'YYYY-MM-DD"T"HH24:MI') AS data_hora
        FROM mega.approvo_ocorrencias WHERE obra = $1 ORDER BY 5, id`, [obra]),
     query(`SELECT DISTINCT numero_contrato, numero_medicao FROM mega.medicoes_contratos WHERE obra = $1 ORDER BY 2`, [obra]),
     obterRegras(projetoId),
@@ -381,7 +381,7 @@ export async function obterMicro(projetoId, grupoId, hoje = hojeNoBrasil()) {
   const docs = new Map()
   for (const d of docsRes.rows) {
     const t = TIPO_APPROVO[d.tipo_documento]
-    if (t) docs.set(`${t}|${d.numero}`, { valor: Number(d.valor), data_envio: d.data_envio_aprovacao })
+    if (t) docs.set(`${t}|${d.numero}`, { valor: Number(d.valor), data_envio: d.data_envio })
   }
   const eventos = new Map()
   for (const e of evRes.rows) {
@@ -389,7 +389,7 @@ export async function obterMicro(projetoId, grupoId, hoje = hojeNoBrasil()) {
     if (!t) continue
     const k = `${t}|${e.numero_documento}`
     if (!eventos.has(k)) eventos.set(k, [])
-    eventos.get(k).push({ acao: e.acao, aprovador: e.aprovador, data_hora: e.data_hora?.toISOString?.() ?? e.data_hora })
+    eventos.get(k).push({ acao: e.acao, aprovador: e.aprovador, data_hora: e.data_hora })
   }
   const medicoesDo = new Map()
   for (const m of medRes.rows) {

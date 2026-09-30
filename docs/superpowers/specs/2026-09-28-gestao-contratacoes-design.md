@@ -248,3 +248,6 @@ Regras decididas:
   (ex.: POTY 3136, 3166); tipo material × mão de obra vem do grupo
   configurado, não de pedido × contrato.
 - Dados Mega ganha uma aba **Approvo** (Documentos e Ocorrências por obra).
+- **Etapa 3 entregue (2026-09-30):** linha do macro abre o micro (itens, etapa,
+  trilha com aprovações feitas/exigidas, "parado há X dias"); aba Aprovações
+  nas Configurações; aba Approvo em Dados Mega.

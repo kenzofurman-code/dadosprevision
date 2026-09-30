@@ -23,7 +23,7 @@ export function ContratacoesAprovacoes({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     let vivo = true
-    setRegras(null)
+    setRegras(null); setErro(null); setAviso(null)
     api.regras(projectId).then((r) => { if (vivo) setRegras(r) }).catch((e) => { if (vivo) setErro((e as Error).message) })
     return () => { vivo = false }
   }, [projectId])
@@ -31,6 +31,7 @@ export function ContratacoesAprovacoes({ projectId }: { projectId: string }) {
   if (!regras) return <div className="cc-secao">{erro ? <p className="cc-erro">{erro}</p> : <p className="cc-muted">Carregando…</p>}</div>
 
   const salvar = async () => {
+    if (CAMPOS.some(({ campo }) => !Number.isInteger(regras[campo]) || regras[campo] < 0)) { setErro('Preencha todos os campos com números inteiros.'); return }
     setOcupado(true); setErro(null); setAviso(null)
     try { setRegras(await api.salvarRegras(projectId, regras)); setAviso('Aprovações salvas.') }
     catch (e) { setErro((e as Error).message) } finally { setOcupado(false) }
@@ -43,8 +44,8 @@ export function ContratacoesAprovacoes({ projectId }: { projectId: string }) {
         {CAMPOS.map(({ campo, label }) => (
           <label key={campo}>
             <span>{label}</span>
-            <input type="number" min={0} value={regras[campo]}
-              onChange={(e) => setRegras({ ...regras, [campo]: Number(e.target.value) })} />
+            <input type="number" min={0} step={1} value={Number.isNaN(regras[campo]) ? '' : regras[campo]}
+              onChange={(e) => setRegras({ ...regras, [campo]: e.target.value === '' ? NaN : Number(e.target.value) })} />
           </label>
         ))}
       </div>
