@@ -28,6 +28,7 @@ import { syncProjects, syncRestrictions } from './sync.js'
 import {
   obterConfig, aplicarPadrao, salvarGrupo, excluirGrupo, atrelarEtapas,
   soltarEtapa, confirmarEtapa, previaCusto, importarCusto, obterMacro,
+  obterRegras, salvarRegras, obterMicro,
 } from './contratacoes-db.js'
 import {
   repoDiario, consultarDiario, obrasDiario, resumoDiario, obterRelatorioDiario, indicadoresDiario,
@@ -290,6 +291,13 @@ const rota = (fn) => async (req, res) => {
 }
 
 app.get('/api/contratacoes/macro', rota((req) => obterMacro(exigirProjeto(req.query.projectId))))
+app.get('/api/contratacoes/regras', rota((req) => obterRegras(exigirProjeto(req.query.projectId))))
+app.put('/api/contratacoes/regras', rota((req) => salvarRegras(exigirProjeto(req.body?.projectId), req.body?.regras)))
+app.get('/api/contratacoes/micro', rota((req) => {
+  const grupoId = Number(req.query.grupoId)
+  if (!Number.isInteger(grupoId)) throw Object.assign(new Error('grupoId inválido.'), { status: 400 })
+  return obterMicro(exigirProjeto(req.query.projectId), grupoId)
+}))
 app.get('/api/contratacoes/config', rota((req) => obterConfig(exigirProjeto(req.query.projectId))))
 app.post('/api/contratacoes/aplicar-padrao', rota((req) =>
   aplicarPadrao(exigirProjeto(req.body?.projectId), { restaurar: Boolean(req.body?.restaurar) })))

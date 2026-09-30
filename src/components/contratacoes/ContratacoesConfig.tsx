@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { api, type Config, type Conflito, type Grupo, type Previa, type Tipo } from './contratacoes-api'
+import { ContratacoesAprovacoes } from './ContratacoesAprovacoes'
 import './ContratacoesConfig.css'
 
 const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
@@ -13,7 +14,7 @@ const PRAZOS: { campo: CampoPrazo; label: string }[] = [
 const novoGrupo = (tipo: Tipo, ordem: number): Grupo => ({ tipo, item: '', insumos: null, pacote_servicos: null, ordem,
   lead_time: 45, levantamento: 15 })
 
-type Aba = 'grupos' | 'pendencias' | 'custo'
+type Aba = 'grupos' | 'pendencias' | 'custo' | 'aprovacoes'
 
 export function ContratacoesConfig({ projectId }: { projectId: string }) {
   const [config, setConfig] = useState<Config | null>(null)
@@ -132,10 +133,15 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
           <button type="button" role="tab" aria-selected={aba === 'custo'} onClick={() => setAba('custo')}>
             Custo projetado{config.importacao ? ` · ${config.importacao.referencia.slice(0, 7)}` : ' · não importado'}
           </button>
+          <button type="button" role="tab" aria-selected={aba === 'aprovacoes'} onClick={() => setAba('aprovacoes')}>
+            Aprovações
+          </button>
         </div>
         {aviso && <p className="cc-aviso" onClick={() => setAviso(null)}>{aviso}</p>}
         {erro && <p className="cc-erro">{erro}</p>}
       </div>
+
+      {aba === 'aprovacoes' && <ContratacoesAprovacoes projectId={projectId} />}
 
       {aba === 'grupos' && (
         <div className="cc-secao">

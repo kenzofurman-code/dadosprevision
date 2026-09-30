@@ -10,6 +10,11 @@ type Pct = { solicitado: number | null; pedido: number | null; contratado: numbe
 export interface LinhaMacro { id: number; tipo: Tipo; item: string; insumos: string | null; lead_time: number; etapas: number; projetado: number; solicitado: number; pedido: number; contratado: number; realizado: number; lancado: number; falta: number; pct: Pct; inicio: string | null; limite: string | null; dias_ate_limite: number | null; sinal: Sinal }
 export interface Macro { obra: string | null; motivo?: string; importacao: Config['importacao']; grupos: LinhaMacro[]; resumo: { projetado: number; lancado: number; falta: number; porSinal: Record<Sinal, number> } }
 
+export interface Regras { solicitacao: number; estouro: number; estouro_minimo: number; mapa: number; compra_ate: number; compra_acima: number; alcada_valor: number; aditivo: number; medicao: number }
+export type StatusPasso = 'NAO_INICIADO' | 'PENDENTE' | 'APROVADO' | 'REPROVADO' | 'DISPENSADO'
+export interface Passo { passo: string; numero: number | null; status: StatusPasso; exigidas: number; feitas: number; aprovadores: string[]; ultimo: string | null; valor: number | null }
+export interface ItemMicro { solicitacao: number; sequencia: number; descricao: string | null; fornecedor: string | null; valor: number; etapas: { codigo: string; nome: string | null }[]; cotacao: number | null; pedido: number | null; contrato: number | null; passos: Passo[]; parado_em: Passo | null; dias_parado: number | null }
+
 async function chamar<T>(url: string, init?: RequestInit): Promise<{ status: number; data: T }> {
   const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } })
   const data = await res.json().catch(() => ({}))
@@ -19,6 +24,9 @@ async function chamar<T>(url: string, init?: RequestInit): Promise<{ status: num
 const post = <T>(url: string, body: unknown) => chamar<T>(url, { method: 'POST', body: JSON.stringify(body) })
 
 export const api = {
+  regras: (projectId: string) => chamar<Regras>(`/api/contratacoes/regras?projectId=${encodeURIComponent(projectId)}`).then((r) => r.data),
+  salvarRegras: (projectId: string, regras: Regras) => chamar<Regras>('/api/contratacoes/regras', { method: 'PUT', body: JSON.stringify({ projectId, regras }) }).then((r) => r.data),
+  micro: (projectId: string, grupoId: number) => chamar<{ obra: string | null; itens: ItemMicro[] }>(`/api/contratacoes/micro?projectId=${encodeURIComponent(projectId)}&grupoId=${grupoId}`).then((r) => r.data),
   macro: (projectId: string) => chamar<Macro>(`/api/contratacoes/macro?projectId=${encodeURIComponent(projectId)}`).then((r) => r.data),
   config: (projectId: string) => chamar<Config>(`/api/contratacoes/config?projectId=${encodeURIComponent(projectId)}`).then((r) => r.data),
   aplicarPadrao: (projectId: string, restaurar = false) => post<{ grupos: number; vinculos: number; sugeridos: number; conflitos: number }>('/api/contratacoes/aplicar-padrao', { projectId, restaurar }).then((r) => r.data),

@@ -663,3 +663,10 @@ CREATE TABLE IF NOT EXISTS diario.foto (
   origem TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_diario_foto_relatorio ON diario.foto (relatorio_id);
+
+-- Quantas aprovações cada passo do Approvo exige, por obra (spec seção 12).
+CREATE TABLE IF NOT EXISTS contratacao_aprovacao_regras (
+  projeto_id TEXT PRIMARY KEY,
+  regras JSONB NOT NULL,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

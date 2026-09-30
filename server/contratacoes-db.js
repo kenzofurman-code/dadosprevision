@@ -6,6 +6,7 @@ import { query, withTransaction } from './db.js'
 import {
   etapaParaMega, nivelDoCodigo, resolverEtapasPadrao, expandirParaNivel5,
   sugestoesPorNome, lerCustoProjetado, calcularMacro, hojeNoBrasil,
+  calcularTrilha, REGRAS_PADRAO,
 } from './contratacoes.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -325,4 +326,90 @@ export async function obterMacro(projetoId, hoje = hojeNoBrasil()) {
   }
   const grupos = gruposRes.rows.map((g) => ({ ...g, lead_time: Number(g.lead_time) || 0, etapas: etapasDo.get(g.id) || [] }))
   return { obra, importacao, ...calcularMacro({ grupos, projetado, valores, inicio, hoje }) }
+}
+
+const CAMPOS_REGRA = Object.keys(REGRAS_PADRAO)
+
+export async function obterRegras(projetoId) {
+  const { rows } = await query('SELECT regras FROM contratacao_aprovacao_regras WHERE projeto_id = $1', [projetoId])
+  return { ...REGRAS_PADRAO, ...(rows[0]?.regras || {}) }
+}
+
+export async function salvarRegras(projetoId, regras) {
+  const limpo = {}
+  for (const c of CAMPOS_REGRA) {
+    const n = Number(regras?.[c])
+    if (!Number.isFinite(n) || n < 0) throw Object.assign(new Error(`Valor inválido em ${c}`), { status: 400 })
+    limpo[c] = n
+  }
+  await query(
+    `INSERT INTO contratacao_aprovacao_regras (projeto_id, regras) VALUES ($1, $2)
+     ON CONFLICT (projeto_id) DO UPDATE SET regras = EXCLUDED.regras, atualizado_em = NOW()`, [projetoId, limpo])
+  return limpo
+}
+
+const TIPO_APPROVO = {
+  'Solicitação de Obra': 'SOLICITACAO', 'Estouro de Orçamento': 'ESTOURO', 'Mapa de Cotação': 'MAPA',
+  'Pedido de Compra': 'PEDIDO', 'Contrato de Cotação e Materiais': 'CONTRATO', 'Contrato Livre': 'CONTRATO',
+  'Aditivo de Contrato de Cotação e Materiais': 'ADITIVO', 'Medição de Contrato': 'MEDICAO',
+}
+
+export async function obterMicro(projetoId, grupoId, hoje = hojeNoBrasil()) {
+  const obra = await obraDoProjeto(projetoId)
+  if (!obra) return { obra: null, itens: [] }
+  const etapasRes = await query(
+    `SELECT codigo_etapa, COALESCE(nome_obra, nome_padrao) AS nome FROM contratacao_grupo_etapas WHERE projeto_id = $1 AND grupo_id = $2`,
+    [projetoId, grupoId])
+  const nomeEtapa = new Map(etapasRes.rows.map((e) => [e.codigo_etapa, e.nome]))
+  if (!nomeEtapa.size) return { obra, itens: [] }
+  const [itensRes, docsRes, evRes, medRes, regras] = await Promise.all([
+    query(
+      `SELECT v.solicitacao, v.sequencia, MAX(v.descricao) AS descricao, MAX(v.fornecedor) AS fornecedor, MAX(v.valor_total) AS valor,
+              MAX(v.cod_cotacao)::bigint AS cotacao, MAX(v.cod_pedido)::bigint AS pedido, MAX(v.cod_contrato)::bigint AS contrato,
+              ARRAY_AGG(DISTINCT s.codigo_etapa) AS etapas
+       FROM mega.visualizacao_itens v
+       JOIN mega.solicitacoes_por_etapa s ON s.obra = v.obra AND s.codigo_solicitacao::text = v.solicitacao::text AND s.sequencial_item::text = v.sequencia::text
+       WHERE v.obra = $1 AND s.codigo_etapa IS NOT NULL
+       GROUP BY v.solicitacao, v.sequencia`, [obra]),
+    query(`SELECT tipo_documento, numero, valor, data_envio_aprovacao FROM mega.approvo_documentos WHERE obra = $1`, [obra]),
+    query(
+      `SELECT tipo_documento, numero_documento, acao, aprovador, COALESCE(data_hora, data_aprovacao::timestamp) AS data_hora
+       FROM mega.approvo_ocorrencias WHERE obra = $1 ORDER BY 5, id`, [obra]),
+    query(`SELECT DISTINCT numero_contrato, numero_medicao FROM mega.medicoes_contratos WHERE obra = $1 ORDER BY 2`, [obra]),
+    obterRegras(projetoId),
+  ])
+  const docs = new Map()
+  for (const d of docsRes.rows) {
+    const t = TIPO_APPROVO[d.tipo_documento]
+    if (t) docs.set(`${t}|${d.numero}`, { valor: Number(d.valor), data_envio: d.data_envio_aprovacao })
+  }
+  const eventos = new Map()
+  for (const e of evRes.rows) {
+    const t = TIPO_APPROVO[e.tipo_documento]
+    if (!t) continue
+    const k = `${t}|${e.numero_documento}`
+    if (!eventos.has(k)) eventos.set(k, [])
+    eventos.get(k).push({ acao: e.acao, aprovador: e.aprovador, data_hora: e.data_hora?.toISOString?.() ?? e.data_hora })
+  }
+  const medicoesDo = new Map()
+  for (const m of medRes.rows) {
+    const k = String(m.numero_contrato)
+    if (!medicoesDo.has(k)) medicoesDo.set(k, [])
+    medicoesDo.get(k).push(Number(m.numero_medicao))
+  }
+  const itens = []
+  for (const r of itensRes.rows) {
+    const etapas = [...new Set(r.etapas.map(etapaParaMega))].filter((c) => nomeEtapa.has(c))
+    if (!etapas.length) continue
+    const item = { solicitacao: Number(r.solicitacao), cotacao: r.cotacao && Number(r.cotacao), pedido: r.pedido && Number(r.pedido), contrato: r.contrato && Number(r.contrato) }
+    const { passos, parado_em } = calcularTrilha({ item, docs, eventos, medicoes: medicoesDo.get(String(r.contrato)) || [], regras })
+    const desde = parado_em?.ultimo?.slice(0, 10) ?? null
+    itens.push({
+      ...item, sequencia: r.sequencia, descricao: r.descricao, fornecedor: r.fornecedor, valor: Number(r.valor) || 0,
+      etapas: etapas.map((c) => ({ codigo: c, nome: nomeEtapa.get(c) })), passos, parado_em,
+      dias_parado: desde ? Math.round((Date.parse(`${hoje}T00:00:00Z`) - Date.parse(`${desde}T00:00:00Z`)) / 86400000) : null,
+    })
+  }
+  itens.sort((a, b) => (a.parado_em ? 0 : 1) - (b.parado_em ? 0 : 1) || (b.dias_parado ?? -1) - (a.dias_parado ?? -1))
+  return { obra, itens }
 }

@@ -33,3 +33,6 @@
 .cc-acoes-linha { white-space: nowrap; text-align: right; }
 .cc-separador { opacity: .6; }
 .cc-vazio { align-items: flex-start; }
+.cc-regras { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 16px; }
+.cc-regras label { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.cc-regras input { width: 100%; }
