@@ -25,7 +25,7 @@ test('diasSemDiario atravessa mês e ano sem erro de fuso', () => {
 
 test('montarIndicadores com entrada vazia devolve zeros e listas vazias (obra sem dados)', () => {
   const r = montarIndicadores({})
-  assert.deepEqual(r.efetivo, { porDia: [], porEmpreiteira: [], porFuncao: [], homensDia: 0, diasComEfetivo: 0, mediaPorDia: 0 })
+  assert.deepEqual(r.efetivo, { porDia: [], porEmpreiteira: [], porFuncao: [], mediaPorDia: 0, diasComDiario: 0 })
   assert.deepEqual(r.clima.totais, { relatorios: 0, chuvosos: 0, impraticaveis: 0, parados: 0, chuvaMm: 0 })
   assert.deepEqual(r.ocorrencias, { total: 0, relatorios: 0, porTag: [] })
   assert.equal(r.preenchimento.totais.semDiario, 0)
@@ -37,6 +37,7 @@ test('montarIndicadores soma totais e converte nomes das colunas', () => {
     efetivoDia: [{ data: '2026-08-01', total: 10 }, { data: '2026-08-02', total: '15' }],
     efetivoEmpreiteira: [{ chave: 'PEREIRA DECOL', rotulo: 'Pereira Decol', total: '25' }],
     efetivoFuncao: [{ rotulo: 'Pedreiro', total: 12 }],
+    diasComDiario: 4,
     climaObra: [
       { obra_id: 'O1', obra_nome: 'Obra 1', relatorios: 2, chuvosos: 1, impraticaveis: 1, parados: 0, chuva_mm: '5.25' },
       { obra_id: 'O2', obra_nome: 'Obra 2', relatorios: 3, chuvosos: 2, impraticaveis: 0, parados: 1, chuva_mm: '0.2' },
@@ -48,9 +49,11 @@ test('montarIndicadores soma totais e converte nomes das colunas', () => {
       pendentes_antigos: 1, datas: ['2026-08-01', '2026-08-02', '2026-08-04'],
     }],
   }, { dataInicio: null, dataFim: null })
-  assert.equal(r.efetivo.homensDia, 25)
-  assert.equal(r.efetivo.mediaPorDia, 12.5)
   assert.equal(r.efetivo.porDia[1].total, 15)
+  assert.equal(r.efetivo.diasComDiario, 4)
+  assert.equal(r.efetivo.mediaPorDia, 6.3) // 25 homens-dia / 4 dias com diário, uma casa decimal
+  assert.deepEqual(r.efetivo.porEmpreiteira, [{ chave: 'PEREIRA DECOL', rotulo: 'Pereira Decol', media: 6.3 }])
+  assert.deepEqual(r.efetivo.porFuncao, [{ rotulo: 'Pedreiro', media: 3 }])
   assert.deepEqual(r.clima.totais, { relatorios: 5, chuvosos: 3, impraticaveis: 1, parados: 1, chuvaMm: 5.5 })
   assert.equal(r.ocorrencias.porTag[0].total, 4)
   assert.deepEqual(r.preenchimento.porObra[0], {
@@ -59,4 +62,16 @@ test('montarIndicadores soma totais e converte nomes das colunas', () => {
   })
   assert.equal(r.preenchimento.totais.pendentesAntigos, 1)
   assert.equal(r.preenchimento.totais.semDiario, 1)
+})
+
+test('montarIndicadores: sem dias com diário a média é zero (sem dividir por zero)', () => {
+  const r = montarIndicadores({
+    efetivoDia: [{ data: '2026-08-01', total: 10 }],
+    efetivoEmpreiteira: [{ chave: 'X', rotulo: 'X', total: 10 }],
+    efetivoFuncao: [{ rotulo: 'Y', total: 10 }],
+    diasComDiario: 0,
+  })
+  assert.equal(r.efetivo.mediaPorDia, 0)
+  assert.equal(r.efetivo.porEmpreiteira[0].media, 0)
+  assert.equal(r.efetivo.porFuncao[0].media, 0)
 })

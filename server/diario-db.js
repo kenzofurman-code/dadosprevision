@@ -160,7 +160,7 @@ export async function indicadoresDiario({ obra = '', dataInicio = null, dataFim 
     AND ($2::date IS NULL OR r.data >= $2::date)
     AND ($3::date IS NULL OR r.data <= $3::date)`
   const ler = (sql) => query(sql, params).then((r) => r.rows)
-  const [efetivoDia, efetivoEmpreiteira, efetivoFuncao, climaObra, tags, ocorrenciaTotais, preenchimentoObra] = await Promise.all([
+  const [efetivoDia, efetivoEmpreiteira, efetivoFuncao, climaObra, tags, ocorrenciaTotais, preenchimentoObra, dias] = await Promise.all([
     ler(`SELECT r.data::text AS data, SUM(m.quantidade)::int AS total
            FROM diario.relatorio r JOIN diario.mao_obra m ON m.relatorio_id = r.relatorio_id
           WHERE ${onde} GROUP BY r.data ORDER BY r.data`),
@@ -194,9 +194,10 @@ export async function indicadoresDiario({ obra = '', dataInicio = null, dataFim 
                 array_agg(DISTINCT r.data::text) AS datas
            FROM diario.relatorio r JOIN diario.obra o ON o.obra_id = r.obra_id
           WHERE ${onde} GROUP BY o.obra_id, o.nome ORDER BY o.nome`),
+    ler(`SELECT COUNT(DISTINCT r.data)::int AS dias FROM diario.relatorio r WHERE ${onde}`),
   ])
   return montarIndicadores(
-    { efetivoDia, efetivoEmpreiteira, efetivoFuncao, climaObra, tags, ocorrenciaTotais: ocorrenciaTotais[0], preenchimentoObra },
+    { efetivoDia, efetivoEmpreiteira, efetivoFuncao, climaObra, tags, ocorrenciaTotais: ocorrenciaTotais[0], preenchimentoObra, diasComDiario: dias[0].dias },
     { dataInicio, dataFim },
   )
 }

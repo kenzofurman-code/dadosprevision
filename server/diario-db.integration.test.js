@@ -64,8 +64,10 @@ test('grava, consulta, indica, remove e restaura (SQL real)', opcoes, async () =
   assert.equal(await obterRelatorioDiario('nao-existe'), null)
 
   const ind = await indicadoresDiario({})
-  assert.equal(ind.efetivo.homensDia, 8)
-  assert.deepEqual(ind.efetivo.porEmpreiteira[0], { chave: 'PEREIRA DECOL', rotulo: ind.efetivo.porEmpreiteira[0].rotulo, total: 8 })
+  // 8 pessoas lançadas no total e 2 dias com diário (10/08 e 13/08) → média de 4 por dia
+  assert.equal(ind.efetivo.diasComDiario, 2)
+  assert.equal(ind.efetivo.mediaPorDia, 4)
+  assert.deepEqual(ind.efetivo.porEmpreiteira[0], { chave: 'PEREIRA DECOL', rotulo: ind.efetivo.porEmpreiteira[0].rotulo, media: 4 })
   assert.deepEqual([ind.clima.totais.parados, ind.clima.totais.chuvosos, ind.clima.totais.chuvaMm], [1, 1, 10])
   assert.equal(ind.ocorrencias.porTag[0].tag, 'PARALISAÇÃO – CHUVA (ACIMA 5 mm)')
   assert.deepEqual(
@@ -74,7 +76,7 @@ test('grava, consulta, indica, remove e restaura (SQL real)', opcoes, async () =
     [3, 1, 2, 2, 2],
   )
   assert.equal((await indicadoresDiario({ dataInicio: '2026-08-11', dataFim: '2026-08-31' })).preenchimento.totais.relatorios, 1)
-  assert.equal((await indicadoresDiario({ obra: 'outra' })).efetivo.homensDia, 0)
+  assert.equal((await indicadoresDiario({ obra: 'outra' })).efetivo.mediaPorDia, 0)
 
   assert.equal(await repoDiario.marcarRemovidos('teste-O1', ['teste-rel-a', 'teste-rel-b']), 1)
   assert.equal((await consultarDiario('relatorios', {})).total, 2)

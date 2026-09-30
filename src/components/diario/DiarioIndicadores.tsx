@@ -2,16 +2,10 @@ import { useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import './Diario.css'
 import { diarioApi, type IndicadoresDiario, type ObraDiario } from './diario-api'
-import { BarrasDia, BarrasHorizontais } from './graficos'
-import { fmtInteiro, fmtNumero } from './formatos'
+import { BarrasHorizontais, BarrasUltimosDias } from './graficos'
+import { fmtInteiro, fmtMedia, fmtNumero, somarDias } from './formatos'
 
 const hoje = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' })
-
-function somarDias(iso: string, dias: number) {
-  const d = new Date(`${iso}T12:00:00Z`)
-  d.setUTCDate(d.getUTCDate() + dias)
-  return d.toISOString().slice(0, 10)
-}
 
 function Cartao({ rotulo, valor, detalhe, alerta = false }: { rotulo: string; valor: string; detalhe?: string; alerta?: boolean }) {
   return (
@@ -79,7 +73,7 @@ export function DiarioIndicadores() {
       {dados && !semDados && (
         <>
           <div className="dd-cartoes">
-            <Cartao rotulo="Homens-dia" valor={fmtInteiro(dados.efetivo.homensDia)} detalhe={`média ${fmtNumero(dados.efetivo.mediaPorDia)} por dia com efetivo`} />
+            <Cartao rotulo="Efetivo médio por dia" valor={fmtMedia(dados.efetivo.mediaPorDia)} detalhe={`pessoas · ${fmtInteiro(dados.efetivo.diasComDiario)} dias com diário`} />
             <Cartao rotulo="Diários" valor={fmtInteiro(dados.preenchimento.totais.relatorios)} detalhe={`${fmtInteiro(dados.preenchimento.totais.aprovados)} aprovados`} />
             <Cartao rotulo="Dias parados" valor={fmtInteiro(dados.clima.totais.parados)} detalhe="tag PARALISAÇÃO" alerta={dados.clima.totais.parados > 0} />
             <Cartao rotulo="Dias chuvosos" valor={fmtInteiro(dados.clima.totais.chuvosos)} detalhe={`${fmtNumero(dados.clima.totais.chuvaMm)} mm registrados`} />
@@ -91,16 +85,16 @@ export function DiarioIndicadores() {
 
           <div className="dd-grade-graficos">
             <div className="dd-bloco">
-              <h4>Efetivo por dia (homens-dia)</h4>
-              <BarrasDia dados={dados.efetivo.porDia} />
+              <h4>Efetivo por dia — últimos 14 dias (soma das obras)</h4>
+              <BarrasUltimosDias dados={dados.efetivo.porDia} fim={dataFim || null} />
             </div>
             <div className="dd-bloco">
-              <h4>Efetivo por empreiteira (top 15)</h4>
-              <BarrasHorizontais itens={dados.efetivo.porEmpreiteira.map((e) => ({ rotulo: e.rotulo, total: e.total }))} />
+              <h4>Efetivo médio por empreiteira (pessoas/dia, top 15)</h4>
+              <BarrasHorizontais itens={dados.efetivo.porEmpreiteira.map((e) => ({ rotulo: e.rotulo, total: e.media }))} formato={fmtMedia} />
             </div>
             <div className="dd-bloco">
-              <h4>Efetivo por função (top 15)</h4>
-              <BarrasHorizontais itens={dados.efetivo.porFuncao} />
+              <h4>Efetivo médio por função (pessoas/dia, top 15)</h4>
+              <BarrasHorizontais itens={dados.efetivo.porFuncao.map((f) => ({ rotulo: f.rotulo, total: f.media }))} formato={fmtMedia} />
             </div>
             <div className="dd-bloco">
               <h4>Ocorrências por tag (top 15)</h4>

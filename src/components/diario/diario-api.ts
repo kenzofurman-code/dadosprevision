@@ -39,11 +39,10 @@ export interface RelatorioDetalhe {
 export interface IndicadoresDiario {
   efetivo: {
     porDia: { data: string; total: number }[]
-    porEmpreiteira: { chave: string; rotulo: string; total: number }[]
-    porFuncao: { rotulo: string; total: number }[]
-    homensDia: number
-    diasComEfetivo: number
+    porEmpreiteira: { chave: string; rotulo: string; media: number }[]
+    porFuncao: { rotulo: string; media: number }[]
     mediaPorDia: number
+    diasComDiario: number
   }
   clima: {
     totais: { relatorios: number; chuvosos: number; impraticaveis: number; parados: number; chuvaMm: number }

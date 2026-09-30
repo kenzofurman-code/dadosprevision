@@ -25,10 +25,11 @@ export function diasSemDiario(datas, { inicio = null, fim = null } = {}) {
 export function montarIndicadores(entrada, { dataInicio = null, dataFim = null } = {}) {
   const {
     efetivoDia = [], efetivoEmpreiteira = [], efetivoFuncao = [], climaObra = [],
-    tags = [], ocorrenciaTotais = { ocorrencias: 0, relatorios: 0 }, preenchimentoObra = [],
+    tags = [], ocorrenciaTotais = { ocorrencias: 0, relatorios: 0 }, preenchimentoObra = [], diasComDiario = 0,
   } = entrada
 
-  const homensDia = soma(efetivoDia, 'total')
+  // Média de pessoas por dia com diário (nunca o acumulado do período, que não diz o tamanho da equipe).
+  const media = (total) => (diasComDiario > 0 ? arredondar(Number(total) / diasComDiario) : 0)
   const preenchimento = preenchimentoObra.map((o) => {
     const dias = diasSemDiario(o.datas ?? [], { inicio: dataInicio, fim: dataFim })
     return {
@@ -41,11 +42,10 @@ export function montarIndicadores(entrada, { dataInicio = null, dataFim = null }
   return {
     efetivo: {
       porDia: efetivoDia.map((d) => ({ data: d.data, total: Number(d.total) })),
-      porEmpreiteira: efetivoEmpreiteira.map((e) => ({ chave: e.chave, rotulo: e.rotulo, total: Number(e.total) })),
-      porFuncao: efetivoFuncao.map((f) => ({ rotulo: f.rotulo, total: Number(f.total) })),
-      homensDia,
-      diasComEfetivo: efetivoDia.length,
-      mediaPorDia: efetivoDia.length ? arredondar(homensDia / efetivoDia.length) : 0,
+      porEmpreiteira: efetivoEmpreiteira.map((e) => ({ chave: e.chave, rotulo: e.rotulo, media: media(e.total) })),
+      porFuncao: efetivoFuncao.map((f) => ({ rotulo: f.rotulo, media: media(f.total) })),
+      mediaPorDia: media(soma(efetivoDia, 'total')),
+      diasComDiario,
     },
     clima: {
       totais: {
