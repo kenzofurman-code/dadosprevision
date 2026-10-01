@@ -248,6 +248,23 @@ async function obraDoProjeto(projetoId) {
 // em_pedido / em_contrato = saldo aberto da Análise de Saldo (abas Pedidos e
 // Contratos, última extração da obra); realizado = apropriação por cod_estruturado.
 // Comprometido = realizado + saldos, como na planilha de projeção de custo.
+// Saldo da última carga bem-sucedida da obra (mega.carga): se a obra zerou o
+// saldo, essa carga não traz linhas e o saldo é zero, não o de um dia antigo.
+// Sem registro em mega.carga, cai na última data da tabela. Rodar a carga duas
+// vezes no mesmo dia duplica as linhas (INSERT simples), por isso o DISTINCT.
+const saldoSql = (tabela, arquivo, campo, colunas) => `
+  WITH dia AS (
+    SELECT COALESCE(
+      (SELECT MAX(data_extracao) FROM mega.carga
+       WHERE relatorio = 'analise_saldo_solicitacao' AND arquivo = '${arquivo}' AND NOT bloqueado
+         AND ($1 = ANY(obras_ok) OR $1 = ANY(obras_sem_movimento))),
+      (SELECT MAX(data_extracao) FROM mega.${tabela} WHERE obra = $1)) AS d
+  ), linhas AS (
+    SELECT DISTINCT ${colunas}, raw_data FROM mega.${tabela}
+    WHERE obra = $1 AND data_extracao = (SELECT d FROM dia)
+  )
+  SELECT raw_data->>'cod_estruturado' AS codigo_etapa, SUM(COALESCE(${campo}, 0)) AS valor FROM linhas GROUP BY 1`
+
 async function valoresPorEtapa(obra) {
   const [itens, pedidos, contratos, realizado] = await Promise.all([
     query(
@@ -266,16 +283,10 @@ async function valoresPorEtapa(obra) {
        FROM etapa_item e
        JOIN item i ON i.solicitacao::text = e.codigo_solicitacao::text AND i.sequencia::text = e.sequencial_item::text
        GROUP BY e.codigo_etapa`, [obra]),
-    query(
-      `SELECT raw_data->>'cod_estruturado' AS codigo_etapa, SUM(COALESCE(valor_apropriacao, 0)) AS valor
-       FROM mega.analise_pedidos_hist
-       WHERE obra = $1 AND data_extracao = (SELECT MAX(data_extracao) FROM mega.analise_pedidos_hist WHERE obra = $1)
-       GROUP BY 1`, [obra]),
-    query(
-      `SELECT raw_data->>'cod_estruturado' AS codigo_etapa, SUM(COALESCE(total, 0)) AS valor
-       FROM mega.analise_contratos_hist
-       WHERE obra = $1 AND data_extracao = (SELECT MAX(data_extracao) FROM mega.analise_contratos_hist WHERE obra = $1)
-       GROUP BY 1`, [obra]),
+    query(saldoSql('analise_pedidos_hist', 'Analise_Pedidos', 'valor_apropriacao',
+      'codigo_pedido, fornecedor, qtde_pedido, valor_unitario, qtde_apropriada, valor_apropriacao'), [obra]),
+    query(saldoSql('analise_contratos_hist', 'Analise_Contratos', 'total',
+      'codigo_contrato, fornecedor, status_pre_contrato, saldo_qtde_contrato, valor_unitario, total'), [obra]),
     query(
       `SELECT raw_data->>'cod_estruturado' AS codigo_etapa, SUM(COALESCE(valor_apropriacao, 0)) AS valor
        FROM mega.analise_realizado WHERE obra = $1 AND raw_data ? 'cod_estruturado' GROUP BY 1`, [obra]),
