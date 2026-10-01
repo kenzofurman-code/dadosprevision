@@ -6,7 +6,7 @@ import { query, withTransaction } from './db.js'
 import {
   etapaParaMega, nivelDoCodigo, resolverEtapasPadrao, expandirParaNivel5,
   sugestoesPorNome, lerCustoProjetado, calcularMacro, hojeNoBrasil,
-  calcularTrilha, REGRAS_PADRAO,
+  calcularTrilha, REGRAS_PADRAO, classificador, lerClassificacaoInsumos, origemParaCanal, normalizarNome,
 } from './contratacoes.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -75,6 +75,45 @@ async function custosDaImportacao(importacaoId) {
   return new Map(rows.map((r) => [r.codigo_etapa, Number(r.custo_projetado)]))
 }
 
+// Classificação de insumos da empresa + ajustes da obra.
+async function classificadorDaObra(projetoId) {
+  const { rows } = await query(
+    'SELECT projeto_id, cod_insumo, descricao, tipo FROM insumo_classificacao WHERE projeto_id IS NULL OR projeto_id = $1', [projetoId])
+  const empresa = rows.filter((r) => r.projeto_id === null)
+  const obra = rows.filter((r) => r.projeto_id !== null)
+  return {
+    tipoDe: classificador({ empresa, obra }),
+    empresa: empresa.length,
+    obra: obra.map((r) => ({ descricao: r.descricao, tipo: r.tipo })),
+  }
+}
+
+// Projetado por 'etapa|TIPO'. Importação antiga (sem linhas por insumo) entra
+// toda como material, com aviso para reimportar.
+async function projetadoPorTipo(importacaoId, tipoDe) {
+  const mapa = new Map()
+  const somar = (c, t, v) => mapa.set(`${c}|${t}`, (mapa.get(`${c}|${t}`) || 0) + v)
+  if (!importacaoId) return { mapa, semDescricao: false, semClassificacao: [] }
+  const { rows } = await query('SELECT codigo_etapa, descricao, custo_projetado FROM custo_projetado_insumos WHERE importacao_id = $1', [importacaoId])
+  if (!rows.length) {
+    for (const [c, v] of await custosDaImportacao(importacaoId)) somar(c, 'MATERIAL', v)
+    return { mapa, semDescricao: true, semClassificacao: [] }
+  }
+  const semClassificacao = new Map()
+  for (const r of rows) {
+    const v = Number(r.custo_projetado) || 0
+    const { tipo, fonte } = tipoDe(r.descricao)
+    somar(r.codigo_etapa, tipo, v)
+    if (fonte === 'HEURISTICA') {
+      const d = normalizarNome(r.descricao)
+      const atual = semClassificacao.get(d) || { descricao: d, tipo, projetado: 0 }
+      atual.projetado += v
+      semClassificacao.set(d, atual)
+    }
+  }
+  return { mapa, semDescricao: false, semClassificacao: [...semClassificacao.values()].sort((a, b) => b.projetado - a.projetado) }
+}
+
 export async function obterConfig(projetoId) {
   const [orcamento, importacao, gruposRes, etapasRes, padraoRes] = await Promise.all([
     orcamentoDaObra(projetoId),
@@ -84,19 +123,21 @@ export async function obterConfig(projetoId) {
     query(`SELECT e.codigo_etapa, e.nome_padrao, g.ordem, g.id AS padrao_id FROM contratacao_grupo_etapas e
            JOIN contratacao_grupos g ON g.id = e.grupo_id WHERE e.projeto_id IS NULL`),
   ])
-  const custos = await custosDaImportacao(importacao?.id)
+  const classif = await classificadorDaObra(projetoId)
+  const proj = await projetadoPorTipo(importacao?.id, classif.tipoDe)
+  const custo = (c, t) => proj.mapa.get(`${c}|${t}`) ?? null
+  const tipoDoGrupo = new Map(gruposRes.rows.map((g) => [g.id, g.tipo]))
   const porGrupo = new Map()
-  const usadas = new Set()
+  const usadas = { MATERIAL: new Set(), MAO_DE_OBRA: new Set() }
   for (const e of etapasRes.rows) {
-    usadas.add(e.codigo_etapa)
+    const t = tipoDoGrupo.get(e.grupo_id)
+    usadas[t]?.add(e.codigo_etapa)
     if (!porGrupo.has(e.grupo_id)) porGrupo.set(e.grupo_id, [])
-    porGrupo.get(e.grupo_id).push({ ...e, custo_projetado: custos.get(e.codigo_etapa) ?? null })
+    porGrupo.get(e.grupo_id).push({ ...e, custo_projetado: custo(e.codigo_etapa, t) })
   }
   const grupos = gruposRes.rows.map((g) => ({ ...g, etapas: porGrupo.get(g.id) || [] }))
-  const pendBase = [...orcamento.entries()]
-    .filter(([c]) => nivelDoCodigo(c) === 5 && !usadas.has(c))
-    .map(([codigo, nome]) => ({ codigo, nome }))
-  const sugestoes = sugestoesPorNome(pendBase,
+  const nivel5 = [...orcamento.entries()].filter(([c]) => nivelDoCodigo(c) === 5)
+  const sugestoes = sugestoesPorNome(nivel5.map(([codigo, nome]) => ({ codigo, nome })),
     padraoRes.rows.map((r) => ({ codigo: r.codigo_etapa, nome: r.nome_padrao, ordem: r.ordem })))
   const grupoPorPadraoOrdem = new Map()
   const ordemPorPadraoId = new Map(padraoRes.rows.map((r) => [r.padrao_id, r.ordem]))
@@ -104,16 +145,24 @@ export async function obterConfig(projetoId) {
     const ordemPadrao = ordemPorPadraoId.get(g.padrao_grupo_id)
     if (ordemPadrao !== undefined) grupoPorPadraoOrdem.set(ordemPadrao, g)
   }
-  const pendencias = pendBase.map((p) => {
-    const s = sugestoes.get(p.codigo)
-    const g = s ? grupoPorPadraoOrdem.get(s.ordem) : null
-    return {
-      codigo_etapa: p.codigo, nome: p.nome, custo_projetado: custos.get(p.codigo) ?? null,
-      sugestao: g ? { grupo_id: g.id, item: g.item, codigo_padrao: s.codigo_padrao } : null,
-    }
-  }).sort((a, b) => (b.custo_projetado ?? -1) - (a.custo_projetado ?? -1) || a.codigo_etapa.localeCompare(b.codigo_etapa))
-  const orcamentoTotal = [...custos.values()].reduce((s, v) => s + v, 0)
-  return { aplicado: grupos.length > 0, grupos, pendencias, importacao, orcamentoTotal }
+  // Pendências por tipo: etapa sem grupo daquele tipo. Com a projeção por
+  // insumo, só entram etapas com custo daquele tipo.
+  const pendenciasDo = (t) => nivel5
+    .filter(([c]) => !usadas[t].has(c) && (proj.semDescricao || !importacao || (custo(c, t) ?? 0) > 0))
+    .map(([codigo, nome]) => {
+      const s = sugestoes.get(codigo)
+      const g = s ? grupoPorPadraoOrdem.get(s.ordem) : null
+      return {
+        codigo_etapa: codigo, nome, custo_projetado: custo(codigo, t),
+        sugestao: g && g.tipo === t ? { grupo_id: g.id, item: g.item, codigo_padrao: s.codigo_padrao } : null,
+      }
+    }).sort((a, b) => (b.custo_projetado ?? -1) - (a.custo_projetado ?? -1) || a.codigo_etapa.localeCompare(b.codigo_etapa))
+  const orcamentoTotal = [...proj.mapa.values()].reduce((s, v) => s + v, 0)
+  return {
+    aplicado: grupos.length > 0, grupos, importacao, orcamentoTotal, projecaoSemInsumo: proj.semDescricao,
+    pendencias: { MATERIAL: pendenciasDo('MATERIAL'), MAO_DE_OBRA: pendenciasDo('MAO_DE_OBRA') },
+    classificacao: { empresa: classif.empresa, obra: classif.obra, sem_classificacao: proj.semClassificacao },
+  }
 }
 
 export async function aplicarPadrao(projetoId, { restaurar = false } = {}) {
@@ -141,11 +190,12 @@ export async function aplicarPadrao(projetoId, { restaurar = false } = {}) {
       )
       idPorOrdem.set(g.ordem, novo.id)
     }
+    const tipoPorOrdem = new Map(padrao.map((g) => [g.ordem, g.tipo]))
     for (const v of vinculos) {
       await q(
-        `INSERT INTO contratacao_grupo_etapas (grupo_id, projeto_id, codigo_etapa, nivel, situacao, nome_padrao, nome_obra, origem_nivel4)
-         VALUES ($1,$2,$3,5,$4,$5,$6,$7)`,
-        [idPorOrdem.get(v.ordem), projetoId, v.codigo_etapa, v.situacao, v.nome_padrao, v.nome_obra, v.origem_nivel4],
+        `INSERT INTO contratacao_grupo_etapas (grupo_id, projeto_id, codigo_etapa, nivel, situacao, nome_padrao, nome_obra, origem_nivel4, tipo)
+         VALUES ($1,$2,$3,5,$4,$5,$6,$7,$8)`,
+        [idPorOrdem.get(v.ordem), projetoId, v.codigo_etapa, v.situacao, v.nome_padrao, v.nome_obra, v.origem_nivel4, tipoPorOrdem.get(v.ordem)],
       )
     }
     return { grupos: padrao.length, vinculos: vinculos.length,
@@ -184,31 +234,61 @@ export async function atrelarEtapas(projetoId, grupoId, codigos, { mover = false
   const alvo = expandirParaNivel5(codigos, orcamento)
   if (!alvo.length) return { inseridas: 0, conflitos: [] }
   return withTransaction(async (q) => {
-    const { rows: [grupo] } = await q('SELECT id FROM contratacao_grupos WHERE id = $1 AND projeto_id = $2', [grupoId, projetoId])
+    const { rows: [grupo] } = await q('SELECT id, tipo FROM contratacao_grupos WHERE id = $1 AND projeto_id = $2', [grupoId, projetoId])
     if (!grupo) throw Object.assign(new Error('Grupo não encontrado nesta obra.'), { status: 404 })
+    // Conflito só com grupo do mesmo tipo: a etapa pode ter um grupo de material e um de mão de obra.
     const { rows: existentes } = await q(
       `SELECT e.codigo_etapa, e.grupo_id, g.item FROM contratacao_grupo_etapas e JOIN contratacao_grupos g ON g.id = e.grupo_id
-       WHERE e.projeto_id = $1 AND e.codigo_etapa = ANY($2) AND e.grupo_id <> $3`,
-      [projetoId, alvo.map((a) => a.codigo_etapa), grupoId])
+       WHERE e.projeto_id = $1 AND e.codigo_etapa = ANY($2) AND e.grupo_id <> $3 AND e.tipo = $4`,
+      [projetoId, alvo.map((a) => a.codigo_etapa), grupoId, grupo.tipo])
     if (existentes.length && !mover) return { inseridas: 0, conflitos: existentes }
-    await q('DELETE FROM contratacao_grupo_etapas WHERE projeto_id = $1 AND codigo_etapa = ANY($2)',
-      [projetoId, alvo.map((a) => a.codigo_etapa)])
+    await q('DELETE FROM contratacao_grupo_etapas WHERE projeto_id = $1 AND codigo_etapa = ANY($2) AND tipo = $3',
+      [projetoId, alvo.map((a) => a.codigo_etapa), grupo.tipo])
     for (const a of alvo) {
       await q(
-        `INSERT INTO contratacao_grupo_etapas (grupo_id, projeto_id, codigo_etapa, nivel, situacao, nome_obra, origem_nivel4)
-         VALUES ($1,$2,$3,5,'CONFIRMADO',$4,$5)`,
-        [grupoId, projetoId, a.codigo_etapa, orcamento.get(a.codigo_etapa) || '', a.origem_nivel4])
+        `INSERT INTO contratacao_grupo_etapas (grupo_id, projeto_id, codigo_etapa, nivel, situacao, nome_obra, origem_nivel4, tipo)
+         VALUES ($1,$2,$3,5,'CONFIRMADO',$4,$5,$6)`,
+        [grupoId, projetoId, a.codigo_etapa, orcamento.get(a.codigo_etapa) || '', a.origem_nivel4, grupo.tipo])
     }
     return { inseridas: alvo.length, conflitos: [] }
   })
 }
 
-export async function soltarEtapa(projetoId, codigo) {
-  await query('DELETE FROM contratacao_grupo_etapas WHERE projeto_id = $1 AND codigo_etapa = $2', [projetoId, codigo])
+// grupoId: a mesma etapa pode estar num grupo de material e num de mão de obra.
+export async function soltarEtapa(projetoId, codigo, grupoId = null) {
+  await query('DELETE FROM contratacao_grupo_etapas WHERE projeto_id = $1 AND codigo_etapa = $2 AND ($3::int IS NULL OR grupo_id = $3)',
+    [projetoId, codigo, grupoId])
 }
 
-export async function confirmarEtapa(projetoId, codigo) {
-  await query(`UPDATE contratacao_grupo_etapas SET situacao = 'CONFIRMADO' WHERE projeto_id = $1 AND codigo_etapa = $2`, [projetoId, codigo])
+export async function confirmarEtapa(projetoId, codigo, grupoId = null) {
+  await query(`UPDATE contratacao_grupo_etapas SET situacao = 'CONFIRMADO'
+               WHERE projeto_id = $1 AND codigo_etapa = $2 AND ($3::int IS NULL OR grupo_id = $3)`, [projetoId, codigo, grupoId])
+}
+
+// Planilha de insumos da empresa: substitui a classificação da empresa inteira.
+export async function importarClassificacao(matriz) {
+  const lido = lerClassificacaoInsumos(matriz)
+  if (lido.erros.length) throw Object.assign(new Error(lido.erros[0]), { status: 400 })
+  if (!lido.itens.length) throw Object.assign(new Error('Nenhum insumo com definição MT, SE, EQ ou OU encontrado.'), { status: 400 })
+  const unicos = [...new Map(lido.itens.map((i) => [i.descricao, i])).values()]
+  return withTransaction(async (q) => {
+    await q('DELETE FROM insumo_classificacao WHERE projeto_id IS NULL')
+    await q(
+      `INSERT INTO insumo_classificacao (projeto_id, cod_insumo, descricao, definicao, tipo)
+       SELECT NULL, c, d, f, t FROM unnest($1::bigint[], $2::text[], $3::text[], $4::text[]) AS x(c, d, f, t)`,
+      [unicos.map((i) => i.cod_insumo), unicos.map((i) => i.descricao), unicos.map((i) => i.definicao), unicos.map((i) => i.tipo)])
+    return { insumos: unicos.length, ignoradas: lido.ignoradas }
+  })
+}
+
+// Ajuste da obra para um insumo (por descrição); tipo null remove o ajuste.
+export async function classificarInsumoObra(projetoId, descricao, tipo) {
+  const d = normalizarNome(descricao)
+  if (!d) throw Object.assign(new Error('Informe a descrição do insumo.'), { status: 400 })
+  if (tipo != null && !['MATERIAL', 'MAO_DE_OBRA'].includes(tipo)) throw Object.assign(new Error('Tipo deve ser MATERIAL ou MAO_DE_OBRA.'), { status: 400 })
+  await query('DELETE FROM insumo_classificacao WHERE projeto_id = $1 AND descricao = $2', [projetoId, d])
+  if (tipo != null) await query('INSERT INTO insumo_classificacao (projeto_id, descricao, tipo) VALUES ($1, $2, $3)', [projetoId, d, tipo])
+  return {}
 }
 
 export async function previaCusto(projetoId, matriz) {
@@ -235,6 +315,10 @@ export async function importarCusto(projetoId, { referencia, arquivo, matriz }) 
       await q('INSERT INTO custo_projetado_itens (importacao_id, codigo_etapa, custo_projetado) VALUES ($1,$2,$3)',
         [imp.id, i.codigo_etapa, i.custo_projetado])
     }
+    await q(
+      `INSERT INTO custo_projetado_insumos (importacao_id, codigo_etapa, descricao, custo_projetado)
+       SELECT $1, c, d, v FROM unnest($2::text[], $3::text[], $4::numeric[]) AS x(c, d, v)`,
+      [imp.id, lido.linhas.map((l) => l.codigo_etapa), lido.linhas.map((l) => l.descricao), lido.linhas.map((l) => l.custo_projetado)])
     return { id: imp.id, total: lido.total, itens: lido.itens.length }
   })
 }
@@ -263,47 +347,61 @@ const saldoSql = (tabela, arquivo, campo, colunas) => `
     SELECT DISTINCT ${colunas}, raw_data FROM mega.${tabela}
     WHERE obra = $1 AND data_extracao = (SELECT d FROM dia)
   )
-  SELECT raw_data->>'cod_estruturado' AS codigo_etapa, SUM(COALESCE(${campo}, 0)) AS valor FROM linhas GROUP BY 1`
+  SELECT raw_data->>'cod_estruturado' AS codigo_etapa, raw_data->>'cod_insumo' AS cod, raw_data->>'descricao_insumo' AS descricao,
+         SUM(COALESCE(${campo}, 0)) AS valor
+  FROM linhas GROUP BY 1, 2, 3`
 
-async function valoresPorEtapa(obra) {
+// Valores por 'etapa|TIPO' (tipo do insumo pela classificação). Realizado é
+// dividido em vindo de pedido / de contrato pela origem da apropriação.
+async function valoresPorEtapa(obra, tipoDe) {
   const [itens, pedidos, contratos, realizado] = await Promise.all([
     query(
       `WITH etapa_distinta AS (
-         SELECT DISTINCT codigo_solicitacao, sequencial_item, codigo_etapa
+         SELECT DISTINCT codigo_solicitacao, sequencial_item, codigo_etapa, numero_insumo, descricao_insumo
          FROM mega.solicitacoes_por_etapa WHERE obra = $1 AND codigo_etapa IS NOT NULL
        ), etapa_item AS (
          -- Item ligado a várias etapas: o Mega não diz quanto vai para cada uma,
          -- então o valor é dividido igualmente (senão conta mais de uma vez).
          SELECT *, COUNT(*) OVER (PARTITION BY codigo_solicitacao, sequencial_item) AS n_etapas FROM etapa_distinta
        ), item AS (
-         SELECT solicitacao, sequencia, MAX(valor_total) AS valor
+         SELECT solicitacao, sequencia, MAX(valor_total) AS valor,
+                BOOL_OR(cod_cotacao IS NOT NULL OR cod_pedido IS NOT NULL OR cod_contrato IS NOT NULL) AS cotado
          FROM mega.visualizacao_itens WHERE obra = $1 GROUP BY solicitacao, sequencia
        )
-       SELECT e.codigo_etapa, SUM(COALESCE(i.valor, 0) / e.n_etapas) AS solicitado
+       SELECT e.codigo_etapa, e.numero_insumo::text AS cod, e.descricao_insumo AS descricao,
+              SUM(COALESCE(i.valor, 0) / e.n_etapas) AS solicitado,
+              COALESCE(SUM(COALESCE(i.valor, 0) / e.n_etapas) FILTER (WHERE i.cotado), 0) AS cotado
        FROM etapa_item e
        JOIN item i ON i.solicitacao::text = e.codigo_solicitacao::text AND i.sequencia::text = e.sequencial_item::text
-       GROUP BY e.codigo_etapa`, [obra]),
+       GROUP BY 1, 2, 3`, [obra]),
     query(saldoSql('analise_pedidos_hist', 'Analise_Pedidos', 'valor_apropriacao',
       'codigo_pedido, fornecedor, qtde_pedido, valor_unitario, qtde_apropriada, valor_apropriacao'), [obra]),
     query(saldoSql('analise_contratos_hist', 'Analise_Contratos', 'total',
       'codigo_contrato, fornecedor, status_pre_contrato, saldo_qtde_contrato, valor_unitario, total'), [obra]),
     query(
-      `SELECT raw_data->>'cod_estruturado' AS codigo_etapa, SUM(COALESCE(valor_apropriacao, 0)) AS valor
-       FROM mega.analise_realizado WHERE obra = $1 AND raw_data ? 'cod_estruturado' GROUP BY 1`, [obra]),
+      `SELECT raw_data->>'cod_estruturado' AS codigo_etapa, raw_data->>'cod_item' AS cod, raw_data->>'descricao_1' AS descricao,
+              raw_data->>'origem' AS origem, SUM(COALESCE(valor_apropriacao, 0)) AS valor
+       FROM mega.analise_realizado WHERE obra = $1 AND raw_data ? 'cod_estruturado' GROUP BY 1, 2, 3, 4`, [obra]),
   ])
   const mapa = new Map()
-  const somar = (rows, campo) => {
-    for (const r of rows) {
-      const c = etapaParaMega(r.codigo_etapa)
-      if (!c) continue
-      if (!mapa.has(c)) mapa.set(c, { solicitado: 0, em_pedido: 0, em_contrato: 0, realizado: 0 })
-      mapa.get(c)[campo] += Number(r[campo === 'solicitado' ? 'solicitado' : 'valor']) || 0
-    }
+  const pega = (r) => {
+    const c = etapaParaMega(r.codigo_etapa)
+    if (!c) return null
+    const { tipo } = tipoDe(r.descricao, r.cod)
+    const chave = `${c}|${tipo}`
+    if (!mapa.has(chave)) mapa.set(chave, { solicitado: 0, cotado: 0, em_pedido: 0, em_contrato: 0, realizado_pedido: 0, realizado_contrato: 0 })
+    return { v: mapa.get(chave), tipo }
   }
-  somar(itens.rows, 'solicitado')
-  somar(pedidos.rows, 'em_pedido')
-  somar(contratos.rows, 'em_contrato')
-  somar(realizado.rows, 'realizado')
+  for (const r of itens.rows) {
+    const p = pega(r)
+    if (p) { p.v.solicitado += Number(r.solicitado) || 0; p.v.cotado += Number(r.cotado) || 0 }
+  }
+  for (const r of pedidos.rows) { const p = pega(r); if (p) p.v.em_pedido += Number(r.valor) || 0 }
+  for (const r of contratos.rows) { const p = pega(r); if (p) p.v.em_contrato += Number(r.valor) || 0 }
+  for (const r of realizado.rows) {
+    const p = pega(r)
+    if (p) p.v[`realizado_${origemParaCanal(r.origem, p.tipo)}`] += Number(r.valor) || 0
+  }
   return mapa
 }
 
@@ -324,12 +422,13 @@ async function inicioPorEtapa(projetoId) {
 export async function obterMacro(projetoId, hoje = hojeNoBrasil()) {
   const obra = await obraDoProjeto(projetoId)
   if (!obra) return { obra: null, motivo: 'Este projeto não tem obra do Mega vinculada.' }
-  const importacao = await ultimaImportacao(projetoId)
-  const [projetado, valores, inicio, gruposRes, etapasRes] = await Promise.all([
-    custosDaImportacao(importacao?.id),
-    valoresPorEtapa(obra),
+  const [importacao, classif] = await Promise.all([ultimaImportacao(projetoId), classificadorDaObra(projetoId)])
+  const [proj, valores, inicio, gruposRes, etapasRes] = await Promise.all([
+    projetadoPorTipo(importacao?.id, classif.tipoDe),
+    valoresPorEtapa(obra, classif.tipoDe),
     inicioPorEtapa(projetoId),
-    query('SELECT id, tipo, item, insumos, lead_time FROM contratacao_grupos WHERE projeto_id = $1 ORDER BY ordem, id', [projetoId]),
+    query(`SELECT id, tipo, item, insumos, lead_time, levantamento, prazo_solicitacao, prazo_emissao, prazo_entrega
+           FROM contratacao_grupos WHERE projeto_id = $1 ORDER BY ordem, id`, [projetoId]),
     query('SELECT grupo_id, codigo_etapa FROM contratacao_grupo_etapas WHERE projeto_id = $1', [projetoId]),
   ])
   const etapasDo = new Map()
@@ -338,7 +437,8 @@ export async function obterMacro(projetoId, hoje = hojeNoBrasil()) {
     etapasDo.get(e.grupo_id).push(e.codigo_etapa)
   }
   const grupos = gruposRes.rows.map((g) => ({ ...g, lead_time: Number(g.lead_time) || 0, etapas: etapasDo.get(g.id) || [] }))
-  return { obra, importacao, ...calcularMacro({ grupos, projetado, valores, inicio, hoje }) }
+  return { obra, importacao, projecaoSemInsumo: proj.semDescricao, classificacaoEmpresa: classif.empresa,
+    ...calcularMacro({ grupos, projetado: proj.mapa, valores, inicio, hoje }) }
 }
 
 const CAMPOS_REGRA = Object.keys(REGRAS_PADRAO)

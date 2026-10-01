@@ -501,8 +501,7 @@ CREATE TABLE IF NOT EXISTS contratacao_grupo_etapas (
   nome_obra TEXT,
   origem_nivel4 TEXT
 );
-CREATE UNIQUE INDEX IF NOT EXISTS uq_contratacao_etapa_obra
-  ON contratacao_grupo_etapas (projeto_id, codigo_etapa) WHERE projeto_id IS NOT NULL;
+-- Unicidade por etapa e tipo: ver revisão 2026-10-01 no fim do bloco de contratações.
 
 CREATE TABLE IF NOT EXISTS custo_projetado_importacoes (
   id SERIAL PRIMARY KEY,
@@ -670,3 +669,32 @@ CREATE TABLE IF NOT EXISTS contratacao_aprovacao_regras (
   regras JSONB NOT NULL,
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Revisão 2026-10-01: material × mão de obra (docs/superpowers/specs/2026-09-30-contratacoes-material-mao-de-obra-design.md).
+-- Projeção por insumo (descrição) para separar material e mão de obra.
+CREATE TABLE IF NOT EXISTS custo_projetado_insumos (
+  importacao_id INTEGER NOT NULL REFERENCES custo_projetado_importacoes (id) ON DELETE CASCADE,
+  codigo_etapa TEXT NOT NULL,
+  descricao TEXT NOT NULL,
+  custo_projetado NUMERIC NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_custo_projetado_insumos_imp ON custo_projetado_insumos (importacao_id);
+
+-- Classificação de insumos: projeto_id NULL = empresa; da obra = ajuste por descrição.
+CREATE TABLE IF NOT EXISTS insumo_classificacao (
+  id SERIAL PRIMARY KEY,
+  projeto_id TEXT,
+  cod_insumo BIGINT,
+  descricao TEXT NOT NULL,
+  definicao TEXT,
+  tipo TEXT NOT NULL CHECK (tipo IN ('MATERIAL', 'MAO_DE_OBRA')),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_insumo_classificacao ON insumo_classificacao ((COALESCE(projeto_id, '')), descricao);
+
+-- Uma etapa pode estar num grupo de material e num de mão de obra.
+ALTER TABLE contratacao_grupo_etapas ADD COLUMN IF NOT EXISTS tipo TEXT;
+UPDATE contratacao_grupo_etapas e SET tipo = g.tipo FROM contratacao_grupos g WHERE g.id = e.grupo_id AND e.tipo IS NULL;
+DROP INDEX IF EXISTS uq_contratacao_etapa_obra;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_contratacao_etapa_obra_tipo
+  ON contratacao_grupo_etapas (projeto_id, codigo_etapa, tipo) WHERE projeto_id IS NOT NULL;

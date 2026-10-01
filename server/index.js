@@ -28,7 +28,7 @@ import { syncProjects, syncRestrictions } from './sync.js'
 import {
   obterConfig, aplicarPadrao, salvarGrupo, excluirGrupo, atrelarEtapas,
   soltarEtapa, confirmarEtapa, previaCusto, importarCusto, obterMacro,
-  obterRegras, salvarRegras, obterMicro,
+  obterRegras, salvarRegras, obterMicro, importarClassificacao, classificarInsumoObra,
 } from './contratacoes-db.js'
 import {
   repoDiario, consultarDiario, obrasDiario, resumoDiario, obterRelatorioDiario, indicadoresDiario,
@@ -314,13 +314,19 @@ app.post('/api/contratacoes/grupos/:id/etapas', rota(async (req, res) => {
   return r
 }))
 app.delete('/api/contratacoes/etapas/:codigo', rota(async (req) => {
-  await soltarEtapa(exigirProjeto(req.query.projectId), req.params.codigo)
+  const grupoId = req.query.grupoId ? Number(req.query.grupoId) : null
+  await soltarEtapa(exigirProjeto(req.query.projectId), req.params.codigo, Number.isInteger(grupoId) ? grupoId : null)
   return {}
 }))
 app.post('/api/contratacoes/etapas/:codigo/confirmar', rota(async (req) => {
-  await confirmarEtapa(exigirProjeto(req.body?.projectId), req.params.codigo)
+  const grupoId = Number(req.body?.grupoId)
+  await confirmarEtapa(exigirProjeto(req.body?.projectId), req.params.codigo, Number.isInteger(grupoId) ? grupoId : null)
   return {}
 }))
+app.post('/api/contratacoes/insumos/importar', rota((req) =>
+  importarClassificacao(Array.isArray(req.body?.matriz) ? req.body.matriz : [])))
+app.post('/api/contratacoes/insumos/obra', rota((req) =>
+  classificarInsumoObra(exigirProjeto(req.body?.projectId), req.body?.descricao, req.body?.tipo ?? null)))
 app.post('/api/contratacoes/custo/previa', rota((req) =>
   previaCusto(exigirProjeto(req.body?.projectId), Array.isArray(req.body?.matriz) ? req.body.matriz : [])))
 app.post('/api/contratacoes/custo/importar', rota((req) =>
