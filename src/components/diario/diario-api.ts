@@ -47,11 +47,39 @@ export interface IndicadoresDiario {
   clima: {
     totais: { relatorios: number; chuvosos: number; impraticaveis: number; parados: number; chuvaMm: number }
     porObra: { obraId: string; obraNome: string; relatorios: number; chuvosos: number; impraticaveis: number; parados: number; chuvaMm: number }[]
+    porDia: { data: string; totalObras: number; chuvosos: number; impraticaveis: number; parados: number; chuvaMediaMm: number; chuvaMaxMm: number }[]
   }
   ocorrencias: { total: number; relatorios: number; porTag: { tag: string; total: number }[] }
   preenchimento: {
-    totais: { relatorios: number; aprovados: number; emRevisao: number; preenchendo: number; pendentesAntigos: number; semDiario: number }
-    porObra: { obraId: string; obraNome: string; relatorios: number; aprovados: number; emRevisao: number; preenchendo: number; pendentesAntigos: number; corridos: number; comDiario: number; semDiario: number }[]
+    totais: {
+      relatorios: number
+      aprovados: number
+      emRevisao: number
+      preenchendo: number
+      pendentesAntigos: number
+      diasUteis: number
+      diasCorridos: number
+      semDiarioUteis: number
+      semAprovadoUteis: number
+      semDiario: number
+    }
+    porObra: {
+      obraId: string
+      obraNome: string
+      relatorios: number
+      aprovados: number
+      emRevisao: number
+      preenchendo: number
+      pendentesAntigos: number
+      corridos: number
+      comDiario: number
+      semDiario: number
+      diasUteis: number
+      comDiarioUteis: number
+      semDiarioUteis: number
+      aprovadosUteis: number
+      semAprovadoUteis: number
+    }[]
   }
 }
 

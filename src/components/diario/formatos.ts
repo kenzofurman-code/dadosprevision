@@ -7,11 +7,9 @@ export function fmtInteiro(v: unknown): string {
   return vazio(v) || !Number.isFinite(Number(v)) ? '-' : inteiro.format(Number(v))
 }
 
-const umaCasa = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-
-// Média de pessoas: sempre com uma casa decimal ('10,0').
+// Média de pessoas: sempre arredondada para o inteiro mais próximo (sem frações).
 export function fmtMedia(v: unknown): string {
-  return vazio(v) || !Number.isFinite(Number(v)) ? '-' : umaCasa.format(Number(v))
+  return vazio(v) || !Number.isFinite(Number(v)) ? '-' : inteiro.format(Math.round(Number(v)))
 }
 
 export function somarDias(iso: string, dias: number): string {

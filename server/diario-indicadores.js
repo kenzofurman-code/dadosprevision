@@ -7,37 +7,95 @@ const utc = (iso) => {
 }
 const soma = (linhas, campo) => linhas.reduce((t, l) => t + (Number(l[campo]) || 0), 0)
 const arredondar = (n) => Math.round(n * 10) / 10
+// Efetivo de pessoas: sempre inteiro mais próximo (não existe fração de pessoa).
+const arredondarEfetivo = (n) => Math.round(Number(n) || 0)
 
-// Dias corridos entre a primeira e a última data (limitados pelo período pedido) sem relatório.
-// Não desconta domingo nem feriado: é um número informativo.
-export function diasSemDiario(datas, { inicio = null, fim = null } = {}) {
-  const unicas = [...new Set(datas)].sort()
-  const zero = { corridos: 0, comDiario: 0, semDiario: 0 }
-  if (!unicas.length) return zero
-  const de = inicio && inicio > unicas[0] ? inicio : unicas[0]
-  const ate = fim && fim < unicas[unicas.length - 1] ? fim : unicas[unicas.length - 1]
-  if (de > ate) return zero
-  const corridos = Math.round((utc(ate) - utc(de)) / DIA_MS) + 1
-  const comDiario = unicas.filter((d) => d >= de && d <= ate).length
-  return { corridos, comDiario, semDiario: corridos - comDiario }
+// Dias corridos e dias úteis (segunda a sexta) no intervalo, com diário feito e com diário aprovado.
+export function diasSemDiario(datas, { inicio = null, fim = null, datasAprovadas = [] } = {}) {
+  const unicas = [...new Set(datas || [])].sort()
+  const unicasAprov = new Set(datasAprovadas || [])
+  const zero = {
+    corridos: 0,
+    comDiario: 0,
+    semDiario: 0,
+    diasUteis: 0,
+    comDiarioUteis: 0,
+    semDiarioUteis: 0,
+    aprovadosUteis: 0,
+    semAprovadoUteis: 0,
+  }
+  if (!unicas.length && !inicio && !fim) return zero
+
+  const de = inicio || unicas[0]
+  const ate = fim || unicas[unicas.length - 1]
+  if (!de || !ate || de > ate) return zero
+
+  const setDatas = new Set(unicas)
+  let d = new Date(`${de}T12:00:00Z`)
+  const fimMs = new Date(`${ate}T12:00:00Z`).getTime()
+
+  let corridos = 0
+  let uteis = 0
+  let comDiarioCorridos = 0
+  let comDiarioUteis = 0
+  let aprovadosUteis = 0
+
+  while (d.getTime() <= fimMs) {
+    const iso = d.toISOString().slice(0, 10)
+    const dow = d.getUTCDay() // 0 = Dom, 6 = Sáb
+    const ehUtil = dow >= 1 && dow <= 5
+
+    corridos++
+    if (ehUtil) uteis++
+
+    if (setDatas.has(iso)) {
+      comDiarioCorridos++
+      if (ehUtil) comDiarioUteis++
+    }
+    if (unicasAprov.has(iso)) {
+      if (ehUtil) aprovadosUteis++
+    }
+
+    d.setUTCDate(d.getUTCDate() + 1)
+  }
+
+  return {
+    corridos,
+    comDiario: comDiarioCorridos,
+    semDiario: Math.max(0, corridos - comDiarioCorridos),
+    diasUteis: uteis,
+    comDiarioUteis,
+    semDiarioUteis: Math.max(0, uteis - comDiarioUteis),
+    aprovadosUteis,
+    semAprovadoUteis: Math.max(0, uteis - aprovadosUteis),
+  }
 }
 
 export function montarIndicadores(entrada, { dataInicio = null, dataFim = null } = {}) {
   const {
-    efetivoDia = [], efetivoEmpreiteira = [], efetivoFuncao = [], climaObra = [],
+    efetivoDia = [], efetivoEmpreiteira = [], efetivoFuncao = [], climaObra = [], climaDia = [],
     tags = [], ocorrenciaTotais = { ocorrencias: 0, relatorios: 0 }, preenchimentoObra = [], diasComDiario = 0,
   } = entrada
 
-  // Média de pessoas por dia com diário (nunca o acumulado do período, que não diz o tamanho da equipe).
-  const media = (total) => (diasComDiario > 0 ? arredondar(Number(total) / diasComDiario) : 0)
+  // Média de pessoas por dia com diário: número inteiro arredondado para cima ou para baixo.
+  const media = (total) => (diasComDiario > 0 ? arredondarEfetivo(Number(total) / diasComDiario) : 0)
   const preenchimento = preenchimentoObra.map((o) => {
-    const dias = diasSemDiario(o.datas ?? [], { inicio: dataInicio, fim: dataFim })
+    const dias = diasSemDiario(o.datas ?? [], {
+      inicio: dataInicio,
+      fim: dataFim,
+      datasAprovadas: o.datas_aprovadas ?? [],
+    })
     return {
       obraId: o.obra_id, obraNome: o.obra_nome, relatorios: o.relatorios, aprovados: o.aprovados,
       emRevisao: o.em_revisao, preenchendo: o.preenchendo, pendentesAntigos: o.pendentes_antigos,
       corridos: dias.corridos, comDiario: dias.comDiario, semDiario: dias.semDiario,
+      diasUteis: dias.diasUteis, comDiarioUteis: dias.comDiarioUteis, semDiarioUteis: dias.semDiarioUteis,
+      aprovadosUteis: dias.aprovadosUteis, semAprovadoUteis: dias.semAprovadoUteis,
     }
   })
+
+  const diasUteisReferencia = preenchimento.length > 0 ? Math.max(...preenchimento.map((p) => p.diasUteis)) : 0
+  const diasCorridosReferencia = preenchimento.length > 0 ? Math.max(...preenchimento.map((p) => p.corridos)) : 0
 
   return {
     efetivo: {
@@ -59,6 +117,15 @@ export function montarIndicadores(entrada, { dataInicio = null, dataFim = null }
         obraId: o.obra_id, obraNome: o.obra_nome, relatorios: o.relatorios, chuvosos: o.chuvosos,
         impraticaveis: o.impraticaveis, parados: o.parados, chuvaMm: arredondar(Number(o.chuva_mm) || 0),
       })),
+      porDia: (climaDia || []).map((d) => ({
+        data: d.data,
+        totalObras: Number(d.total_obras) || 0,
+        chuvosos: Number(d.chuvosos) || 0,
+        impraticaveis: Number(d.impraticaveis) || 0,
+        parados: Number(d.parados) || 0,
+        chuvaMediaMm: arredondar(Number(d.chuva_media_mm) || 0),
+        chuvaMaxMm: arredondar(Number(d.chuva_max_mm) || 0),
+      })),
     },
     ocorrencias: {
       total: ocorrenciaTotais.ocorrencias,
@@ -72,6 +139,10 @@ export function montarIndicadores(entrada, { dataInicio = null, dataFim = null }
         emRevisao: soma(preenchimento, 'emRevisao'),
         preenchendo: soma(preenchimento, 'preenchendo'),
         pendentesAntigos: soma(preenchimento, 'pendentesAntigos'),
+        diasUteis: diasUteisReferencia,
+        diasCorridos: diasCorridosReferencia,
+        semDiarioUteis: soma(preenchimento, 'semDiarioUteis'),
+        semAprovadoUteis: soma(preenchimento, 'semAprovadoUteis'),
         semDiario: soma(preenchimento, 'semDiario'),
       },
       porObra: preenchimento,

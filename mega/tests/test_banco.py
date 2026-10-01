@@ -38,7 +38,7 @@ def test_substituir_obra_apaga_so_a_obra_indicada_e_insere_as_novas_linhas():
     ]
 
 
-def test_substituir_obra_com_lista_vazia_so_apaga_e_nao_insere_nada():
+def test_substituir_obra_com_lista_vazia_preserva_dados_anteriores():
     conn = _conexao_sqlite_com_tabela()
     banco.substituir_obra(conn, "itens_solicitados",
                           ["obra", "numero_rm", "descricao"],
@@ -46,7 +46,7 @@ def test_substituir_obra_com_lista_vazia_so_apaga_e_nao_insere_nada():
     conn.commit()
     linhas = conn.execute(
         "SELECT obra FROM itens_solicitados ORDER BY obra").fetchall()
-    assert linhas == [("410",)]
+    assert linhas == [("340",), ("410",)]
 
 
 def test_registrar_carga_grava_uma_linha_por_chamada():

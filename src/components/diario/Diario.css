@@ -47,3 +47,46 @@
 .dd-hbar-valor { text-align: right; font-variant-numeric: tabular-nums; }
 .dd-vazio { opacity: .6; margin: 0; }
 .dd-erro { color: #b3261e; margin: 0; }
+
+/* Gráficos avançados: Clima/Chuva e Preenchimento */
+.dd-bloco-largo { grid-column: 1 / -1; }
+.dd-grafico-cabecalho { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.dd-legenda { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11.5px; opacity: .85; }
+.dd-legenda-item { display: inline-flex; align-items: center; gap: 5px; }
+.dd-legenda-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.dd-sw-diario { background: #2f6f8f; }
+.dd-sw-imprat { background: #e67e22; }
+.dd-sw-parado { background: #b3261e; }
+.dd-sw-chuva-linha { background: #8b5cf6; }
+.dd-sw-aprovado { background: #16a34a; }
+.dd-sw-revisao { background: #f59e0b; }
+.dd-sw-sem-diario { background: #ef4444; }
+
+.dd-botoes-modo { display: flex; border: 1px solid var(--border, #dde3e6); border-radius: 6px; overflow: hidden; }
+.dd-btn-modo { font-size: 11px; padding: 3px 8px; background: transparent; border: none; color: inherit; cursor: pointer; }
+.dd-btn-modo.ativo { background: var(--border, #dde3e6); font-weight: 600; }
+
+.dd-linha-grade { stroke: currentColor; opacity: .08; stroke-dasharray: 2, 2; }
+.dd-eixo-escala { font-size: 10px; fill: currentColor; opacity: .55; }
+.dd-eixo-chuva { fill: #8b5cf6; font-weight: 600; }
+.dd-barra-diario { fill: #2f6f8f; }
+.dd-barra-impraticavel { fill: #e67e22; }
+.dd-barra-parado { fill: #b3261e; }
+.dd-eixo-obra { font-size: 9.5px; fill: currentColor; opacity: .7; }
+.dd-linha-chuva { fill: none; stroke: #8b5cf6; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.dd-ponto-chuva { fill: #8b5cf6; stroke: #fff; stroke-width: 1.5; }
+.dd-valor-chuva { font-size: 9px; font-weight: 700; fill: #8b5cf6; }
+
+.dd-preench-lista { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.dd-preench-linha { display: flex; flex-direction: column; gap: 4px; }
+.dd-preench-info { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; }
+.dd-preench-nome { font-weight: 600; }
+.dd-preench-resumo { font-size: 12px; opacity: .8; font-variant-numeric: tabular-nums; }
+.dd-alerta-texto { color: #b3261e; font-weight: 600; }
+.dd-aviso-texto { color: #d97706; }
+.dd-preench-trilho { height: 12px; border-radius: 6px; background: rgba(0, 0, 0, .08); display: flex; overflow: hidden; }
+.dd-preench-seg { height: 100%; transition: width .3s ease; }
+.dd-seg-aprovado { background: #16a34a; }
+.dd-seg-revisao { background: #f59e0b; }
+.dd-seg-sem-diario { background: #ef4444; }
+

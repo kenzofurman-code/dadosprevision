@@ -160,7 +160,7 @@ export async function indicadoresDiario({ obra = '', dataInicio = null, dataFim 
     AND ($2::date IS NULL OR r.data >= $2::date)
     AND ($3::date IS NULL OR r.data <= $3::date)`
   const ler = (sql) => query(sql, params).then((r) => r.rows)
-  const [efetivoDia, efetivoEmpreiteira, efetivoFuncao, climaObra, tags, ocorrenciaTotais, preenchimentoObra, dias] = await Promise.all([
+  const [efetivoDia, efetivoEmpreiteira, efetivoFuncao, climaObra, climaDia, tags, ocorrenciaTotais, preenchimentoObra, dias] = await Promise.all([
     ler(`SELECT r.data::text AS data, SUM(m.quantidade)::int AS total
            FROM diario.relatorio r JOIN diario.mao_obra m ON m.relatorio_id = r.relatorio_id
           WHERE ${onde} GROUP BY r.data ORDER BY r.data`),
@@ -179,6 +179,15 @@ export async function indicadoresDiario({ obra = '', dataInicio = null, dataFim 
                 COALESCE(SUM(r.indice_pluviometrico), 0)::float AS chuva_mm
            FROM diario.relatorio r JOIN diario.obra o ON o.obra_id = r.obra_id
           WHERE ${onde} GROUP BY o.obra_id, o.nome ORDER BY o.nome`),
+    ler(`SELECT r.data::text AS data,
+                COUNT(DISTINCT r.obra_id)::int AS total_obras,
+                COUNT(*) FILTER (WHERE r.dia_chuvoso)::int AS chuvosos,
+                COUNT(*) FILTER (WHERE r.dia_impraticavel)::int AS impraticaveis,
+                COUNT(*) FILTER (WHERE r.dia_parado)::int AS parados,
+                ROUND(COALESCE(AVG(r.indice_pluviometrico), 0)::numeric, 1)::float AS chuva_media_mm,
+                ROUND(COALESCE(MAX(r.indice_pluviometrico), 0)::numeric, 1)::float AS chuva_max_mm
+           FROM diario.relatorio r
+          WHERE ${onde} GROUP BY r.data ORDER BY r.data`),
     ler(`SELECT t AS tag, COUNT(*)::int AS total
            FROM diario.relatorio r JOIN diario.ocorrencia oc ON oc.relatorio_id = r.relatorio_id, unnest(oc.tags) AS t
           WHERE ${onde} GROUP BY t ORDER BY total DESC, t LIMIT 15`),
@@ -191,13 +200,14 @@ export async function indicadoresDiario({ obra = '', dataInicio = null, dataFim 
                 COUNT(*) FILTER (WHERE r.status_id = 1)::int AS preenchendo,
                 COUNT(*) FILTER (WHERE r.status_id IS DISTINCT FROM 4
                                    AND r.data < ((now() AT TIME ZONE 'America/Sao_Paulo')::date - 7))::int AS pendentes_antigos,
-                array_agg(DISTINCT r.data::text) AS datas
+                array_agg(DISTINCT r.data::text) AS datas,
+                array_agg(DISTINCT r.data::text) FILTER (WHERE r.status_id = 4) AS datas_aprovadas
            FROM diario.relatorio r JOIN diario.obra o ON o.obra_id = r.obra_id
           WHERE ${onde} GROUP BY o.obra_id, o.nome ORDER BY o.nome`),
     ler(`SELECT COUNT(DISTINCT r.data)::int AS dias FROM diario.relatorio r WHERE ${onde}`),
   ])
   return montarIndicadores(
-    { efetivoDia, efetivoEmpreiteira, efetivoFuncao, climaObra, tags, ocorrenciaTotais: ocorrenciaTotais[0], preenchimentoObra, diasComDiario: dias[0].dias },
+    { efetivoDia, efetivoEmpreiteira, efetivoFuncao, climaObra, climaDia, tags, ocorrenciaTotais: ocorrenciaTotais[0], preenchimentoObra, diasComDiario: dias[0].dias },
     { dataInicio, dataFim },
   )
 }
