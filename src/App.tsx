@@ -43,6 +43,7 @@ import { CurvasView } from './CurvasView'
 import { MegaView } from './MegaView'
 import { DiarioView } from './DiarioView'
 import { DiarioIndicadores } from './components/diario/DiarioIndicadores'
+import { DiarioEfetivo } from './components/diario/DiarioEfetivo'
 import { ContratacoesConfig } from './components/contratacoes/ContratacoesConfig'
 import { ContratacoesMacro } from './components/contratacoes/ContratacoesMacro'
 
@@ -62,7 +63,7 @@ type DataView =
   | 'dados_diario'
   | 'gestao_a_vista'
 
-type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix' | 'panel5' | 'milestones' | 'contratacoes' | 'diario'
+type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix' | 'panel5' | 'milestones' | 'contratacoes' | 'diario' | 'efetivo'
 type GestaoTablePanel = 'panel1' | 'panel2' | 'panel3'
 type ReorderableGestaoPanel = GestaoTablePanel | 'panel4'
 
@@ -3965,6 +3966,14 @@ function App() {
                   <ListChecks size={14} />
                   <span>Painel 7: Indicadores diários</span>
                 </button>
+                <button
+                  type="button"
+                  className={`gestao-panel-tab-btn ${gestaoPanelTab === 'efetivo' ? 'active' : ''}`}
+                  onClick={() => setGestaoPanelTab('efetivo')}
+                >
+                  <Users size={14} />
+                  <span>Painel 8: Efetivo</span>
+                </button>
 
                 <div className="gestao-top-actions">
                   <button
@@ -4690,6 +4699,7 @@ function App() {
               )}
 
               {gestaoPanelTab === 'diario' && <DiarioIndicadores />}
+              {gestaoPanelTab === 'efetivo' && <DiarioEfetivo />}
 
               {gestaoPanelTab === 'panel5' && (
                 <div className={a4LayoutMode ? 'a4-landscape-container' : ''}>

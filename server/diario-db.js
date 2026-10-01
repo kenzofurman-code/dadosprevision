@@ -160,7 +160,7 @@ export async function indicadoresDiario({ obra = '', dataInicio = null, dataFim 
     AND ($2::date IS NULL OR r.data >= $2::date)
     AND ($3::date IS NULL OR r.data <= $3::date)`
   const ler = (sql) => query(sql, params).then((r) => r.rows)
-  const [efetivoDia, efetivoEmpreiteira, efetivoFuncao, climaObra, climaDia, tags, ocorrenciaTotais, preenchimentoObra, dias] = await Promise.all([
+  const [efetivoDia, efetivoEmpreiteira, efetivoFuncao, efetivoObra, climaObra, climaDia, tags, ocorrenciaTotais, preenchimentoObra, dias] = await Promise.all([
     ler(`SELECT r.data::text AS data, SUM(m.quantidade)::int AS total
            FROM diario.relatorio r JOIN diario.mao_obra m ON m.relatorio_id = r.relatorio_id
           WHERE ${onde} GROUP BY r.data ORDER BY r.data`),
@@ -172,6 +172,15 @@ export async function indicadoresDiario({ obra = '', dataInicio = null, dataFim 
     ler(`SELECT COALESCE(NULLIF(TRIM(m.funcao), ''), 'Sem função') AS rotulo, SUM(m.quantidade)::int AS total
            FROM diario.relatorio r JOIN diario.mao_obra m ON m.relatorio_id = r.relatorio_id
           WHERE ${onde} GROUP BY 1 ORDER BY total DESC, rotulo LIMIT 15`),
+    ler(`SELECT o.obra_id, o.nome AS obra_nome,
+                COUNT(DISTINCT r.data)::int AS dias_com_diario,
+                COALESCE(SUM(m.quantidade), 0)::int AS total_homens
+           FROM diario.relatorio r
+           JOIN diario.obra o ON o.obra_id = r.obra_id
+      LEFT JOIN diario.mao_obra m ON m.relatorio_id = r.relatorio_id
+          WHERE ${onde}
+          GROUP BY o.obra_id, o.nome
+          ORDER BY total_homens DESC, o.nome`),
     ler(`SELECT o.obra_id, o.nome AS obra_nome, COUNT(*)::int AS relatorios,
                 COUNT(*) FILTER (WHERE r.dia_chuvoso)::int AS chuvosos,
                 COUNT(*) FILTER (WHERE r.dia_impraticavel)::int AS impraticaveis,
@@ -207,7 +216,7 @@ export async function indicadoresDiario({ obra = '', dataInicio = null, dataFim 
     ler(`SELECT COUNT(DISTINCT r.data)::int AS dias FROM diario.relatorio r WHERE ${onde}`),
   ])
   return montarIndicadores(
-    { efetivoDia, efetivoEmpreiteira, efetivoFuncao, climaObra, climaDia, tags, ocorrenciaTotais: ocorrenciaTotais[0], preenchimentoObra, diasComDiario: dias[0].dias },
+    { efetivoDia, efetivoEmpreiteira, efetivoFuncao, efetivoObra, climaObra, climaDia, tags, ocorrenciaTotais: ocorrenciaTotais[0], preenchimentoObra, diasComDiario: dias[0].dias },
     { dataInicio, dataFim },
   )
 }

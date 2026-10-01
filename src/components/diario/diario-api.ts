@@ -39,9 +39,11 @@ export interface RelatorioDetalhe {
 export interface IndicadoresDiario {
   efetivo: {
     porDia: { data: string; total: number }[]
-    porEmpreiteira: { chave: string; rotulo: string; media: number }[]
-    porFuncao: { rotulo: string; media: number }[]
+    porEmpreiteira: { chave: string; rotulo: string; media: number; total?: number }[]
+    porFuncao: { rotulo: string; media: number; total?: number }[]
+    porObra?: { obraId: string; obraNome: string; diasComDiario: number; totalHomens: number; mediaPorDia: number }[]
     mediaPorDia: number
+    totalHomensDia?: number
     diasComDiario: number
   }
   clima: {
@@ -59,6 +61,9 @@ export interface IndicadoresDiario {
       pendentesAntigos: number
       diasUteis: number
       diasCorridos: number
+      comDiarioUteis: number
+      aprovadosUteis: number
+      emAprovacaoUteis: number
       semDiarioUteis: number
       semAprovadoUteis: number
       semDiario: number
@@ -79,6 +84,7 @@ export interface IndicadoresDiario {
       semDiarioUteis: number
       aprovadosUteis: number
       semAprovadoUteis: number
+      emAprovacaoUteis: number
     }[]
   }
 }

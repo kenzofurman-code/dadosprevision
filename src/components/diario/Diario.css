@@ -90,3 +90,128 @@
 .dd-seg-revisao { background: #f59e0b; }
 .dd-seg-sem-diario { background: #ef4444; }
 
+/* Diagramas circulares (Donut Chart) */
+.dd-donut-wrapper { display: flex; align-items: center; justify-content: center; position: relative; }
+.dd-donut-lg { width: 170px; height: 170px; }
+.dd-donut-sm { width: 110px; height: 110px; }
+.dd-donut-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.dd-donut-seg { transition: stroke-dasharray .35s ease, stroke-width .2s ease; cursor: pointer; }
+.dd-donut-seg:hover { stroke-width: 21; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.15)); }
+.dd-donut-pct-lg { font-size: 24px; font-weight: 800; fill: currentColor; font-variant-numeric: tabular-nums; }
+.dd-donut-pct-sm { font-size: 17px; font-weight: 700; fill: currentColor; font-variant-numeric: tabular-nums; }
+.dd-donut-rotulo-centro { font-size: 10px; fill: currentColor; opacity: .7; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+.dd-donut-dias-centro { font-size: 9.5px; fill: currentColor; opacity: .6; font-variant-numeric: tabular-nums; }
+
+/* Modificadores de Cartão */
+.dd-cartao-aprovado strong { color: #16a34a; }
+.dd-cartao-revisao strong { color: #d97706; }
+.dd-cartao-alerta strong { color: #b3261e; }
+.dd-cartao-info strong { color: #2563eb; }
+
+/* Cores de texto dos indicadores */
+.dd-cor-aprovado { color: #16a34a; }
+.dd-cor-revisao { color: #d97706; }
+.dd-cor-sem-diario { color: #b3261e; }
+
+/* Seções de Indicadores */
+.dd-secao-indicador { display: flex; flex-direction: column; gap: 14px; margin-bottom: 8px; }
+.dd-secao-cabecalho h3 { margin: 0 0 4px; font-size: 15px; font-weight: 700; }
+.dd-secao-cabecalho p, .dd-subtitulo-bloco { margin: 0; font-size: 12px; opacity: .7; }
+.dd-secao-cabecalho-bloco { margin-bottom: 12px; }
+
+/* Destaque para Obra Única */
+.dd-preench-destaque-obra {
+  display: grid;
+  grid-template-columns: 210px 1fr;
+  gap: 24px;
+  align-items: center;
+  border: 1px solid var(--border, #dde3e6);
+  border-radius: 10px;
+  padding: 18px 22px;
+  background: var(--surface, #fff);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+}
+@media (max-width: 768px) {
+  .dd-preench-destaque-obra { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+}
+.dd-destaque-donut-col { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.dd-destaque-info-col { display: flex; flex-direction: column; gap: 14px; width: 100%; }
+.dd-destaque-header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.dd-destaque-header h4 { margin: 0; font-size: 16px; font-weight: 700; }
+.dd-destaque-badge { font-size: 12.5px; opacity: .85; background: rgba(0,0,0,0.05); padding: 3px 10px; border-radius: 999px; }
+.dd-destaque-badge strong { color: #16a34a; font-weight: 700; }
+.dd-cartoes-preench-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.dd-aviso-pendencia {
+  background: rgba(220, 38, 38, 0.08);
+  border-left: 3px solid #dc2626;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #b3261e;
+}
+
+/* Visão de Todas as Obras - Grade de Diagramas Circulares */
+.dd-secao-preenchimento-todas { display: flex; flex-direction: column; gap: 16px; }
+.dd-grade-circulos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  gap: 14px;
+  margin-top: 10px;
+}
+.dd-card-obra-circulo {
+  border: 1px solid var(--border, #dde3e6);
+  border-radius: 9px;
+  padding: 12px 10px;
+  background: var(--surface, #fff);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  cursor: pointer;
+}
+.dd-card-obra-circulo:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.07);
+  border-color: #2f6f8f;
+}
+.dd-card-obra-topo { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 6px; }
+.dd-card-obra-titulo { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.dd-card-obra-badge-alerta { font-size: 10.5px; font-weight: 700; color: #fff; background: #dc2626; border-radius: 999px; padding: 1px 6px; }
+.dd-card-obra-stats {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 11px;
+  border-top: 1px solid var(--border, #dde3e6);
+  padding-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.dd-card-obra-rodape { font-size: 10.5px; opacity: .7; text-align: center; }
+
+/* Legenda vertical */
+.dd-legenda-col { flex-direction: column; gap: 4px; align-items: flex-start; }
+
+/* Links de Tabela */
+.dd-link-tabela {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  opacity: .9;
+}
+.dd-link-tabela:hover { opacity: 1; color: #2f6f8f; }
+.dd-linha-ativa { background: rgba(47, 111, 143, 0.08); font-weight: 600; }
+
+/* Gráfico de Evolução do Efetivo */
+.dd-efetivo-grafico-container { width: 100%; }
+.dd-linha-media { stroke: #d97706; stroke-width: 1.8; stroke-dasharray: 4, 3; }
+.dd-texto-media { font-size: 10px; font-weight: 700; fill: #d97706; }
+.dd-sw-media { background: #d97706; }
+
+

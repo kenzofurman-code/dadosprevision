@@ -73,7 +73,7 @@ export function diasSemDiario(datas, { inicio = null, fim = null, datasAprovadas
 
 export function montarIndicadores(entrada, { dataInicio = null, dataFim = null } = {}) {
   const {
-    efetivoDia = [], efetivoEmpreiteira = [], efetivoFuncao = [], climaObra = [], climaDia = [],
+    efetivoDia = [], efetivoEmpreiteira = [], efetivoFuncao = [], efetivoObra = [], climaObra = [], climaDia = [],
     tags = [], ocorrenciaTotais = { ocorrencias: 0, relatorios: 0 }, preenchimentoObra = [], diasComDiario = 0,
   } = entrada
 
@@ -85,12 +85,14 @@ export function montarIndicadores(entrada, { dataInicio = null, dataFim = null }
       fim: dataFim,
       datasAprovadas: o.datas_aprovadas ?? [],
     })
+    const emAprovacaoUteis = Math.max(0, dias.comDiarioUteis - dias.aprovadosUteis)
     return {
       obraId: o.obra_id, obraNome: o.obra_nome, relatorios: o.relatorios, aprovados: o.aprovados,
       emRevisao: o.em_revisao, preenchendo: o.preenchendo, pendentesAntigos: o.pendentes_antigos,
       corridos: dias.corridos, comDiario: dias.comDiario, semDiario: dias.semDiario,
       diasUteis: dias.diasUteis, comDiarioUteis: dias.comDiarioUteis, semDiarioUteis: dias.semDiarioUteis,
       aprovadosUteis: dias.aprovadosUteis, semAprovadoUteis: dias.semAprovadoUteis,
+      emAprovacaoUteis,
     }
   })
 
@@ -100,9 +102,30 @@ export function montarIndicadores(entrada, { dataInicio = null, dataFim = null }
   return {
     efetivo: {
       porDia: efetivoDia.map((d) => ({ data: d.data, total: Number(d.total) })),
-      porEmpreiteira: efetivoEmpreiteira.map((e) => ({ chave: e.chave, rotulo: e.rotulo, media: media(e.total) })),
-      porFuncao: efetivoFuncao.map((f) => ({ rotulo: f.rotulo, media: media(f.total) })),
+      porEmpreiteira: efetivoEmpreiteira.map((e) => ({
+        chave: e.chave,
+        rotulo: e.rotulo,
+        media: media(e.total),
+        total: Number(e.total) || 0,
+      })),
+      porFuncao: efetivoFuncao.map((f) => ({
+        rotulo: f.rotulo,
+        media: media(f.total),
+        total: Number(f.total) || 0,
+      })),
+      porObra: (efetivoObra || []).map((o) => {
+        const diasObra = Number(o.dias_com_diario) || 0
+        const totalHomens = Number(o.total_homens) || 0
+        return {
+          obraId: o.obra_id,
+          obraNome: o.obra_nome,
+          diasComDiario: diasObra,
+          totalHomens,
+          mediaPorDia: diasObra > 0 ? arredondarEfetivo(totalHomens / diasObra) : 0,
+        }
+      }),
       mediaPorDia: media(soma(efetivoDia, 'total')),
+      totalHomensDia: soma(efetivoDia, 'total'),
       diasComDiario,
     },
     clima: {
@@ -141,6 +164,9 @@ export function montarIndicadores(entrada, { dataInicio = null, dataFim = null }
         pendentesAntigos: soma(preenchimento, 'pendentesAntigos'),
         diasUteis: diasUteisReferencia,
         diasCorridos: diasCorridosReferencia,
+        comDiarioUteis: soma(preenchimento, 'comDiarioUteis'),
+        aprovadosUteis: soma(preenchimento, 'aprovadosUteis'),
+        emAprovacaoUteis: soma(preenchimento, 'emAprovacaoUteis'),
         semDiarioUteis: soma(preenchimento, 'semDiarioUteis'),
         semAprovadoUteis: soma(preenchimento, 'semAprovadoUteis'),
         semDiario: soma(preenchimento, 'semDiario'),

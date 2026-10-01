@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import './Diario.css'
 import { diarioApi, type IndicadoresDiario, type ObraDiario } from './diario-api'
-import { BarrasHorizontais, BarrasUltimosDias, GraficoClimaChuva, GraficoPreenchimentoObras } from './graficos'
-import { fmtInteiro, fmtMedia, fmtNumero, somarDias } from './formatos'
+import { BarrasHorizontais, GraficoClimaChuva, SecaoPreenchimentoDiario } from './graficos'
+import { fmtInteiro, fmtNumero, somarDias } from './formatos'
 
 const hoje = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' })
 
@@ -51,6 +51,7 @@ export function DiarioIndicadores() {
 
   return (
     <div className="gestao-card dd-indicadores">
+      {/* Barra de Filtros */}
       <div className="dd-filtros">
         <label>
           <span>Obra do Diário</span>
@@ -72,77 +73,24 @@ export function DiarioIndicadores() {
 
       {dados && !semDados && (
         <>
-          <div className="dd-cartoes">
-            <Cartao rotulo="Efetivo médio por dia" valor={fmtMedia(dados.efetivo.mediaPorDia)} detalhe={`pessoas · ${fmtInteiro(dados.efetivo.diasComDiario)} dias com diário`} />
-            <Cartao rotulo="Diários" valor={fmtInteiro(dados.preenchimento.totais.relatorios)} detalhe={`${fmtInteiro(dados.preenchimento.totais.aprovados)} aprovados`} />
-            <Cartao rotulo="Dias úteis sem diário" valor={fmtInteiro(dados.preenchimento.totais.semDiarioUteis)} detalhe={`de ${fmtInteiro(dados.preenchimento.totais.diasUteis)} dias úteis`} alerta={dados.preenchimento.totais.semDiarioUteis > 0} />
-            <Cartao rotulo="Sem diário aprovado" valor={fmtInteiro(dados.preenchimento.totais.semAprovadoUteis)} detalhe="dias úteis sem aprovação" alerta={dados.preenchimento.totais.semAprovadoUteis > 0} />
-            <Cartao rotulo="Pendentes há +7 dias" valor={fmtInteiro(dados.preenchimento.totais.pendentesAntigos)} detalhe="não aprovados" alerta={dados.preenchimento.totais.pendentesAntigos > 0} />
-            <Cartao rotulo="Dias impraticáveis" valor={fmtInteiro(dados.clima.totais.impraticaveis)} detalhe={`${fmtInteiro(dados.clima.totais.parados)} parados`} alerta={dados.clima.totais.impraticaveis > 0} />
-            <Cartao rotulo="Dias chuvosos" valor={fmtInteiro(dados.clima.totais.chuvosos)} detalhe={`${fmtNumero(dados.clima.totais.chuvaMm)} mm registrados`} />
-            <Cartao rotulo="Dias sem diário" valor={fmtInteiro(dados.preenchimento.totais.semDiario)} detalhe="corridos, informativo" />
-            <Cartao rotulo="Ocorrências" valor={fmtInteiro(dados.ocorrencias.total)} detalhe={`em ${fmtInteiro(dados.ocorrencias.relatorios)} diários`} />
+          {/* SEÇÃO 1: PREENCHIMENTO DOS DIÁRIOS — DIAGRAMA CIRCULAR E DIAS ÚTEIS */}
+          <div className="dd-secao-indicador">
+            <div className="dd-secao-cabecalho">
+              <h3>Adesão e Preenchimento dos Diários de Obra</h3>
+              <p>Conformidade em dias úteis (segunda a sexta), relatórios aprovados, em análise e faltantes</p>
+            </div>
+
+            <SecaoPreenchimentoDiario
+              obraId={obra}
+              totais={dados.preenchimento.totais}
+              obras={dados.preenchimento.porObra}
+              onSelecionarObra={setObra}
+            />
           </div>
 
-          <div className="dd-grade-graficos">
-            <div className="dd-bloco dd-bloco-largo">
-              <h4>Preenchimento dos diários de obra — adesão em dias úteis e aprovações</h4>
-              <GraficoPreenchimentoObras dados={dados.preenchimento.porObra} />
-            </div>
-
-            <div className="dd-bloco dd-bloco-largo">
-              <h4>Clima, dias parados / impraticáveis e chuva (escala dupla)</h4>
-              <GraficoClimaChuva porObra={dados.clima.porObra} porDia={dados.clima.porDia} />
-            </div>
-
-            <div className="dd-bloco">
-              <h4>Efetivo por dia — últimos 14 dias (soma das obras)</h4>
-              <BarrasUltimosDias dados={dados.efetivo.porDia} fim={dataFim || null} />
-            </div>
-            <div className="dd-bloco">
-              <h4>Efetivo médio por empreiteira (pessoas/dia, top 15)</h4>
-              <BarrasHorizontais itens={dados.efetivo.porEmpreiteira.map((e) => ({ rotulo: e.rotulo, total: e.media }))} formato={fmtMedia} />
-            </div>
-            <div className="dd-bloco">
-              <h4>Efetivo médio por função (pessoas/dia, top 15)</h4>
-              <BarrasHorizontais itens={dados.efetivo.porFuncao.map((f) => ({ rotulo: f.rotulo, total: f.media }))} formato={fmtMedia} />
-            </div>
-            <div className="dd-bloco">
-              <h4>Ocorrências por tag (top 15)</h4>
-              <BarrasHorizontais itens={dados.ocorrencias.porTag.map((t) => ({ rotulo: t.tag, total: t.total }))} />
-            </div>
-          </div>
-
-          <div className="dd-bloco">
-            <h4>Clima e dias parados por obra</h4>
-            <table className="dd-tabela">
-              <thead>
-                <tr>
-                  <th>Obra</th>
-                  <th className="dd-num">Diários</th>
-                  <th className="dd-num">Chuvosos</th>
-                  <th className="dd-num">Impraticáveis</th>
-                  <th className="dd-num">Parados</th>
-                  <th className="dd-num">Chuva (mm)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dados.clima.porObra.map((o) => (
-                  <tr key={o.obraId}>
-                    <td>{o.obraNome}</td>
-                    <td className="dd-num">{fmtInteiro(o.relatorios)}</td>
-                    <td className="dd-num">{fmtInteiro(o.chuvosos)}</td>
-                    <td className="dd-num">{fmtInteiro(o.impraticaveis)}</td>
-                    <td className="dd-num">{fmtInteiro(o.parados)}</td>
-                    <td className="dd-num">{fmtNumero(o.chuvaMm)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="dd-bloco">
-            <h4>Preenchimento dos diários por obra</h4>
+          {/* TABELA DE PREENCHIMENTO POR OBRA */}
+          <div className="dd-bloco dd-bloco-largo">
+            <h4>Detalhamento de preenchimento por obra</h4>
             <table className="dd-tabela">
               <thead>
                 <tr>
@@ -159,8 +107,17 @@ export function DiarioIndicadores() {
               </thead>
               <tbody>
                 {dados.preenchimento.porObra.map((o) => (
-                  <tr key={o.obraId}>
-                    <td>{o.obraNome}</td>
+                  <tr key={o.obraId} className={obra === o.obraId ? 'dd-linha-ativa' : ''}>
+                    <td>
+                      <button
+                        type="button"
+                        className="dd-link-tabela"
+                        onClick={() => setObra(o.obraId === obra ? '' : o.obraId)}
+                        title="Filtrar esta obra"
+                      >
+                        {o.obraNome}
+                      </button>
+                    </td>
                     <td className="dd-num">{fmtInteiro(o.relatorios)}</td>
                     <td className="dd-num">{fmtInteiro(o.aprovados)}</td>
                     <td className="dd-num">{fmtInteiro(o.emRevisao)}</td>
@@ -173,6 +130,61 @@ export function DiarioIndicadores() {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* SEÇÃO 2: CLIMA, DIAS PARADOS / IMPRATICÁVEIS E CHUVA */}
+          <div className="dd-secao-indicador">
+            <div className="dd-secao-cabecalho">
+              <h3>Clima, Dias Impraticáveis e Precipitação</h3>
+              <p>Impacto meteorológico no avanço das obras e comparação com pluviometria</p>
+            </div>
+
+            <div className="dd-cartoes">
+              <Cartao rotulo="Dias impraticáveis" valor={fmtInteiro(dados.clima.totais.impraticaveis)} detalhe={`${fmtInteiro(dados.clima.totais.parados)} dias parados`} alerta={dados.clima.totais.impraticaveis > 0} />
+              <Cartao rotulo="Dias chuvosos" valor={fmtInteiro(dados.clima.totais.chuvosos)} detalhe={`${fmtNumero(dados.clima.totais.chuvaMm)} mm acumulados`} />
+              <Cartao rotulo="Chuva acumulada" valor={`${fmtNumero(dados.clima.totais.chuvaMm)} mm`} detalhe="pluviometria no período" />
+              <Cartao rotulo="Ocorrências" valor={fmtInteiro(dados.ocorrencias.total)} detalhe={`em ${fmtInteiro(dados.ocorrencias.relatorios)} diários`} alerta={dados.ocorrencias.total > 0} />
+            </div>
+
+            <div className="dd-bloco dd-bloco-largo">
+              <h4>Clima, dias parados / impraticáveis e chuva (escala dupla)</h4>
+              <GraficoClimaChuva porObra={dados.clima.porObra} porDia={dados.clima.porDia} />
+            </div>
+
+            <div className="dd-grade-graficos">
+              <div className="dd-bloco">
+                <h4>Clima e dias parados por obra</h4>
+                <table className="dd-tabela">
+                  <thead>
+                    <tr>
+                      <th>Obra</th>
+                      <th className="dd-num">Diários</th>
+                      <th className="dd-num">Chuvosos</th>
+                      <th className="dd-num">Impraticáveis</th>
+                      <th className="dd-num">Parados</th>
+                      <th className="dd-num">Chuva (mm)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dados.clima.porObra.map((o) => (
+                      <tr key={o.obraId}>
+                        <td>{o.obraNome}</td>
+                        <td className="dd-num">{fmtInteiro(o.relatorios)}</td>
+                        <td className="dd-num">{fmtInteiro(o.chuvosos)}</td>
+                        <td className="dd-num">{fmtInteiro(o.impraticaveis)}</td>
+                        <td className="dd-num">{fmtInteiro(o.parados)}</td>
+                        <td className="dd-num">{fmtNumero(o.chuvaMm)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="dd-bloco">
+                <h4>Ocorrências por tag (top 15)</h4>
+                <BarrasHorizontais itens={dados.ocorrencias.porTag.map((t) => ({ rotulo: t.tag, total: t.total }))} />
+              </div>
+            </div>
           </div>
         </>
       )}

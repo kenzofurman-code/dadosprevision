@@ -304,6 +304,7 @@ export interface PreenchimentoObraItem {
   semDiarioUteis: number
   aprovadosUteis: number
   semAprovadoUteis: number
+  emAprovacaoUteis?: number
   corridos: number
   semDiario: number
 }
@@ -328,7 +329,7 @@ export function GraficoPreenchimentoObras({
         {dados.map((d) => {
           const totalBase = d.diasUteis > 0 ? d.diasUteis : Math.max(1, d.relatorios)
           const pctAprovado = Math.min(100, Math.round((d.aprovadosUteis / totalBase) * 100))
-          const pendentesUteis = Math.max(0, d.comDiarioUteis - d.aprovadosUteis)
+          const pendentesUteis = d.emAprovacaoUteis ?? Math.max(0, d.comDiarioUteis - d.aprovadosUteis)
           const pctPendentes = Math.min(100 - pctAprovado, Math.round((pendentesUteis / totalBase) * 100))
           const pctSemDiario = Math.max(0, 100 - pctAprovado - pctPendentes)
 
@@ -357,3 +358,477 @@ export function GraficoPreenchimentoObras({
     </div>
   )
 }
+
+// -------------------------------------------------------------
+// DIAGRAMA CIRCULAR (DONUT) DE PREENCHIMENTO EM DIAS ÚTEIS
+// -------------------------------------------------------------
+export interface DonutPreenchimentoProps {
+  aprovados: number
+  emAprovacao: number
+  semDiario: number
+  totalDiasUteis: number
+  tamanho?: 'grande' | 'pequeno'
+}
+
+export function DonutPreenchimento({
+  aprovados,
+  emAprovacao,
+  semDiario,
+  totalDiasUteis,
+  tamanho = 'grande',
+}: DonutPreenchimentoProps) {
+  const isGrande = tamanho === 'grande'
+  const viewBoxSize = isGrande ? 160 : 120
+  const cx = viewBoxSize / 2
+  const cy = viewBoxSize / 2
+  const r = isGrande ? 56 : 42
+  const strokeWidth = isGrande ? 17 : 13
+  const C = 2 * Math.PI * r
+
+  const baseTotal = totalDiasUteis > 0 ? totalDiasUteis : Math.max(1, aprovados + emAprovacao + semDiario)
+  const seguroTotal = Math.max(1, baseTotal)
+
+  const fracAprov = Math.max(0, aprovados) / seguroTotal
+  const fracEmAprov = Math.max(0, emAprovacao) / seguroTotal
+  const fracSemDiario = Math.max(0, semDiario) / seguroTotal
+
+  const lAprov = fracAprov * C
+  const lEmAprov = fracEmAprov * C
+  const lSemDiario = fracSemDiario * C
+
+  const pctAprovado = Math.min(100, Math.round(fracAprov * 100))
+
+  return (
+    <div className={`dd-donut-wrapper ${isGrande ? 'dd-donut-lg' : 'dd-donut-sm'}`}>
+      <svg
+        viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`}
+        className="dd-donut-svg"
+        role="img"
+        aria-label={`Diagrama circular: ${aprovados} aprovados, ${emAprovacao} em aprovação, ${semDiario} sem diário de ${baseTotal} dias úteis`}
+      >
+        {/* Trilho base de fundo */}
+        <circle
+          cx={cx}
+          cy={cy}
+          r={r}
+          stroke="var(--border, rgba(0, 0, 0, 0.1))"
+          strokeWidth={strokeWidth}
+          fill="none"
+          opacity={0.35}
+        />
+
+        {/* Fatias circulares em SVG iniciadas no topo (12h) */}
+        <g transform={`rotate(-90 ${cx} ${cy})`}>
+          {/* Segmento 1: Aprovados (Verde) */}
+          {lAprov > 0 && (
+            <circle
+              cx={cx}
+              cy={cy}
+              r={r}
+              stroke="#16a34a"
+              strokeWidth={strokeWidth}
+              strokeDasharray={`${lAprov} ${C - lAprov}`}
+              strokeDashoffset={0}
+              fill="none"
+              className="dd-donut-seg dd-donut-seg-aprovado"
+            >
+              <title>{`Aprovados: ${aprovados} dias úteis (${Math.round(fracAprov * 100)}%)`}</title>
+            </circle>
+          )}
+
+          {/* Segmento 2: Em Aprovação (Amarelo) */}
+          {lEmAprov > 0 && (
+            <circle
+              cx={cx}
+              cy={cy}
+              r={r}
+              stroke="#f59e0b"
+              strokeWidth={strokeWidth}
+              strokeDasharray={`${lEmAprov} ${C - lEmAprov}`}
+              strokeDashoffset={-lAprov}
+              fill="none"
+              className="dd-donut-seg dd-donut-seg-revisao"
+            >
+              <title>{`Em aprovação: ${emAprovacao} dias úteis (${Math.round(fracEmAprov * 100)}%)`}</title>
+            </circle>
+          )}
+
+          {/* Segmento 3: Sem Diário (Vermelho) */}
+          {lSemDiario > 0 && (
+            <circle
+              cx={cx}
+              cy={cy}
+              r={r}
+              stroke="#ef4444"
+              strokeWidth={strokeWidth}
+              strokeDasharray={`${lSemDiario} ${C - lSemDiario}`}
+              strokeDashoffset={-(lAprov + lEmAprov)}
+              fill="none"
+              className="dd-donut-seg dd-donut-seg-sem-diario"
+            >
+              <title>{`Sem diário: ${semDiario} dias úteis (${Math.round(fracSemDiario * 100)}%)`}</title>
+            </circle>
+          )}
+        </g>
+
+        {/* Centro do Diagrama */}
+        <text
+          x={cx}
+          y={isGrande ? cy - 3 : cy - 2}
+          textAnchor="middle"
+          className={isGrande ? 'dd-donut-pct-lg' : 'dd-donut-pct-sm'}
+        >
+          {pctAprovado}%
+        </text>
+        <text
+          x={cx}
+          y={isGrande ? cy + 13 : cy + 11}
+          textAnchor="middle"
+          className="dd-donut-rotulo-centro"
+        >
+          aprovado
+        </text>
+        {isGrande && (
+          <text
+            x={cx}
+            y={cy + 25}
+            textAnchor="middle"
+            className="dd-donut-dias-centro"
+          >
+            {aprovados}/{baseTotal} úteis
+          </text>
+        )}
+      </svg>
+    </div>
+  )
+}
+
+// -------------------------------------------------------------
+// SEÇÃO DE PREENCHIMENTO DOS DIÁRIOS (INDIVIDUAL OU CONSOLIDADA)
+// -------------------------------------------------------------
+export function SecaoPreenchimentoDiario({
+  obraId,
+  totais,
+  obras,
+  onSelecionarObra,
+}: {
+  obraId: string
+  totais: {
+    diasUteis: number
+    aprovadosUteis: number
+    emAprovacaoUteis: number
+    semDiarioUteis: number
+    pendentesAntigos: number
+    relatorios?: number
+  }
+  obras: PreenchimentoObraItem[]
+  onSelecionarObra?: (obraId: string) => void
+}) {
+  // CASO 1: SE UMA OBRA ESTIVER SELECIONADA
+  if (obraId) {
+    const o = obras.find((item) => item.obraId === obraId) || obras[0]
+    if (!o) return <p className="dd-vazio">Sem dados de preenchimento para a obra selecionada.</p>
+
+    const emAprov = o.emAprovacaoUteis ?? Math.max(0, o.comDiarioUteis - o.aprovadosUteis)
+    const baseUteis = o.diasUteis > 0 ? o.diasUteis : Math.max(1, o.relatorios)
+    const pctAprov = Math.round((o.aprovadosUteis / baseUteis) * 100)
+    const pctEmAprov = Math.round((emAprov / baseUteis) * 100)
+    const pctSemDiario = Math.round((o.semDiarioUteis / baseUteis) * 100)
+
+    return (
+      <div className="dd-preench-destaque-obra">
+        <div className="dd-destaque-donut-col">
+          <DonutPreenchimento
+            aprovados={o.aprovadosUteis}
+            emAprovacao={emAprov}
+            semDiario={o.semDiarioUteis}
+            totalDiasUteis={o.diasUteis}
+            tamanho="grande"
+          />
+          <div className="dd-legenda dd-legenda-col">
+            <span className="dd-legenda-item">
+              <span className="dd-legenda-swatch dd-sw-aprovado" />
+              <strong>{o.aprovadosUteis}</strong> aprovados ({pctAprov}%)
+            </span>
+            <span className="dd-legenda-item">
+              <span className="dd-legenda-swatch dd-sw-revisao" />
+              <strong>{emAprov}</strong> em aprovação ({pctEmAprov}%)
+            </span>
+            <span className="dd-legenda-item">
+              <span className="dd-legenda-swatch dd-sw-sem-diario" />
+              <strong>{o.semDiarioUteis}</strong> sem diário ({pctSemDiario}%)
+            </span>
+          </div>
+        </div>
+
+        <div className="dd-destaque-info-col">
+          <div className="dd-destaque-header">
+            <h4>{o.obraNome}</h4>
+            <span className="dd-destaque-badge">
+              Adesão aos dias úteis: <strong>{pctAprov}%</strong>
+            </span>
+          </div>
+
+          <div className="dd-cartoes-preench-grid">
+            <div className="dd-cartao dd-cartao-info">
+              <span>Dias úteis</span>
+              <strong>{o.diasUteis}</strong>
+              <small>segunda a sexta no período</small>
+            </div>
+
+            <div className="dd-cartao dd-cartao-aprovado">
+              <span>Aprovados</span>
+              <strong>{o.aprovadosUteis}</strong>
+              <small>{pctAprov}% dos dias úteis</small>
+            </div>
+
+            <div className="dd-cartao dd-cartao-revisao">
+              <span>Em aprovação</span>
+              <strong>{emAprov}</strong>
+              <small>diário feito aguardando</small>
+            </div>
+
+            <div className={`dd-cartao ${o.semDiarioUteis > 0 ? 'dd-cartao-alerta' : ''}`}>
+              <span>Sem diário</span>
+              <strong>{o.semDiarioUteis}</strong>
+              <small>{o.semDiarioUteis > 0 ? 'dias úteis faltantes' : 'nenhum dia faltante'}</small>
+            </div>
+          </div>
+
+          {o.pendentesAntigos > 0 && (
+            <div className="dd-aviso-pendencia">
+              <span>⚠️ <strong>{o.pendentesAntigos}</strong> diário(s) pendente(s) de aprovação há mais de 7 dias.</span>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // CASO 2: TODAS AS OBRAS SELECIONADAS
+  const totalEsperado = (totais.diasUteis * obras.length) || 1
+  const pctGlobal = Math.round((totais.aprovadosUteis / totalEsperado) * 100)
+
+  return (
+    <div className="dd-secao-preenchimento-todas">
+      {/* 1ª Linha: Cards Numéricos Consolidados */}
+      <div className="dd-cartoes dd-cartoes-preench">
+        <div className="dd-cartao dd-cartao-info">
+          <span>Dias úteis no período</span>
+          <strong>{totais.diasUteis}</strong>
+          <small>{totalEsperado} relatórios esperados ({obras.length} obras)</small>
+        </div>
+
+        <div className="dd-cartao dd-cartao-aprovado">
+          <span>Aprovados (todas)</span>
+          <strong>{totais.aprovadosUteis}</strong>
+          <small>{pctGlobal}% de conformidade global</small>
+        </div>
+
+        <div className="dd-cartao dd-cartao-revisao">
+          <span>Em aprovação</span>
+          <strong>{totais.emAprovacaoUteis}</strong>
+          <small>diários em análise</small>
+        </div>
+
+        <div className={`dd-cartao ${totais.semDiarioUteis > 0 ? 'dd-cartao-alerta' : ''}`}>
+          <span>Dias úteis sem diário</span>
+          <strong>{totais.semDiarioUteis}</strong>
+          <small>{totais.semDiarioUteis > 0 ? 'faltantes somando as obras' : 'tudo preenchido'}</small>
+        </div>
+
+        <div className={`dd-cartao ${totais.pendentesAntigos > 0 ? 'dd-cartao-alerta' : ''}`}>
+          <span>Pendentes há +7 dias</span>
+          <strong>{totais.pendentesAntigos}</strong>
+          <small>não aprovados há +1 semana</small>
+        </div>
+      </div>
+
+      {/* 2ª Linha: Grade de Diagramas Circulares por Obra */}
+      <div className="dd-bloco dd-bloco-largo">
+        <div className="dd-grafico-cabecalho">
+          <div>
+            <h4>Preenchimento por Obra — Diagramas Circulares</h4>
+            <p className="dd-subtitulo-bloco">Acompanhe a aderência e aprovações de cada gestor (clique no card para filtrar)</p>
+          </div>
+          <div className="dd-legenda">
+            <span className="dd-legenda-item"><span className="dd-legenda-swatch dd-sw-aprovado" />Aprovados</span>
+            <span className="dd-legenda-item"><span className="dd-legenda-swatch dd-sw-revisao" />Em aprovação</span>
+            <span className="dd-legenda-item"><span className="dd-legenda-swatch dd-sw-sem-diario" />Sem diário</span>
+          </div>
+        </div>
+
+        <div className="dd-grade-circulos">
+          {obras.map((o) => {
+            const emAprov = o.emAprovacaoUteis ?? Math.max(0, o.comDiarioUteis - o.aprovadosUteis)
+            const baseUteis = o.diasUteis > 0 ? o.diasUteis : Math.max(1, o.relatorios)
+            const pctAprov = Math.round((o.aprovadosUteis / baseUteis) * 100)
+
+            return (
+              <div
+                key={o.obraId}
+                className="dd-card-obra-circulo"
+                onClick={() => onSelecionarObra && onSelecionarObra(o.obraId)}
+                title={`Clique para filtrar ${o.obraNome}`}
+                role="button"
+                tabIndex={0}
+              >
+                <div className="dd-card-obra-topo">
+                  <span className="dd-card-obra-titulo" title={o.obraNome}>{o.obraNome}</span>
+                  {o.pendentesAntigos > 0 && (
+                    <span className="dd-card-obra-badge-alerta" title={`${o.pendentesAntigos} diários pendentes há +7d`}>
+                      ! {o.pendentesAntigos}
+                    </span>
+                  )}
+                </div>
+
+                <DonutPreenchimento
+                  aprovados={o.aprovadosUteis}
+                  emAprovacao={emAprov}
+                  semDiario={o.semDiarioUteis}
+                  totalDiasUteis={o.diasUteis}
+                  tamanho="pequeno"
+                />
+
+                <div className="dd-card-obra-stats">
+                  <span className="dd-obra-stat-val dd-cor-aprovado" title="Aprovados">
+                    <strong>{o.aprovadosUteis}</strong> apr
+                  </span>
+                  <span className="dd-obra-stat-val dd-cor-revisao" title="Em aprovação">
+                    <strong>{emAprov}</strong> aguard
+                  </span>
+                  <span className="dd-obra-stat-val dd-cor-sem-diario" title="Sem diário">
+                    <strong>{o.semDiarioUteis}</strong> falt
+                  </span>
+                </div>
+
+                <div className="dd-card-obra-rodape">
+                  <small>de {o.diasUteis} úteis ({pctAprov}%)</small>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// -------------------------------------------------------------
+// GRÁFICO ROBUSTO DE EVOLUÇÃO DIÁRIA DO EFETIVO COM LINHA DE MÉDIA
+// -------------------------------------------------------------
+export function GraficoEvolucaoEfetivo({
+  dados,
+  mediaGeral = 0,
+  fim,
+}: {
+  dados: { data: string; total: number }[]
+  mediaGeral?: number
+  fim: string | null
+}) {
+  const [zoom, setZoom] = useState<'14' | '30' | 'tudo'>('30')
+
+  if (!dados.length) return <p className="dd-vazio">Sem dados no período.</p>
+
+  const limiteDias = zoom === '14' ? 14 : zoom === '30' ? 30 : dados.length
+  const ultimo = fim && fim < dados[dados.length - 1].data ? fim : dados[dados.length - 1].data
+  const porData = new Map(dados.map((d) => [d.data, d.total]))
+
+  const janela = Array.from({ length: Math.min(limiteDias, 90) }, (_, i) => {
+    const data = somarDias(ultimo, i - (Math.min(limiteDias, 90) - 1))
+    return { data, total: porData.get(data) ?? null }
+  })
+
+  const largura = 780
+  const altura = 230
+  const topo = 20
+  const base = altura - 30
+  const areaY = base - topo
+  const max = Math.max(...janela.map((d) => d.total ?? 0), mediaGeral, 1)
+  const numBarras = janela.length
+  const faixa = largura / numBarras
+
+  const yMedia = base - (mediaGeral / max) * areaY
+
+  return (
+    <div className="dd-efetivo-grafico-container">
+      <div className="dd-grafico-cabecalho">
+        <div className="dd-legenda">
+          <span className="dd-legenda-item"><span className="dd-legenda-swatch dd-sw-diario" />Pessoas presentes</span>
+          {mediaGeral > 0 && (
+            <span className="dd-legenda-item">
+              <span className="dd-legenda-swatch dd-sw-media" />
+              Linha de média ({fmtInteiro(mediaGeral)} pessoas/dia)
+            </span>
+          )}
+        </div>
+        <div className="dd-botoes-modo">
+          <button type="button" className={`dd-btn-modo ${zoom === '14' ? 'ativo' : ''}`} onClick={() => setZoom('14')}>
+            14 dias
+          </button>
+          <button type="button" className={`dd-btn-modo ${zoom === '30' ? 'ativo' : ''}`} onClick={() => setZoom('30')}>
+            30 dias
+          </button>
+          <button type="button" className={`dd-btn-modo ${zoom === 'tudo' ? 'ativo' : ''}`} onClick={() => setZoom('tudo')}>
+            Todo o período
+          </button>
+        </div>
+      </div>
+
+      <svg viewBox={`0 0 ${largura} ${altura}`} className="dd-svg" role="img" aria-label="Evolução do Efetivo Diário">
+        {/* Linha horizontal da Média */}
+        {mediaGeral > 0 && (
+          <g>
+            <line x1={0} y1={yMedia} x2={largura} y2={yMedia} className="dd-linha-media" />
+            <text x={largura - 8} y={yMedia - 4} textAnchor="end" className="dd-texto-media">
+              Média: {fmtInteiro(mediaGeral)}
+            </text>
+          </g>
+        )}
+
+        {/* Linha de base X */}
+        <line x1={0} y1={base} x2={largura} y2={base} className="dd-linha-eixo" />
+
+        {/* Barras diárias */}
+        {janela.map((d, i) => {
+          const valor = d.total ?? 0
+          const h = (valor / max) * areaY
+          const x = i * faixa
+          const largBarra = Math.max(3, faixa * 0.65)
+          const xBarra = x + (faixa - largBarra) / 2
+
+          return (
+            <g key={d.data}>
+              {d.total !== null && (
+                <>
+                  <rect
+                    x={xBarra}
+                    y={base - h}
+                    width={largBarra}
+                    height={h}
+                    className="dd-barra"
+                    rx={2}
+                  >
+                    <title>{`${fmtData(d.data)}: ${fmtInteiro(d.total)} pessoas`}</title>
+                  </rect>
+                  {(numBarras <= 20 || valor === max) && (
+                    <text x={x + faixa / 2} y={base - h - 4} textAnchor="middle" className="dd-valor">
+                      {fmtInteiro(valor)}
+                    </text>
+                  )}
+                </>
+              )}
+              {/* Rótulo de data espaçado */}
+              {(numBarras <= 16 || i % Math.ceil(numBarras / 15) === 0) && (
+                <text x={x + faixa / 2} y={base + 15} textAnchor="middle" className="dd-eixo">
+                  {fmtData(d.data).slice(0, 5)}
+                </text>
+              )}
+            </g>
+          )
+        })}
+      </svg>
+    </div>
+  )
+}
+

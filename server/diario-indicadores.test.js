@@ -44,7 +44,7 @@ test('diasSemDiario atravessa mês e ano sem erro de fuso', () => {
 
 test('montarIndicadores com entrada vazia devolve zeros e listas vazias (obra sem dados)', () => {
   const r = montarIndicadores({})
-  assert.deepEqual(r.efetivo, { porDia: [], porEmpreiteira: [], porFuncao: [], mediaPorDia: 0, diasComDiario: 0 })
+  assert.deepEqual(r.efetivo, { porDia: [], porEmpreiteira: [], porFuncao: [], porObra: [], mediaPorDia: 0, totalHomensDia: 0, diasComDiario: 0 })
   assert.deepEqual(r.clima.totais, { relatorios: 0, chuvosos: 0, impraticaveis: 0, parados: 0, chuvaMm: 0 })
   assert.deepEqual(r.clima.porDia, [])
   assert.deepEqual(r.ocorrencias, { total: 0, relatorios: 0, porTag: [] })
@@ -57,6 +57,7 @@ test('montarIndicadores soma totais, converte nomes das colunas e arredonda méd
     efetivoDia: [{ data: '2026-08-01', total: 10 }, { data: '2026-08-02', total: '15' }],
     efetivoEmpreiteira: [{ chave: 'PEREIRA DECOL', rotulo: 'Pereira Decol', total: '25' }],
     efetivoFuncao: [{ rotulo: 'Pedreiro', total: 12 }],
+    efetivoObra: [{ obra_id: 'O1', obra_nome: 'Obra 1', dias_com_diario: 3, total_homens: 25 }],
     diasComDiario: 4,
     climaObra: [
       { obra_id: 'O1', obra_nome: 'Obra 1', relatorios: 2, chuvosos: 1, impraticaveis: 1, parados: 0, chuva_mm: '5.25' },
@@ -75,9 +76,11 @@ test('montarIndicadores soma totais, converte nomes das colunas e arredonda méd
   }, { dataInicio: null, dataFim: null })
   assert.equal(r.efetivo.porDia[1].total, 15)
   assert.equal(r.efetivo.diasComDiario, 4)
+  assert.equal(r.efetivo.totalHomensDia, 25)
   assert.equal(r.efetivo.mediaPorDia, 6) // 25 homens-dia / 4 dias com diário = 6.25, arredondado para inteiro 6
-  assert.deepEqual(r.efetivo.porEmpreiteira, [{ chave: 'PEREIRA DECOL', rotulo: 'Pereira Decol', media: 6 }])
-  assert.deepEqual(r.efetivo.porFuncao, [{ rotulo: 'Pedreiro', media: 3 }])
+  assert.deepEqual(r.efetivo.porEmpreiteira, [{ chave: 'PEREIRA DECOL', rotulo: 'Pereira Decol', media: 6, total: 25 }])
+  assert.deepEqual(r.efetivo.porFuncao, [{ rotulo: 'Pedreiro', media: 3, total: 12 }])
+  assert.deepEqual(r.efetivo.porObra, [{ obraId: 'O1', obraNome: 'Obra 1', diasComDiario: 3, totalHomens: 25, mediaPorDia: 8 }])
   assert.deepEqual(r.clima.totais, { relatorios: 5, chuvosos: 3, impraticaveis: 1, parados: 1, chuvaMm: 5.5 })
   assert.equal(r.clima.porDia.length, 1)
   assert.equal(r.ocorrencias.porTag[0].total, 4)
@@ -85,8 +88,16 @@ test('montarIndicadores soma totais, converte nomes das colunas e arredonda méd
   assert.equal(r.preenchimento.porObra[0].corridos, 4)
   assert.equal(r.preenchimento.porObra[0].comDiario, 3)
   assert.equal(r.preenchimento.porObra[0].semDiario, 1)
+  assert.equal(r.preenchimento.porObra[0].diasUteis, 2) // 2026-08-01 (sáb) a 2026-08-04 (ter): dias úteis são 03 (seg) e 04 (ter)
+  assert.equal(r.preenchimento.porObra[0].comDiarioUteis, 1) // 04 (ter)
+  assert.equal(r.preenchimento.porObra[0].aprovadosUteis, 1) // 04 (ter)
+  assert.equal(r.preenchimento.porObra[0].emAprovacaoUteis, 0)
+  assert.equal(r.preenchimento.porObra[0].semDiarioUteis, 1)
   assert.equal(r.preenchimento.totais.pendentesAntigos, 1)
   assert.equal(r.preenchimento.totais.semDiario, 1)
+  assert.equal(r.preenchimento.totais.aprovadosUteis, 1)
+  assert.equal(r.preenchimento.totais.emAprovacaoUteis, 0)
+  assert.equal(r.preenchimento.totais.semDiarioUteis, 1)
 })
 
 test('montarIndicadores: sem dias com diário a média é zero (sem dividir por zero)', () => {
