@@ -4,7 +4,7 @@ import {
   normalizarNome, nivelDoCodigo, etapaParaMega, resolverEtapasPadrao,
   expandirParaNivel5, sugestoesPorNome, lerCustoProjetado, calcularMacro, subtrairDias, hojeNoBrasil,
   avaliarPasso, calcularTrilha, REGRAS_PADRAO,
-  definicaoParaTipo, lerClassificacaoInsumos, classificador, origemParaCanal,
+  definicaoParaTipo, lerClassificacaoInsumos, classificador, origemParaCanal, flagsDoGrupo,
 } from './contratacoes.js'
 
 test('normalizarNome ignora acento, caixa e espaços extras', () => {
@@ -376,4 +376,40 @@ test('macro: etapa em grupo de material e de mão de obra soma só o próprio ti
   assert.deepEqual([mo.projetado, mo.contrato, mo.comprometido], [200, 150, 150])
   assert.deepEqual([r.resumo.total_obra, r.resumo.MATERIAL.projetado_obra, r.resumo.MATERIAL.projetado_grupos, r.resumo.MATERIAL.fora_grupos], [2000, 1800, 800, 1000])
   assert.deepEqual([r.resumo.MAO_DE_OBRA.projetado_obra, r.resumo.MAO_DE_OBRA.fora_grupos], [200, 0])
+})
+
+const prazos = { lead_time: 45, levantamento: 15, prazo_solicitacao: 15, prazo_emissao: 10, prazo_entrega: 5 }
+const flag = (fs, fase) => fs.find((f) => f.fase === fase)
+
+test('flags: datas-limite de trás para frente a partir do início', () => {
+  const fs = flagsDoGrupo({ ...prazos, inicio: '2026-12-31', P: 100, solicitado: 0, cotado: 0, comprometido: 0, hoje: '2026-09-01' })
+  assert.equal(flag(fs, 'SOLICITACAO').limite, '2026-11-16')
+  assert.equal(flag(fs, 'LEVANTAMENTO').limite, '2026-10-17')
+  assert.equal(flag(fs, 'MAPA').limite, '2026-12-16')
+  assert.equal(flag(fs, 'PEDIDO_CONTRATO').limite, '2026-12-26')
+  assert.ok(fs.every((f) => f.estado === 'NO_PRAZO'))
+})
+
+test('flags: atrasado, atenção, feito e levantamento só como lembrete', () => {
+  const fs = flagsDoGrupo({ ...prazos, inicio: '2026-10-05', P: 100, solicitado: 100, cotado: 60, comprometido: 40, hoje: '2026-09-29' })
+  assert.equal(flag(fs, 'SOLICITACAO').estado, 'FEITO')
+  assert.equal(flag(fs, 'LEVANTAMENTO').estado, 'FEITO')
+  assert.equal(flag(fs, 'MAPA').estado, 'ATRASADO')
+  assert.equal(flag(fs, 'PEDIDO_CONTRATO').estado, 'ATENCAO')
+  const lembrete = flagsDoGrupo({ ...prazos, inicio: '2026-10-05', P: 100, solicitado: 0, cotado: 0, comprometido: 0, hoje: '2026-09-29' })
+  assert.equal(flag(lembrete, 'LEVANTAMENTO').estado, 'LEMBRETE')
+  assert.equal(flag(lembrete, 'SOLICITACAO').estado, 'ATRASADO')
+})
+
+test('flags: comprometido conta como cotado; sem início fica sem data', () => {
+  const fs = flagsDoGrupo({ ...prazos, inicio: '2026-10-05', P: 100, solicitado: 100, cotado: 0, comprometido: 100, hoje: '2026-12-01' })
+  assert.ok(fs.every((f) => f.estado === 'FEITO'))
+  const sem = flagsDoGrupo({ ...prazos, inicio: null, P: 100, solicitado: 0, cotado: 0, comprometido: 0, hoje: '2026-12-01' })
+  assert.ok(sem.every((f) => f.estado === 'SEM_DATA' && f.limite === null))
+})
+
+test('macro: grupo traz as flags', () => {
+  const g = macro({ ...base(['a']), ...prazos, lead_time: 30 }, { proj: { a: 100 }, val: { a: v(50) }, ini: { a: '2026-10-20' } })
+  assert.equal(g.flags.length, 4)
+  assert.equal(flag(g.flags, 'SOLICITACAO').estado, 'ATRASADO')
 })

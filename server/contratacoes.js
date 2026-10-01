@@ -233,6 +233,33 @@ export function origemParaCanal(origem, tipo) {
   return tipo === 'MAO_DE_OBRA' ? 'contrato' : 'pedido'
 }
 
+// Flags por fase, de trás para frente a partir do início no cronograma:
+// solicitação = início − lead time; levantamento (só lembrete) = limite da
+// solicitação − (levantamento + prazo de solicitação); mapa = início −
+// (emissão + entrega); pedido/contrato = início − entrega.
+export function flagsDoGrupo({ inicio, lead_time, levantamento, prazo_solicitacao, prazo_emissao, prazo_entrega,
+  P, solicitado, cotado, comprometido, hoje }) {
+  const n = (x) => Number(x) || 0
+  const limSolic = inicio ? subtrairDias(inicio, n(lead_time)) : null
+  const fases = [
+    { fase: 'LEVANTAMENTO', limite: limSolic ? subtrairDias(limSolic, n(levantamento) + n(prazo_solicitacao)) : null, feito: solicitado >= P, lembrete: true },
+    { fase: 'SOLICITACAO', limite: limSolic, feito: solicitado >= P },
+    { fase: 'MAPA', limite: inicio ? subtrairDias(inicio, n(prazo_emissao) + n(prazo_entrega)) : null, feito: Math.max(cotado, comprometido) >= P },
+    { fase: 'PEDIDO_CONTRATO', limite: inicio ? subtrairDias(inicio, n(prazo_entrega)) : null, feito: comprometido >= P },
+  ]
+  return fases.map(({ fase, limite, feito, lembrete }) => {
+    const dias = limite ? diasEntre(hoje, limite) : null
+    let estado
+    if (P > 0 && feito) estado = 'FEITO'
+    else if (!limite) estado = 'SEM_DATA'
+    else if (lembrete) estado = dias <= 7 ? 'LEMBRETE' : 'NO_PRAZO'
+    else if (dias < 0) estado = 'ATRASADO'
+    else if (dias <= 7) estado = 'ATENCAO'
+    else estado = 'NO_PRAZO'
+    return { fase, limite, dias, estado }
+  })
+}
+
 // Painel macro por tipo (material / mão de obra). Projetado e valores vêm por
 // 'etapa|TIPO'; cada grupo soma só as chaves do seu tipo.
 // Pedido = realizado vindo de pedido + saldo aberto de pedido; Contrato idem;
@@ -278,6 +305,7 @@ export function calcularMacro({ grupos, projetado, valores, inicio, hoje }) {
       em_pedido: soma.em_pedido, em_contrato: soma.em_contrato, pedido, contrato, comprometido, realizado,
       falta_solicitar: Math.max(0, P - soma.solicitado_efetivo), falta_fechar: Math.max(0, P - comprometido),
       pct, inicio: menorInicio, limite, dias_ate_limite: diasAteLimite, sinal,
+      flags: flagsDoGrupo({ ...g, inicio: menorInicio, P, solicitado: soma.solicitado_efetivo, cotado: soma.cotado, comprometido, hoje }),
     }
   })
   linhas.sort((a, b) => PRIORIDADE.indexOf(a.sinal) - PRIORIDADE.indexOf(b.sinal)
