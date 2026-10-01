@@ -113,7 +113,7 @@ function paraNumero(valor) {
 
 export function lerCustoProjetado(matriz) {
   const primeiraLinha = (v) => normalizarNome(String(v ?? '').split('\n')[0])
-  let cab = -1, colCusto = -1, colCodigo = -1, colNivel = -1
+  let cab = -1, colCusto = -1, colCodigo = -1, colNivel = -1, colDescricao = -1
   for (let i = 0; i < Math.min(matriz.length, 20) && cab < 0; i++) {
     const linha = matriz[i] || []
     const custo = linha.findIndex((v) => primeiraLinha(v).startsWith('CUSTO PROJETADO'))
@@ -126,15 +126,21 @@ export function lerCustoProjetado(matriz) {
     for (let j = colCodigo - 1; j >= 0; j--) {
       if (primeiraLinha(linha[j]) === 'NIVEL') { colNivel = j; break }
     }
+    for (let j = colCodigo + 1; j < custo; j++) {
+      if (primeiraLinha(linha[j]) === 'DESCRICAO') { colDescricao = j; break }
+    }
     cab = i; colCusto = custo
   }
   if (cab < 0) {
-    return { itens: [], total: 0, ignoradas: 0,
+    return { itens: [], linhas: [], total: 0, ignoradas: 0,
       erros: [{ linha: 0, motivo: 'colunas "CÓDIGO" (ou "ETAPA") e "CUSTO PROJETADO" não encontradas' }] }
   }
   // Por etapa: {nivel, soma}. Com coluna NÍVEL, só as linhas de menor N
   // contam (a linha N4 já é o total das N5 do mesmo código). Sem ela, soma tudo.
   const porEtapa = new Map()
+  // Linhas por insumo (descrição) para separar material × mão de obra: as do
+  // nível mais detalhado da etapa (N5), que somam o mesmo que a linha N4.
+  const detalhe = new Map()
   const erros = []
   let ignoradas = 0
   for (let i = cab + 1; i < matriz.length; i++) {
@@ -148,11 +154,63 @@ export function lerCustoProjetado(matriz) {
     const atual = porEtapa.get(codigo)
     if (!atual || nivel < atual.nivel) porEtapa.set(codigo, { nivel, soma: v.numero })
     else if (nivel === atual.nivel) atual.soma += v.numero
+    const linhaDet = { codigo_etapa: codigo, descricao: colDescricao >= 0 ? String(linha[colDescricao] ?? '').trim() : '', custo_projetado: v.numero }
+    const det = detalhe.get(codigo)
+    if (!det || nivel > det.nivel) detalhe.set(codigo, { nivel, linhas: [linhaDet] })
+    else if (nivel === det.nivel) det.linhas.push(linhaDet)
   }
   const itens = [...porEtapa.entries()].sort(([a], [b]) => a.localeCompare(b))
     .map(([codigo_etapa, { soma }]) => ({ codigo_etapa, custo_projetado: Math.round(soma * 100) / 100 }))
   const total = Math.round(itens.reduce((s, i) => s + i.custo_projetado, 0) * 100) / 100
-  return { itens, total, ignoradas, erros }
+  const linhas = [...detalhe.keys()].sort().flatMap((c) => detalhe.get(c).linhas)
+  return { itens, linhas, total, ignoradas, erros }
+}
+
+// Classificação de insumos (planilha da empresa): SE = serviço/mão de obra;
+// MT, EQ e OU = material.
+export function definicaoParaTipo(def) {
+  const d = String(def ?? '').trim().toUpperCase()
+  if (d === 'SE') return 'MAO_DE_OBRA'
+  if (['MT', 'EQ', 'OU'].includes(d)) return 'MATERIAL'
+  return null
+}
+
+export function lerClassificacaoInsumos(matriz) {
+  const n = (v) => normalizarNome(v).replace(/[^A-Z]/g, '')
+  const cab = (matriz[0] || []).map(n)
+  const iCod = cab.indexOf('CODITEM'), iDesc = cab.indexOf('DESCRICAODOITEM'), iDef = cab.indexOf('DEFINICAOITEM')
+  if (iCod < 0 || iDesc < 0 || iDef < 0) {
+    return { itens: [], ignoradas: 0, erros: ['colunas "Cód.Item", "Descrição do Item" e "Definição Item" não encontradas'] }
+  }
+  const itens = []
+  let ignoradas = 0
+  for (const linha of matriz.slice(1)) {
+    const tipo = definicaoParaTipo(linha?.[iDef])
+    const descricao = normalizarNome(linha?.[iDesc])
+    if (!tipo || !descricao) { ignoradas++; continue }
+    const cod = Number(linha[iCod])
+    itens.push({ cod_insumo: Number.isFinite(cod) ? cod : null, descricao, definicao: String(linha[iDef]).trim().toUpperCase(), tipo })
+  }
+  return { itens, ignoradas, erros: [] }
+}
+
+const FORA_ORCAMENTO = 'ITENS FORA DE ORCAMENTO'
+
+// Prioridade: item fora de orçamento (sempre material) > ajuste da obra (por
+// descrição) > empresa por código > empresa por descrição > heurística "MO ".
+export function classificador({ empresa = [], obra = [] }) {
+  const porObra = new Map(obra.map((o) => [normalizarNome(o.descricao), o.tipo]))
+  const porCodigo = new Map(empresa.filter((e) => e.cod_insumo != null).map((e) => [Number(e.cod_insumo), e.tipo]))
+  const porDescricao = new Map(empresa.map((e) => [normalizarNome(e.descricao), e.tipo]))
+  return (descricao, cod) => {
+    const d = normalizarNome(descricao)
+    if (d === FORA_ORCAMENTO) return { tipo: 'MATERIAL', fonte: 'FORA_ORCAMENTO' }
+    if (porObra.has(d)) return { tipo: porObra.get(d), fonte: 'OBRA' }
+    const c = cod == null || cod === '' ? NaN : Number(cod)
+    if (porCodigo.has(c)) return { tipo: porCodigo.get(c), fonte: 'CODIGO' }
+    if (porDescricao.has(d)) return { tipo: porDescricao.get(d), fonte: 'DESCRICAO' }
+    return { tipo: d.startsWith('MO ') ? 'MAO_DE_OBRA' : 'MATERIAL', fonte: 'HEURISTICA' }
+  }
 }
 
 export function subtrairDias(dataISO, dias) {

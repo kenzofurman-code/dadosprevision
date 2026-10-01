@@ -4,6 +4,7 @@ import {
   normalizarNome, nivelDoCodigo, etapaParaMega, resolverEtapasPadrao,
   expandirParaNivel5, sugestoesPorNome, lerCustoProjetado, calcularMacro, subtrairDias, hojeNoBrasil,
   avaliarPasso, calcularTrilha, REGRAS_PADRAO,
+  definicaoParaTipo, lerClassificacaoInsumos, classificador,
 } from './contratacoes.js'
 
 test('normalizarNome ignora acento, caixa e espaços extras', () => {
@@ -292,4 +293,58 @@ test('calcularTrilha: estouro pequeno dispensado, pedido até a alçada, passos 
   assert.equal(t.parado_em.passo, 'PEDIDO')
   const s = calcularTrilha({ item: { solicitacao: 1, cotacao: null, pedido: null, contrato: null }, docs, eventos, medicoes: [], regras: REGRAS_PADRAO })
   assert.deepEqual(s.passos.map((p) => [p.passo, p.status]), [['SOLICITACAO', 'APROVADO'], ['MAPA', 'NAO_INICIADO'], ['COMPRA', 'NAO_INICIADO']])
+})
+
+test('definicaoParaTipo: SE é mão de obra; MT, EQ e OU são material', () => {
+  assert.equal(definicaoParaTipo('SE'), 'MAO_DE_OBRA')
+  for (const d of ['MT', 'EQ', 'OU', ' mt ']) assert.equal(definicaoParaTipo(d), 'MATERIAL')
+  assert.equal(definicaoParaTipo('XX'), null)
+})
+
+test('lerClassificacaoInsumos lê a planilha da empresa', () => {
+  const r = lerClassificacaoInsumos([
+    ['Cód.Item', 'Descrição do Item', 'Unid.', 'Definição Item'],
+    [6984, 'CHAPA DRYWALL ST', 'M2', 'MT'],
+    [4936, 'MO Execução revestimento', 'M2', 'SE'],
+    [1, 'SEM DEF', 'UN', ''],
+  ])
+  assert.deepEqual(r.itens, [
+    { cod_insumo: 6984, descricao: 'CHAPA DRYWALL ST', definicao: 'MT', tipo: 'MATERIAL' },
+    { cod_insumo: 4936, descricao: 'MO EXECUCAO REVESTIMENTO', definicao: 'SE', tipo: 'MAO_DE_OBRA' },
+  ])
+  assert.equal(r.ignoradas, 1)
+  assert.equal(lerClassificacaoInsumos([['A']]).erros.length, 1)
+})
+
+test('classificador: fora de orçamento, obra, código, descrição e heurística', () => {
+  const tipo = classificador({
+    empresa: [
+      { cod_insumo: 10, descricao: 'CHAPA', tipo: 'MATERIAL' },
+      { cod_insumo: 20, descricao: 'MO PAREDE', tipo: 'MAO_DE_OBRA' },
+    ],
+    obra: [{ descricao: 'CHAPA', tipo: 'MAO_DE_OBRA' }, { descricao: 'ITENS FORA DE ORCAMENTO', tipo: 'MAO_DE_OBRA' }],
+  })
+  assert.deepEqual(tipo('Itens fora de orçamento'), { tipo: 'MATERIAL', fonte: 'FORA_ORCAMENTO' })
+  assert.deepEqual(tipo('chapa', 10), { tipo: 'MAO_DE_OBRA', fonte: 'OBRA' })
+  assert.deepEqual(tipo('outro nome', 20), { tipo: 'MAO_DE_OBRA', fonte: 'CODIGO' })
+  assert.deepEqual(tipo('MO PAREDE'), { tipo: 'MAO_DE_OBRA', fonte: 'DESCRICAO' })
+  assert.deepEqual(tipo('MO COLOCACAO GRANITO'), { tipo: 'MAO_DE_OBRA', fonte: 'HEURISTICA' })
+  assert.deepEqual(tipo('GRANITO'), { tipo: 'MATERIAL', fonte: 'HEURISTICA' })
+  assert.deepEqual(tipo(null), { tipo: 'MATERIAL', fonte: 'HEURISTICA' })
+})
+
+test('lerCustoProjetado devolve linhas N5 com descrição e total igual', () => {
+  const r = lerCustoProjetado([
+    ['NÍVEL', 'CÓDIGO', 'DESCRIÇÃO', 'CUSTO PROJETADO SALDO'],
+    ['N4', '01.05.01.03.002', 'REFORÇOS', 300],
+    ['N5', '01.05.01.03.002', 'MO REFORÇO', 200],
+    ['N5', '01.05.01.03.002', 'DIVERSOS', 100],
+    ['N5', '01.05.01.03.004', 'CHAPA', 50],
+  ])
+  assert.equal(r.total, 350)
+  assert.deepEqual(r.linhas, [
+    { codigo_etapa: '01.05.01.03.002', descricao: 'MO REFORÇO', custo_projetado: 200 },
+    { codigo_etapa: '01.05.01.03.002', descricao: 'DIVERSOS', custo_projetado: 100 },
+    { codigo_etapa: '01.05.01.03.004', descricao: 'CHAPA', custo_projetado: 50 },
+  ])
 })
