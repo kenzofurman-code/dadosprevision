@@ -4,7 +4,7 @@ import {
   normalizarNome, nivelDoCodigo, etapaParaMega, resolverEtapasPadrao,
   expandirParaNivel5, sugestoesPorNome, lerCustoProjetado, calcularMacro, subtrairDias, hojeNoBrasil,
   avaliarPasso, calcularTrilha, REGRAS_PADRAO,
-  definicaoParaTipo, lerClassificacaoInsumos, classificador,
+  definicaoParaTipo, lerClassificacaoInsumos, classificador, origemParaCanal,
 } from './contratacoes.js'
 
 test('normalizarNome ignora acento, caixa e espaços extras', () => {
@@ -148,11 +148,14 @@ test('subtrairDias trabalha só com a data', () => {
   assert.equal(subtrairDias('2026-10-10', 0), '2026-10-10')
 })
 
-const base = (etapas, lead = 30) => ({ id: 1, tipo: 'MATERIAL', item: 'G', insumos: null, lead_time: lead, etapas })
+const base = (etapas, lead = 30, tipo = 'MATERIAL') => ({ id: 1, tipo, item: 'G', insumos: null, lead_time: lead, etapas })
+// Chaves sem tipo ('a') viram 'a|MATERIAL'.
+const porTipo = (o) => new Map(Object.entries(o).map(([k, x]) => [k.includes('|') ? k : `${k}|MATERIAL`, x]))
 const macro = (grupo, { proj = {}, val = {}, ini = {}, hoje = '2026-09-29' } = {}) =>
-  calcularMacro({ grupos: [grupo], projetado: new Map(Object.entries(proj)),
-    valores: new Map(Object.entries(val)), inicio: new Map(Object.entries(ini)), hoje }).grupos[0]
-const v = (solicitado, em_pedido = 0, em_contrato = 0, realizado = 0) => ({ solicitado, em_pedido, em_contrato, realizado })
+  calcularMacro({ grupos: [grupo], projetado: porTipo(proj),
+    valores: porTipo(val), inicio: new Map(Object.entries(ini)), hoje }).grupos[0]
+const v = (solicitado, em_pedido = 0, em_contrato = 0, realizado_pedido = 0, realizado_contrato = 0) =>
+  ({ solicitado, em_pedido, em_contrato, realizado_pedido, realizado_contrato })
 
 test('macro: sem projeção não divide por zero', () => {
   const g = macro(base([]))
@@ -217,11 +220,12 @@ test('macro: concluído com 100% realizado; sem data sem cronograma', () => {
 test('macro: resumo soma a obra e conta sinais', () => {
   const r = calcularMacro({
     grupos: [base(['a']), { ...base(['b']), id: 2 }],
-    projetado: new Map([['a', 100], ['b', 50]]), valores: new Map([['a', v(20, 10)]]),
+    projetado: porTipo({ a: 100, b: 50 }), valores: porTipo({ a: v(20, 10) }),
     inicio: new Map(), hoje: '2026-09-29',
   })
-  assert.deepEqual([r.resumo.projetado, r.resumo.comprometido, r.resumo.falta_fechar, r.resumo.falta_solicitar], [150, 10, 140, 130])
-  assert.equal(r.resumo.porSinal.SEM_DATA, 2)
+  const m = r.resumo.MATERIAL
+  assert.deepEqual([m.projetado_grupos, m.comprometido, m.falta_fechar, m.falta_solicitar], [150, 10, 140, 130])
+  assert.equal(m.porSinal.SEM_DATA, 2)
 })
 
 test('hojeNoBrasil usa o fuso de São Paulo, não UTC', () => {
@@ -347,4 +351,29 @@ test('lerCustoProjetado devolve linhas N5 com descrição e total igual', () => 
     { codigo_etapa: '01.05.01.03.002', descricao: 'DIVERSOS', custo_projetado: 100 },
     { codigo_etapa: '01.05.01.03.004', descricao: 'CHAPA', custo_projetado: 50 },
   ])
+})
+
+test('origemParaCanal: E = empreiteiro (contrato), R = pedido, resto pelo tipo', () => {
+  assert.equal(origemParaCanal('E', 'MATERIAL'), 'contrato')
+  assert.equal(origemParaCanal('R', 'MAO_DE_OBRA'), 'pedido')
+  assert.equal(origemParaCanal('MVI', 'MAO_DE_OBRA'), 'contrato')
+  assert.equal(origemParaCanal('CPA', 'MATERIAL'), 'pedido')
+  assert.equal(origemParaCanal(null, 'MAO_DE_OBRA'), 'contrato')
+})
+
+test('macro: pedido e contrato incluem o realizado e somam o comprometido', () => {
+  const g = macro(base(['a']), { proj: { a: 1000 }, val: { a: v(900, 100, 50, 400, 300) }, ini: { a: '2027-01-01' } })
+  assert.deepEqual([g.pedido, g.contrato, g.comprometido, g.realizado], [500, 350, 850, 700])
+  assert.deepEqual([g.pct.pedido, g.pct.contrato, g.pct.comprometido], [0.5, 0.35, 0.85])
+})
+
+test('macro: etapa em grupo de material e de mão de obra soma só o próprio tipo', () => {
+  const proj = new Map([['a|MATERIAL', 800], ['a|MAO_DE_OBRA', 200], ['z|MATERIAL', 1000]])
+  const valores = new Map([['a|MATERIAL', v(800, 0, 0, 800)], ['a|MAO_DE_OBRA', v(0, 0, 50, 0, 100)]])
+  const r = calcularMacro({ grupos: [base(['a']), { ...base(['a'], 30, 'MAO_DE_OBRA'), id: 2 }], projetado: proj, valores, inicio: new Map(), hoje: '2026-09-29' })
+  const mat = r.grupos.find((g) => g.tipo === 'MATERIAL'), mo = r.grupos.find((g) => g.tipo === 'MAO_DE_OBRA')
+  assert.deepEqual([mat.projetado, mat.comprometido], [800, 800])
+  assert.deepEqual([mo.projetado, mo.contrato, mo.comprometido], [200, 150, 150])
+  assert.deepEqual([r.resumo.total_obra, r.resumo.MATERIAL.projetado_obra, r.resumo.MATERIAL.projetado_grupos, r.resumo.MATERIAL.fora_grupos], [2000, 1800, 800, 1000])
+  assert.deepEqual([r.resumo.MAO_DE_OBRA.projetado_obra, r.resumo.MAO_DE_OBRA.fora_grupos], [200, 0])
 })
