@@ -121,3 +121,20 @@ material por contrato; prazo de mobilização separado.
 2. Classificação de insumos + projetado por tipo + aba Mão de obra.
 3. Flags por fase.
 4. Micro em tabela.
+
+## 10. Decisões de 2026-10-01
+
+- **Pedido + Contrato = Comprometido.** Pedido = realizado vindo de pedido +
+  saldo aberto de pedido; Contrato = realizado vindo de contrato + saldo aberto
+  de contrato. Realizado continua como coluna à parte.
+- **Origem da apropriação** (Análise Realizado, `origem`): E = empreiteiro →
+  contrato; R = recebimento de material → pedido (conferido no POTY: chapa,
+  perfil e fita = R; MO = E); MVI (movimento inicial), CPA e vazio → pelo tipo
+  do insumo.
+- **Total da obra** = total da projeção importada (POTY: R$ 95,9 mi = material
+  R$ 55,6 mi + mão de obra R$ 40,3 mi), com "em grupos" e "fora de grupos".
+- Custos indiretos ficam como etapas comuns, fora de grupo até o usuário
+  atribuir.
+- Projeção por insumo em `custo_projetado_insumos` (linhas N5 com descrição);
+  importações antigas contam como material até serem refeitas.
+- Insumo do realizado = insumo do orçamento (`cod_item`/`descricao_1`).
