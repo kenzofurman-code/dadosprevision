@@ -6,7 +6,7 @@ import { query, withTransaction } from './db.js'
 import {
   etapaParaMega, nivelDoCodigo, resolverEtapasPadrao, expandirParaNivel5,
   sugestoesPorNome, lerCustoProjetado, calcularMacro, hojeNoBrasil,
-  calcularTrilha, REGRAS_PADRAO, classificador, lerClassificacaoInsumos, origemParaCanal, normalizarNome,
+  calcularTrilha, REGRAS_PADRAO, resumirMedicoes, classificador, lerClassificacaoInsumos, origemParaCanal, normalizarNome,
 } from './contratacoes.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -467,28 +467,45 @@ const TIPO_APPROVO = {
   'Aditivo de Contrato de Cotação e Materiais': 'ADITIVO', 'Medição de Contrato': 'MEDICAO',
 }
 
+// Micro de um grupo: só os itens das etapas do grupo e do tipo do grupo; do
+// Approvo e das medições, só os documentos desses itens (antes carregava a obra
+// inteira a cada grupo aberto).
 export async function obterMicro(projetoId, grupoId, hoje = hojeNoBrasil()) {
   const obra = await obraDoProjeto(projetoId)
   if (!obra) return { obra: null, itens: [] }
-  const etapasRes = await query(
-    `SELECT codigo_etapa, COALESCE(nome_obra, nome_padrao) AS nome FROM contratacao_grupo_etapas WHERE projeto_id = $1 AND grupo_id = $2`,
-    [projetoId, grupoId])
+  const [etapasRes, grupoRes, classif] = await Promise.all([
+    query(`SELECT codigo_etapa, COALESCE(nome_obra, nome_padrao) AS nome FROM contratacao_grupo_etapas WHERE projeto_id = $1 AND grupo_id = $2`,
+      [projetoId, grupoId]),
+    query('SELECT tipo FROM contratacao_grupos WHERE id = $1 AND projeto_id = $2', [grupoId, projetoId]),
+    classificadorDaObra(projetoId),
+  ])
   const nomeEtapa = new Map(etapasRes.rows.map((e) => [e.codigo_etapa, e.nome]))
-  if (!nomeEtapa.size) return { obra, itens: [] }
-  const [itensRes, docsRes, evRes, medRes, regras] = await Promise.all([
-    query(
-      `SELECT v.solicitacao, v.sequencia, MAX(v.descricao) AS descricao, MAX(v.fornecedor) AS fornecedor, MAX(v.valor_total) AS valor,
-              MAX(v.cod_cotacao)::bigint AS cotacao, MAX(v.cod_pedido)::bigint AS pedido, MAX(v.cod_contrato)::bigint AS contrato,
-              ARRAY_AGG(DISTINCT s.codigo_etapa) AS etapas
-       FROM mega.visualizacao_itens v
-       JOIN mega.solicitacoes_por_etapa s ON s.obra = v.obra AND s.codigo_solicitacao = v.solicitacao AND s.sequencial_item = v.sequencia
-       WHERE v.obra = $1 AND s.codigo_etapa IS NOT NULL
-       GROUP BY v.solicitacao, v.sequencia`, [obra]),
-    query(`SELECT tipo_documento, numero, valor, TO_CHAR(data_envio_aprovacao, 'YYYY-MM-DD') AS data_envio FROM mega.approvo_documentos WHERE obra = $1`, [obra]),
+  const tipoGrupo = grupoRes.rows[0]?.tipo
+  if (!nomeEtapa.size || !tipoGrupo) return { obra, itens: [] }
+  const itensRes = await query(
+    `SELECT v.solicitacao, v.sequencia, MAX(v.descricao) AS descricao, MAX(v.fornecedor) AS fornecedor, MAX(v.valor_total) AS valor,
+            MAX(v.cod_cotacao)::bigint AS cotacao, MAX(v.cod_pedido)::bigint AS pedido, MAX(v.cod_contrato)::bigint AS contrato,
+            MAX(s.numero_insumo)::text AS cod_insumo, MAX(s.descricao_insumo) AS insumo, ARRAY_AGG(DISTINCT s.codigo_etapa) AS etapas
+     FROM mega.solicitacoes_por_etapa s
+     JOIN mega.visualizacao_itens v ON v.obra = s.obra AND v.solicitacao = s.codigo_solicitacao AND v.sequencia = s.sequencial_item
+     WHERE s.obra = $1 AND s.codigo_etapa = ANY($2)
+     GROUP BY v.solicitacao, v.sequencia`, [obra, [...nomeEtapa.keys()]])
+  const linhas = itensRes.rows.filter((r) => classif.tipoDe(r.insumo, r.cod_insumo).tipo === tipoGrupo)
+  const contratos = [...new Set(linhas.map((r) => r.contrato).filter(Boolean).map(String))]
+  const medRes = contratos.length
+    ? await query(`SELECT DISTINCT numero_contrato, numero_medicao FROM mega.medicoes_contratos
+                   WHERE obra = $1 AND numero_contrato = ANY($2::bigint[]) ORDER BY 2`, [obra, contratos])
+    : { rows: [] }
+  const numeros = [...new Set([
+    ...linhas.flatMap((r) => [r.solicitacao, r.cotacao, r.pedido, r.contrato]),
+    ...medRes.rows.map((m) => m.numero_medicao),
+  ].filter((x) => x !== null && x !== undefined).map(String))]
+  const [docsRes, evRes, regras] = await Promise.all([
+    query(`SELECT tipo_documento, numero, valor, TO_CHAR(data_envio_aprovacao, 'YYYY-MM-DD') AS data_envio
+           FROM mega.approvo_documentos WHERE obra = $1 AND numero = ANY($2::bigint[])`, [obra, numeros]),
     query(
       `SELECT tipo_documento, numero_documento, acao, aprovador, TO_CHAR(COALESCE(data_hora, data_aprovacao::timestamp), 'YYYY-MM-DD"T"HH24:MI') AS data_hora
-       FROM mega.approvo_ocorrencias WHERE obra = $1 ORDER BY 5, id`, [obra]),
-    query(`SELECT DISTINCT numero_contrato, numero_medicao FROM mega.medicoes_contratos WHERE obra = $1 ORDER BY 2`, [obra]),
+       FROM mega.approvo_ocorrencias WHERE obra = $1 AND numero_documento = ANY($2::bigint[]) ORDER BY 5, id`, [obra, numeros]),
     obterRegras(projetoId),
   ])
   const docs = new Map()
@@ -511,18 +528,24 @@ export async function obterMicro(projetoId, grupoId, hoje = hojeNoBrasil()) {
     medicoesDo.get(k).push(Number(m.numero_medicao))
   }
   const itens = []
-  for (const r of itensRes.rows) {
+  for (const r of linhas) {
     const etapas = [...new Set(r.etapas.map(etapaParaMega))].filter((c) => nomeEtapa.has(c))
     if (!etapas.length) continue
     const item = { solicitacao: Number(r.solicitacao), cotacao: r.cotacao && Number(r.cotacao), pedido: r.pedido && Number(r.pedido), contrato: r.contrato && Number(r.contrato) }
     const { passos, parado_em } = calcularTrilha({ item, docs, eventos, medicoes: medicoesDo.get(String(r.contrato)) || [], regras })
     const desde = parado_em?.ultimo?.slice(0, 10) ?? null
+    const medicoes = passos.filter((p) => p.passo === 'MEDICAO')
     itens.push({
-      ...item, sequencia: r.sequencia, descricao: r.descricao, fornecedor: r.fornecedor, valor: Number(r.valor) || 0,
-      etapas: etapas.map((c) => ({ codigo: c, nome: nomeEtapa.get(c) })), passos, parado_em,
+      ...item, sequencia: r.sequencia, descricao: r.descricao, insumo: r.insumo, fornecedor: r.fornecedor, valor: Number(r.valor) || 0,
+      etapas: etapas.map((c) => ({ codigo: c, nome: nomeEtapa.get(c) })),
+      passos: passos.filter((p) => p.passo !== 'MEDICAO'), medicoes, resumo_medicoes: resumirMedicoes(medicoes, hoje), parado_em,
       dias_parado: desde ? Math.round((Date.parse(`${hoje}T00:00:00Z`) - Date.parse(`${desde}T00:00:00Z`)) / 86400000) : null,
+      alerta: tipoGrupo === 'MAO_DE_OBRA' && item.pedido ? 'Insumo de mão de obra comprado por pedido' : null,
     })
   }
-  itens.sort((a, b) => (a.parado_em ? 0 : 1) - (b.parado_em ? 0 : 1) || (b.dias_parado ?? -1) - (a.dias_parado ?? -1))
-  return { obra, itens }
+  // Agrupado por solicitação: as solicitações paradas há mais tempo primeiro.
+  const pior = new Map()
+  for (const i of itens) pior.set(i.solicitacao, Math.max(pior.get(i.solicitacao) ?? -1, i.parado_em ? (i.dias_parado ?? 0) : -1))
+  itens.sort((a, b) => pior.get(b.solicitacao) - pior.get(a.solicitacao) || a.solicitacao - b.solicitacao || a.sequencia - b.sequencia)
+  return { obra, tipo: tipoGrupo, itens }
 }

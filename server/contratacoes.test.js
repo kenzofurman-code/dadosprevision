@@ -4,7 +4,7 @@ import {
   normalizarNome, nivelDoCodigo, etapaParaMega, resolverEtapasPadrao,
   expandirParaNivel5, sugestoesPorNome, lerCustoProjetado, calcularMacro, subtrairDias, hojeNoBrasil,
   avaliarPasso, calcularTrilha, REGRAS_PADRAO,
-  definicaoParaTipo, lerClassificacaoInsumos, classificador, origemParaCanal, flagsDoGrupo,
+  definicaoParaTipo, lerClassificacaoInsumos, classificador, origemParaCanal, flagsDoGrupo, resumirMedicoes,
 } from './contratacoes.js'
 
 test('normalizarNome ignora acento, caixa e espaços extras', () => {
@@ -412,4 +412,11 @@ test('macro: grupo traz as flags', () => {
   const g = macro({ ...base(['a']), ...prazos, lead_time: 30 }, { proj: { a: 100 }, val: { a: v(50) }, ini: { a: '2026-10-20' } })
   assert.equal(g.flags.length, 4)
   assert.equal(flag(g.flags, 'SOLICITACAO').estado, 'ATRASADO')
+})
+
+test('resumirMedicoes: total, aprovadas e a primeira pendente com dias', () => {
+  const m = (numero, status, ultimo) => ({ passo: 'MEDICAO', numero, status, ultimo })
+  const r = resumirMedicoes([m(1, 'APROVADO', '2026-08-01T10:00'), m(2, 'APROVADO', null), m(3, 'PENDENTE', '2026-09-26T09:00'), m(4, 'NAO_INICIADO', null), m(5, 'REPROVADO', '2026-09-20T09:00')], '2026-09-29')
+  assert.deepEqual(r, { total: 5, aprovadas: 2, reprovadas: 1, pendente: { numero: 3, dias: 3 } })
+  assert.deepEqual(resumirMedicoes([], '2026-09-29'), { total: 0, aprovadas: 0, reprovadas: 0, pendente: null })
 })

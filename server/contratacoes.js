@@ -375,3 +375,16 @@ export function calcularTrilha({ item, docs, eventos, medicoes, regras }) {
   const parado_em = passos.find((p) => p.status === 'PENDENTE' || p.status === 'REPROVADO' || p.status === 'NAO_INICIADO') || null
   return { passos, parado_em }
 }
+
+// Medições de um contrato numa linha só: quantas, quantas aprovadas e a
+// primeira ainda pendente (com dias desde o último movimento).
+export function resumirMedicoes(passos, hoje) {
+  const pend = passos.find((p) => p.status === 'PENDENTE' || p.status === 'NAO_INICIADO')
+  const desde = pend?.ultimo?.slice(0, 10)
+  return {
+    total: passos.length,
+    aprovadas: passos.filter((p) => p.status === 'APROVADO' || p.status === 'DISPENSADO').length,
+    reprovadas: passos.filter((p) => p.status === 'REPROVADO').length,
+    pendente: pend ? { numero: pend.numero, dias: desde ? diasEntre(desde, hoje) : null } : null,
+  }
+}
