@@ -6,9 +6,9 @@ export interface Config { aplicado: boolean; grupos: Grupo[]; pendencias: Penden
 export interface Previa { itens: { codigo_etapa: string; custo_projetado: number }[]; total: number; ignoradas: number; erros: { linha: number; motivo: string }[]; foraDoOrcamento: string[]; totalAnterior: number | null }
 export interface Conflito { codigo_etapa: string; grupo_id: number; item: string }
 export type Sinal = 'ATRASADO' | 'ATENCAO' | 'PENDENCIA' | 'NO_PRAZO' | 'SEM_DATA' | 'SEM_PROJECAO' | 'CONCLUIDO'
-type Pct = { solicitado: number | null; pedido: number | null; contratado: number | null; realizado: number | null; lancado: number | null }
-export interface LinhaMacro { id: number; tipo: Tipo; item: string; insumos: string | null; lead_time: number; etapas: number; projetado: number; solicitado: number; pedido: number; contratado: number; realizado: number; lancado: number; falta: number; pct: Pct; inicio: string | null; limite: string | null; dias_ate_limite: number | null; sinal: Sinal }
-export interface Macro { obra: string | null; motivo?: string; importacao: Config['importacao']; grupos: LinhaMacro[]; resumo: { projetado: number; lancado: number; falta: number; porSinal: Record<Sinal, number> } }
+type Pct = { solicitado: number | null; em_pedido: number | null; em_contrato: number | null; realizado: number | null; comprometido: number | null }
+export interface LinhaMacro { id: number; tipo: Tipo; item: string; insumos: string | null; lead_time: number; etapas: number; projetado: number; solicitado: number; solicitado_efetivo: number; em_pedido: number; em_contrato: number; realizado: number; comprometido: number; falta_solicitar: number; falta_fechar: number; pct: Pct; inicio: string | null; limite: string | null; dias_ate_limite: number | null; sinal: Sinal }
+export interface Macro { obra: string | null; motivo?: string; importacao: Config['importacao']; grupos: LinhaMacro[]; resumo: { projetado: number; comprometido: number; falta_solicitar: number; falta_fechar: number; porSinal: Record<Sinal, number> } }
 
 export interface Regras { solicitacao: number; estouro: number; estouro_minimo: number; mapa: number; compra_ate: number; compra_acima: number; alcada_valor: number; aditivo: number; medicao: number }
 export type StatusPasso = 'NAO_INICIADO' | 'PENDENTE' | 'APROVADO' | 'REPROVADO' | 'DISPENSADO'

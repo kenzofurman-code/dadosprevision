@@ -50,8 +50,9 @@ export function ContratacoesMacro({ projectId, onConfigurar }: { projectId: stri
       )}
       <div className="cm-resumo">
         <div><span>Projetado</span><strong>{moeda.format(macro.resumo.projetado)}</strong></div>
-        <div><span>Lançado</span><strong>{moeda.format(macro.resumo.lancado)}</strong></div>
-        <div><span>Falta lançar</span><strong>{moeda.format(macro.resumo.falta)}</strong></div>
+        <div><span>Comprometido</span><strong>{moeda.format(macro.resumo.comprometido)}</strong></div>
+        <div><span>Falta fechar</span><strong>{moeda.format(macro.resumo.falta_fechar)}</strong></div>
+        <div><span>Falta solicitar</span><strong>{moeda.format(macro.resumo.falta_solicitar)}</strong></div>
         <div className="cm-fichas">
           {(Object.keys(SINAIS) as Sinal[]).filter((s) => macro.resumo.porSinal[s]).map((s) => (
             <button type="button" key={s} className={`cm-sinal cm-${s} ${filtro === s ? 'ativo' : ''}`} aria-pressed={filtro === s}
@@ -73,8 +74,9 @@ export function ContratacoesMacro({ projectId, onConfigurar }: { projectId: stri
                 <thead>
                   <tr>
                     <th>Grupo</th><th className="cm-num">Projetado</th><th className="cm-num">Solicitado</th>
-                    <th className="cm-num">Pedido</th><th className="cm-num">Contratado</th><th className="cm-num">Realizado</th>
-                    <th className="cm-num">Falta lançar</th><th>Início</th><th>Limite solicitação</th><th>Situação</th>
+                    <th className="cm-num">Em pedido</th><th className="cm-num">Em contrato</th><th className="cm-num">Realizado</th>
+                    <th className="cm-num">Comprometido</th><th className="cm-num">Falta solicitar</th><th className="cm-num">Falta fechar</th>
+                    <th>Início</th><th>Limite solicitação</th><th>Situação</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -84,16 +86,18 @@ export function ContratacoesMacro({ projectId, onConfigurar }: { projectId: stri
                       <td><span aria-hidden="true">{aberto === g.id ? '▾' : '▸'}</span> {g.item}{g.insumos ? <span className="cm-muted"> · {g.insumos}</span> : null}</td>
                       <td className="cm-num">{g.projetado ? moeda.format(g.projetado) : '—'}</td>
                       <td className="cm-num">{pctFmt(g.pct.solicitado)}</td>
-                      <td className="cm-num">{pctFmt(g.pct.pedido)}</td>
-                      <td className="cm-num">{pctFmt(g.pct.contratado)}</td>
+                      <td className="cm-num">{pctFmt(g.pct.em_pedido)}</td>
+                      <td className="cm-num">{pctFmt(g.pct.em_contrato)}</td>
                       <td className="cm-num">{pctFmt(g.pct.realizado)}</td>
-                      <td className="cm-num">{g.projetado ? moeda.format(g.falta) : '—'}</td>
+                      <td className="cm-num"><strong>{pctFmt(g.pct.comprometido)}</strong></td>
+                      <td className="cm-num">{g.projetado ? moeda.format(g.falta_solicitar) : '—'}</td>
+                      <td className="cm-num">{g.projetado ? moeda.format(g.falta_fechar) : '—'}</td>
                       <td>{dataFmt(g.inicio)}</td>
                       <td>{dataFmt(g.limite)} <span className="cm-muted">{limiteTexto(g.dias_ate_limite)}</span></td>
                       <td><span className={`cm-sinal cm-${g.sinal}`}>{SINAIS[g.sinal]}</span></td>
                     </tr>
                     {aberto === g.id && (
-                      <tr className="cm-sub"><td colSpan={10}><ContratacoesMicro projectId={projectId} grupoId={g.id} /></td></tr>
+                      <tr className="cm-sub"><td colSpan={12}><ContratacoesMicro projectId={projectId} grupoId={g.id} /></td></tr>
                     )}
                     </Fragment>
                   ))}
