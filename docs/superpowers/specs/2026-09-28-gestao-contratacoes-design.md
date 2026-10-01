@@ -39,7 +39,7 @@ e não é o destino final.
 | Etapas do grupo | Nível 4 ou 5. Nível 4 é agrupador: atrela **todos os níveis 5** abaixo dele. Uma etapa em no máximo um grupo por obra |
 | Mão de obra | Os 40 grupos entram **sem etapas**; vínculo feito pela equipe na tela |
 | Custo projetado | Importado **mensalmente por obra**; campos: etapa de orçamento e custo projetado |
-| Lançado | Cada item conta **uma vez, pela fase mais avançada** (apropriado > pedido/contrato > cotação > solicitação) |
+| Comprometido | **Substituído em 2026-09-30** (spec `2026-09-30-contratacoes-material-mao-de-obra-design.md`): apropriado + saldo aberto de pedido + saldo aberto de contrato (Análise de Saldo); fases cumulativas até 100% |
 | Fase "feita" no grupo | Por cobertura de valor da fase (ou posteriores) sobre o projetado: ≥ 100% feita; 95–100% **pendência (rever projeção ou dados)**; > 100% do lançado total também **pendência**; < 95% não feita |
 | Atraso | **Por fase**, com datas-limite de trás para frente a partir do início; **atenção 7 dias** antes do limite |
 | Prazos | Dias **corridos**, como na planilha |
