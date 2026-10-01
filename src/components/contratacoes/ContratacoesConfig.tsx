@@ -14,7 +14,7 @@ const PRAZOS: { campo: CampoPrazo; label: string }[] = [
 const novoGrupo = (tipo: Tipo, ordem: number): Grupo => ({ tipo, item: '', insumos: null, pacote_servicos: null, ordem,
   lead_time: 45, levantamento: 15 })
 
-type Aba = 'grupos' | 'pendencias' | 'custo' | 'aprovacoes'
+type Aba = 'grupos' | 'pendencias' | 'custo' | 'insumos' | 'aprovacoes'
 
 export function ContratacoesConfig({ projectId }: { projectId: string }) {
   const [config, setConfig] = useState<Config | null>(null)
@@ -30,7 +30,7 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
   const [busca, setBusca] = useState('')
   const [grupoDestino, setGrupoDestino] = useState('')
   const [novoNome, setNovoNome] = useState('')
-  const [novoTipo, setNovoTipo] = useState<Tipo>('MATERIAL')
+  const [tipoPend, setTipoPend] = useState<Tipo>('MATERIAL')
   const [conflitos, setConflitos] = useState<{ grupoId: number; codigos: string[]; lista: Conflito[] } | null>(null)
   const [arquivo, setArquivo] = useState<{ nome: string; matriz: unknown[][] } | null>(null)
   const [previa, setPrevia] = useState<Previa | null>(null)
@@ -54,12 +54,12 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
 
   const pendenciasFiltradas = useMemo(() => {
     const q = busca.trim().toLowerCase()
-    return (config?.pendencias || []).filter((p) => !q || `${p.codigo_etapa} ${p.nome}`.toLowerCase().includes(q))
-  }, [config, busca])
+    return (config?.pendencias[tipoPend] || []).filter((p) => !q || `${p.codigo_etapa} ${p.nome}`.toLowerCase().includes(q))
+  }, [config, busca, tipoPend])
 
   // Nível 4 digitado: quantas etapas nível 5 fora de grupo ele inclui.
   const ramoValido = /^\d{2}(\.\d{2}){3}$/.test(ramo.trim())
-  const ramoQtd = ramoValido ? (config?.pendencias || []).filter((p) => p.codigo_etapa.startsWith(ramo.trim() + '.')).length : 0
+  const ramoQtd = ramoValido ? (config?.pendencias[tipoPend] || []).filter((p) => p.codigo_etapa.startsWith(ramo.trim() + '.')).length : 0
 
   const atrelar = async (grupoId: number, codigos: string[], mover = false) => {
     setOcupado(true); setErro(null)
@@ -75,10 +75,21 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
     if (!novoNome.trim()) { setErro('Informe o nome do novo grupo.'); return }
     setOcupado(true); setErro(null)
     try {
-      const { id } = await api.salvarGrupo(projectId, { ...novoGrupo(novoTipo, (config?.grupos.length || 0) + 1), item: novoNome.trim() })
+      const { id } = await api.salvarGrupo(projectId, { ...novoGrupo(tipoPend, (config?.grupos.length || 0) + 1), item: novoNome.trim() })
       setNovoNome('')
       await atrelar(id, [...selecionadas])
     } catch (e) { setErro((e as Error).message); setOcupado(false) }
+  }
+
+  const lerInsumos = async (file: File) => {
+    setOcupado(true); setErro(null)
+    try {
+      const wb = XLSX.read(await file.arrayBuffer())
+      const matriz = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: null })
+      const r = await api.importarInsumos(matriz)
+      setAviso(`Classificação da empresa importada: ${r.insumos} insumos.`)
+      await carregar()
+    } catch (e) { setErro((e as Error).message) } finally { setOcupado(false) }
   }
 
   const lerArquivo = async (file: File) => {
@@ -128,10 +139,13 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
             Grupos ({config.grupos.length}){sugeridas ? ` · ${sugeridas} a confirmar` : ''}
           </button>
           <button type="button" role="tab" aria-selected={aba === 'pendencias'} onClick={() => setAba('pendencias')}>
-            Etapas fora de grupo ({config.pendencias.length})
+            Etapas fora de grupo ({config.pendencias.MATERIAL.length} mat. · {config.pendencias.MAO_DE_OBRA.length} MO)
           </button>
           <button type="button" role="tab" aria-selected={aba === 'custo'} onClick={() => setAba('custo')}>
             Custo projetado{config.importacao ? ` · ${config.importacao.referencia.slice(0, 7)}` : ' · não importado'}
+          </button>
+          <button type="button" role="tab" aria-selected={aba === 'insumos'} onClick={() => setAba('insumos')}>
+            Insumos{config.classificacao.sem_classificacao.length ? ` · ${config.classificacao.sem_classificacao.length} sem classificação` : ''}
           </button>
           <button type="button" role="tab" aria-selected={aba === 'aprovacoes'} onClick={() => setAba('aprovacoes')}>
             Aprovações
@@ -234,9 +248,9 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
                                       <td className="cc-num">{fmt(e.custo_projetado)}</td>
                                       <td className="cc-acoes-linha">
                                         {e.situacao === 'SUGERIDO' && (
-                                          <button type="button" className="cc-btn cc-primario" onClick={() => executar(() => api.confirmar(projectId, e.codigo_etapa), 'Vínculo confirmado.')}>Confirmar</button>
+                                          <button type="button" className="cc-btn cc-primario" onClick={() => executar(() => api.confirmar(projectId, e.codigo_etapa, g.id!), 'Vínculo confirmado.')}>Confirmar</button>
                                         )}
-                                        <button type="button" className="cc-btn cc-sutil" onClick={() => executar(() => api.soltar(projectId, e.codigo_etapa), 'Etapa solta.')}>Soltar</button>
+                                        <button type="button" className="cc-btn cc-sutil" onClick={() => executar(() => api.soltar(projectId, e.codigo_etapa, g.id!), 'Etapa solta.')}>Soltar</button>
                                       </td>
                                     </tr>
                                   ))}
@@ -257,13 +271,26 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
 
       {aba === 'pendencias' && (
         <div className="cc-secao">
+          <div className="cc-abas" role="tablist">
+            {(['MATERIAL', 'MAO_DE_OBRA'] as Tipo[]).map((t) => (
+              <button type="button" role="tab" key={t} aria-selected={tipoPend === t}
+                onClick={() => { setTipoPend(t); setSelecionadas(new Set()); setGrupoDestino(''); setConflitos(null) }}>
+                {TIPO_LABEL[t]} ({config.pendencias[t].length})
+              </button>
+            ))}
+          </div>
+          <p className="cc-muted">
+            Etapas sem grupo de {TIPO_LABEL[tipoPend].toLowerCase()}
+            {config.importacao && !config.projecaoSemInsumo ? ` e com custo projetado de ${TIPO_LABEL[tipoPend].toLowerCase()}` : ''}.
+            Uma etapa pode ter um grupo de material e um de mão de obra.
+          </p>
           <div className="cc-acoes">
             <input id="cc-busca" type="search" placeholder="Buscar código ou nome" value={busca} onChange={(e) => setBusca(e.target.value)} />
             <span className="cc-muted">{selecionadas.size} selecionada(s)</span>
             <select id="cc-grupo-destino" value={grupoDestino} onChange={(e) => setGrupoDestino(e.target.value)}>
               <option value="">Atrelar a grupo existente…</option>
-              {config.grupos.map((g) => (
-                <option key={g.id} value={g.id}>{TIPO_LABEL[g.tipo]} · {g.item}{g.insumos ? ` · ${g.insumos}` : ''}</option>
+              {config.grupos.filter((g) => g.tipo === tipoPend).map((g) => (
+                <option key={g.id} value={g.id}>{g.item}{g.insumos ? ` · ${g.insumos}` : ''}</option>
               ))}
             </select>
             <button type="button" className="cc-btn cc-primario" disabled={!grupoDestino || !selecionadas.size || ocupado}
@@ -277,10 +304,7 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
               Atrelar ramo inteiro
             </button>
             <span className="cc-separador">ou</span>
-            <select id="cc-novo-grupo-tipo" value={novoTipo} onChange={(e) => setNovoTipo(e.target.value as Tipo)}>
-              <option value="MATERIAL">Material</option><option value="MAO_DE_OBRA">Mão de obra</option>
-            </select>
-            <input id="cc-novo-grupo-nome" placeholder="Nome do novo grupo" value={novoNome} onChange={(e) => setNovoNome(e.target.value)} />
+            <input id="cc-novo-grupo-nome" placeholder={`Novo grupo de ${TIPO_LABEL[tipoPend].toLowerCase()}`} value={novoNome} onChange={(e) => setNovoNome(e.target.value)} />
             <button type="button" className="cc-btn" disabled={!selecionadas.size || ocupado} onClick={criarGrupoComSelecionadas}>
               Criar grupo com as selecionadas
             </button>
@@ -330,12 +354,68 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
         </div>
       )}
 
+      {aba === 'insumos' && (
+        <div className="cc-secao">
+          <p className="cc-muted">
+            Classificação da empresa (planilha com "Cód.Item", "Descrição do Item" e "Definição Item"): SE = mão de obra; MT, EQ e OU = material.
+            "Itens fora de orçamento" contam sempre como material. Importar de novo substitui a classificação da empresa, que vale para todas as obras.
+          </p>
+          <p>Insumos classificados na empresa: <strong>{config.classificacao.empresa}</strong></p>
+          <div className="cc-acoes">
+            <input id="cc-insumos" type="file" accept=".xlsx,.xls,.csv" onChange={(e) => { const f = e.target.files?.[0]; if (f) lerInsumos(f) }} />
+          </div>
+          <h4>Sem classificação nesta obra ({config.classificacao.sem_classificacao.length})</h4>
+          <p className="cc-muted">Insumos da projeção que não estão na planilha da empresa. Até serem marcados, contam como mão de obra se começarem com "MO ", senão como material.</p>
+          {config.classificacao.sem_classificacao.length > 0 && (
+            <table className="cc-tabela">
+              <thead><tr><th>Insumo</th><th className="cc-num">Projetado</th><th>Hoje conta como</th><th></th></tr></thead>
+              <tbody>
+                {config.classificacao.sem_classificacao.map((i) => (
+                  <tr key={i.descricao}>
+                    <td>{i.descricao}</td><td className="cc-num">{fmt(i.projetado)}</td><td>{TIPO_LABEL[i.tipo]}</td>
+                    <td className="cc-acoes-linha">
+                      {(['MATERIAL', 'MAO_DE_OBRA'] as Tipo[]).map((t) => (
+                        <button key={t} type="button" className="cc-btn" disabled={ocupado}
+                          onClick={() => executar(() => api.classificarInsumo(projectId, i.descricao, t), 'Insumo classificado nesta obra.')}>
+                          {TIPO_LABEL[t]}
+                        </button>
+                      ))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <h4>Ajustes desta obra ({config.classificacao.obra.length})</h4>
+          {config.classificacao.obra.length > 0 && (
+            <table className="cc-tabela">
+              <tbody>
+                {config.classificacao.obra.map((o) => (
+                  <tr key={o.descricao}>
+                    <td>{o.descricao}</td><td>{TIPO_LABEL[o.tipo]}</td>
+                    <td className="cc-acoes-linha">
+                      <button type="button" className="cc-btn cc-sutil" disabled={ocupado}
+                        onClick={() => executar(() => api.classificarInsumo(projectId, o.descricao, null), 'Ajuste removido.')}>
+                        Remover ajuste
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
       {aba === 'custo' && (
         <div className="cc-secao">
           <p className="cc-muted">
             Envie a planilha de custo projetado (.xlsx, .xlsm ou .csv). A aba com as colunas certas é encontrada sozinha.
             Precisa das colunas "CÓDIGO" (ou "ETAPA") e "CUSTO PROJETADO". Só as etapas de nível 5 entram.
           </p>
+          {config.projecaoSemInsumo && (
+            <p className="cc-alerta-texto">A última importação não guardou as linhas por insumo. Importe a projeção de novo para separar material e mão de obra.</p>
+          )}
           {config.importacao && (
             <p>
               Última importação: referência <strong>{config.importacao.referencia.slice(0, 7)}</strong>,
