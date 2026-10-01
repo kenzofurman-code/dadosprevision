@@ -163,38 +163,46 @@ export function subtrairDias(dataISO, dias) {
 
 const diasEntre = (de, ate) => Math.round((Date.parse(`${ate}T00:00:00Z`) - Date.parse(`${de}T00:00:00Z`)) / 86400000)
 const PRIORIDADE = ['ATRASADO', 'ATENCAO', 'PENDENCIA', 'NO_PRAZO', 'SEM_DATA', 'SEM_PROJECAO', 'CONCLUIDO']
-const FASES = ['solicitado', 'pedido', 'contratado', 'realizado']
+const FASES = ['solicitado', 'em_pedido', 'em_contrato', 'realizado']
 
-// Painel macro: por grupo, % do custo projetado em cada fase e sinalizador.
+// Painel macro: por grupo, quanto do custo projetado já está comprometido
+// (apropriado + saldo aberto de pedido + saldo aberto de contrato, como na
+// projeção de custo) e quanto ainda falta solicitar/fechar.
 // Data-limite de solicitação = menor início das etapas no cronograma - lead time.
 export function calcularMacro({ grupos, projetado, valores, inicio, hoje }) {
   const linhas = grupos.map((g) => {
-    const soma = { projetado: 0, solicitado: 0, pedido: 0, contratado: 0, realizado: 0, lancado: 0 }
+    const soma = { projetado: 0, solicitado: 0, em_pedido: 0, em_contrato: 0, realizado: 0, comprometido: 0, solicitado_efetivo: 0 }
     let menorInicio = null
     for (const e of g.etapas) {
       const val = valores.get(e) || {}
+      const n = (f) => Number(val[f]) || 0
       soma.projetado += projetado.get(e) || 0
-      for (const f of FASES) soma[f] += Number(val[f]) || 0
-      soma.lancado += Math.max(0, ...FASES.map((f) => Number(val[f]) || 0))
+      for (const f of FASES) soma[f] += n(f)
+      const comprometido = n('realizado') + n('em_pedido') + n('em_contrato')
+      soma.comprometido += comprometido
+      // Contrato fechado sem passar pela solicitação também conta como solicitado.
+      soma.solicitado_efetivo += Math.max(n('solicitado'), comprometido)
       const ini = inicio.get(e)
       if (ini && (!menorInicio || ini < menorInicio)) menorInicio = ini
     }
     const P = soma.projetado
-    const pct = Object.fromEntries([...FASES, 'lancado'].map((f) => [f, P > 0 ? soma[f] / P : null]))
+    const razao = (x) => (P > 0 ? x / P : null)
+    const pct = { solicitado: razao(soma.solicitado_efetivo), em_pedido: razao(soma.em_pedido),
+      em_contrato: razao(soma.em_contrato), realizado: razao(soma.realizado), comprometido: razao(soma.comprometido) }
     const limite = menorInicio ? subtrairDias(menorInicio, g.lead_time) : null
     const diasAteLimite = limite ? diasEntre(hoje, limite) : null
     let sinal
     if (P <= 0) sinal = 'SEM_PROJECAO'
-    else if (soma.lancado > P) sinal = 'PENDENCIA'
+    else if (soma.solicitado_efetivo > P) sinal = 'PENDENCIA'
     else if (soma.realizado >= P) sinal = 'CONCLUIDO'
-    else if (soma.lancado >= 0.95 * P && soma.lancado < P) sinal = 'PENDENCIA'
     else if (!limite) sinal = 'SEM_DATA'
-    else if (soma.solicitado < P && diasAteLimite < 0) sinal = 'ATRASADO'
-    else if (soma.solicitado < P && diasAteLimite <= 7) sinal = 'ATENCAO'
+    else if (soma.solicitado_efetivo < P && diasAteLimite < 0) sinal = 'ATRASADO'
+    else if (soma.solicitado_efetivo < P && diasAteLimite <= 7) sinal = 'ATENCAO'
     else sinal = 'NO_PRAZO'
     return {
       id: g.id, tipo: g.tipo, item: g.item, insumos: g.insumos, lead_time: g.lead_time, etapas: g.etapas.length,
-      ...soma, falta: Math.max(0, P - soma.lancado), pct, inicio: menorInicio, limite, dias_ate_limite: diasAteLimite, sinal,
+      ...soma, falta_solicitar: Math.max(0, P - soma.solicitado_efetivo), falta_fechar: Math.max(0, P - soma.comprometido),
+      pct, inicio: menorInicio, limite, dias_ate_limite: diasAteLimite, sinal,
     }
   })
   linhas.sort((a, b) => PRIORIDADE.indexOf(a.sinal) - PRIORIDADE.indexOf(b.sinal)
@@ -202,7 +210,8 @@ export function calcularMacro({ grupos, projetado, valores, inicio, hoje }) {
   const porSinal = Object.fromEntries(PRIORIDADE.map((s) => [s, 0]))
   for (const l of linhas) porSinal[l.sinal]++
   const total = (f) => linhas.reduce((s, l) => s + l[f], 0)
-  return { grupos: linhas, resumo: { projetado: total('projetado'), lancado: total('lancado'), falta: total('falta'), porSinal } }
+  return { grupos: linhas, resumo: { projetado: total('projetado'), comprometido: total('comprometido'),
+    falta_solicitar: total('falta_solicitar'), falta_fechar: total('falta_fechar'), porSinal } }
 }
 
 // Data de hoje (AAAA-MM-DD) no fuso das obras; em UTC viraria o dia às 21h.

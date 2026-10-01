@@ -151,19 +151,35 @@ const base = (etapas, lead = 30) => ({ id: 1, tipo: 'MATERIAL', item: 'G', insum
 const macro = (grupo, { proj = {}, val = {}, ini = {}, hoje = '2026-09-29' } = {}) =>
   calcularMacro({ grupos: [grupo], projetado: new Map(Object.entries(proj)),
     valores: new Map(Object.entries(val)), inicio: new Map(Object.entries(ini)), hoje }).grupos[0]
-const v = (solicitado, pedido = 0, contratado = 0, realizado = 0) => ({ solicitado, pedido, contratado, realizado })
+const v = (solicitado, em_pedido = 0, em_contrato = 0, realizado = 0) => ({ solicitado, em_pedido, em_contrato, realizado })
 
 test('macro: sem projeção não divide por zero', () => {
   const g = macro(base([]))
   assert.equal(g.sinal, 'SEM_PROJECAO')
   assert.equal(g.pct.solicitado, null)
+  assert.equal(g.pct.comprometido, null)
 })
 
-test('macro: percentuais e lançado pela fase mais avançada', () => {
-  const g = macro(base(['a', 'b']), { proj: { a: 600, b: 400 }, val: { a: v(300, 300, 0, 100), b: v(0, 0, 0, 200) }, ini: { a: '2027-01-10' } })
-  assert.deepEqual([g.projetado, g.solicitado, g.pedido, g.realizado, g.lancado, g.falta], [1000, 300, 300, 300, 500, 500])
-  assert.equal(g.pct.lancado, 0.5)
+test('macro: comprometido = realizado + saldo de pedido + saldo de contrato', () => {
+  const g = macro(base(['a', 'b']), { proj: { a: 600, b: 400 }, val: { a: v(300, 100, 50, 100), b: v(0, 0, 0, 200) }, ini: { a: '2027-01-10' } })
+  assert.deepEqual(
+    [g.projetado, g.solicitado, g.solicitado_efetivo, g.em_pedido, g.em_contrato, g.realizado, g.comprometido, g.falta_solicitar, g.falta_fechar],
+    [1000, 300, 500, 100, 50, 300, 450, 500, 550])
+  assert.equal(g.pct.comprometido, 0.45)
+  assert.equal(g.pct.solicitado, 0.5)
   assert.equal(g.sinal, 'NO_PRAZO')
+})
+
+test('macro: contrato sem solicitação conta como solicitado e não fica atrasado', () => {
+  const g = macro(base(['a'], 30), { proj: { a: 100 }, val: { a: v(0, 0, 100, 0) }, ini: { a: '2026-10-01' } })
+  assert.equal(g.falta_solicitar, 0)
+  assert.equal(g.falta_fechar, 0)
+  assert.equal(g.sinal, 'NO_PRAZO')
+})
+
+test('macro: sem saldos (campos ausentes) vale zero', () => {
+  const g = macro(base(['a']), { proj: { a: 100 }, val: { a: { solicitado: 40 } }, ini: { a: '2027-01-01' } })
+  assert.deepEqual([g.em_pedido, g.em_contrato, g.realizado, g.comprometido, g.falta_fechar], [0, 0, 0, 0, 100])
 })
 
 test('macro: atrasado quando passou do limite sem 100% solicitado', () => {
@@ -179,28 +195,31 @@ test('macro: atenção a 7 dias ou menos do limite', () => {
   assert.equal(g.sinal, 'ATENCAO')
 })
 
-test('macro: tudo solicitado não fica atrasado mesmo após o limite', () => {
-  const g = macro(base(['a'], 30), { proj: { a: 100 }, val: { a: v(100, 100) }, ini: { a: '2026-10-01' } })
+test('macro: 97% comprometido no prazo continua no prazo (sem regra dos 95%)', () => {
+  const g = macro(base(['a']), { proj: { a: 100 }, val: { a: v(100, 10, 12, 75) }, ini: { a: '2027-01-01' } })
+  assert.equal(g.comprometido, 97)
   assert.equal(g.sinal, 'NO_PRAZO')
 })
 
-test('macro: pendência entre 95% e 100% e acima de 100%', () => {
-  assert.equal(macro(base(['a']), { proj: { a: 100 }, val: { a: v(96) }, ini: { a: '2027-01-01' } }).sinal, 'PENDENCIA')
+test('macro: acima de 100% (solicitado ou comprometido) pede rever projeção', () => {
   assert.equal(macro(base(['a']), { proj: { a: 100 }, val: { a: v(130) }, ini: { a: '2027-01-01' } }).sinal, 'PENDENCIA')
+  const g = macro(base(['a']), { proj: { a: 100 }, val: { a: v(0, 20, 0, 90) }, ini: { a: '2027-01-01' } })
+  assert.equal(g.sinal, 'PENDENCIA')
+  assert.equal(g.falta_fechar, 0)
 })
 
 test('macro: concluído com 100% realizado; sem data sem cronograma', () => {
-  assert.equal(macro(base(['a']), { proj: { a: 100 }, val: { a: v(100, 100, 0, 100) } }).sinal, 'CONCLUIDO')
+  assert.equal(macro(base(['a']), { proj: { a: 100 }, val: { a: v(100, 0, 0, 100) } }).sinal, 'CONCLUIDO')
   assert.equal(macro(base(['a']), { proj: { a: 100 }, val: { a: v(10) } }).sinal, 'SEM_DATA')
 })
 
 test('macro: resumo soma a obra e conta sinais', () => {
   const r = calcularMacro({
     grupos: [base(['a']), { ...base(['b']), id: 2 }],
-    projetado: new Map([['a', 100], ['b', 50]]), valores: new Map([['a', v(20)]]),
+    projetado: new Map([['a', 100], ['b', 50]]), valores: new Map([['a', v(20, 10)]]),
     inicio: new Map(), hoje: '2026-09-29',
   })
-  assert.deepEqual([r.resumo.projetado, r.resumo.lancado, r.resumo.falta], [150, 20, 130])
+  assert.deepEqual([r.resumo.projetado, r.resumo.comprometido, r.resumo.falta_fechar, r.resumo.falta_solicitar], [150, 10, 140, 130])
   assert.equal(r.resumo.porSinal.SEM_DATA, 2)
 })
 
