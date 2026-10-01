@@ -245,11 +245,11 @@ async function obraDoProjeto(projetoId) {
 }
 
 // Valores por etapa (formato Mega). Solicitado = valor do item da solicitação;
-// pedido/contratado = o mesmo valor dos itens que já têm pedido/contrato (o total
-// do Pedido de Compra repete o total do pedido em cada item e não serve para somar);
-// realizado = apropriação por cod_estruturado.
+// em_pedido / em_contrato = saldo aberto da Análise de Saldo (abas Pedidos e
+// Contratos, última extração da obra); realizado = apropriação por cod_estruturado.
+// Comprometido = realizado + saldos, como na planilha de projeção de custo.
 async function valoresPorEtapa(obra) {
-  const [itens, realizado] = await Promise.all([
+  const [itens, pedidos, contratos, realizado] = await Promise.all([
     query(
       `WITH etapa_distinta AS (
          SELECT DISTINCT codigo_solicitacao, sequencial_item, codigo_etapa
@@ -259,38 +259,40 @@ async function valoresPorEtapa(obra) {
          -- então o valor é dividido igualmente (senão conta mais de uma vez).
          SELECT *, COUNT(*) OVER (PARTITION BY codigo_solicitacao, sequencial_item) AS n_etapas FROM etapa_distinta
        ), item AS (
-         SELECT solicitacao, sequencia, MAX(valor_total) AS valor,
-                BOOL_OR(cod_pedido IS NOT NULL) AS tem_pedido, BOOL_OR(cod_contrato IS NOT NULL) AS tem_contrato
+         SELECT solicitacao, sequencia, MAX(valor_total) AS valor
          FROM mega.visualizacao_itens WHERE obra = $1 GROUP BY solicitacao, sequencia
        )
-       SELECT e.codigo_etapa,
-              SUM(COALESCE(i.valor, 0) / e.n_etapas) AS solicitado,
-              SUM(COALESCE(i.valor, 0) / e.n_etapas) FILTER (WHERE i.tem_pedido) AS pedido,
-              SUM(COALESCE(i.valor, 0) / e.n_etapas) FILTER (WHERE i.tem_contrato) AS contratado
+       SELECT e.codigo_etapa, SUM(COALESCE(i.valor, 0) / e.n_etapas) AS solicitado
        FROM etapa_item e
        JOIN item i ON i.solicitacao::text = e.codigo_solicitacao::text AND i.sequencia::text = e.sequencial_item::text
        GROUP BY e.codigo_etapa`, [obra]),
     query(
-      `SELECT raw_data->>'cod_estruturado' AS codigo_etapa, SUM(COALESCE(valor_apropriacao, 0)) AS realizado
+      `SELECT raw_data->>'cod_estruturado' AS codigo_etapa, SUM(COALESCE(valor_apropriacao, 0)) AS valor
+       FROM mega.analise_pedidos_hist
+       WHERE obra = $1 AND data_extracao = (SELECT MAX(data_extracao) FROM mega.analise_pedidos_hist WHERE obra = $1)
+       GROUP BY 1`, [obra]),
+    query(
+      `SELECT raw_data->>'cod_estruturado' AS codigo_etapa, SUM(COALESCE(total, 0)) AS valor
+       FROM mega.analise_contratos_hist
+       WHERE obra = $1 AND data_extracao = (SELECT MAX(data_extracao) FROM mega.analise_contratos_hist WHERE obra = $1)
+       GROUP BY 1`, [obra]),
+    query(
+      `SELECT raw_data->>'cod_estruturado' AS codigo_etapa, SUM(COALESCE(valor_apropriacao, 0)) AS valor
        FROM mega.analise_realizado WHERE obra = $1 AND raw_data ? 'cod_estruturado' GROUP BY 1`, [obra]),
   ])
   const mapa = new Map()
-  const pega = (c) => {
-    if (!mapa.has(c)) mapa.set(c, { solicitado: 0, pedido: 0, contratado: 0, realizado: 0 })
-    return mapa.get(c)
+  const somar = (rows, campo) => {
+    for (const r of rows) {
+      const c = etapaParaMega(r.codigo_etapa)
+      if (!c) continue
+      if (!mapa.has(c)) mapa.set(c, { solicitado: 0, em_pedido: 0, em_contrato: 0, realizado: 0 })
+      mapa.get(c)[campo] += Number(r[campo === 'solicitado' ? 'solicitado' : 'valor']) || 0
+    }
   }
-  for (const r of itens.rows) {
-    const c = etapaParaMega(r.codigo_etapa)
-    if (!c) continue
-    const v = pega(c)
-    v.solicitado += Number(r.solicitado) || 0
-    v.pedido += Number(r.pedido) || 0
-    v.contratado += Number(r.contratado) || 0
-  }
-  for (const r of realizado.rows) {
-    const c = etapaParaMega(r.codigo_etapa)
-    if (c) pega(c).realizado += Number(r.realizado) || 0
-  }
+  somar(itens.rows, 'solicitado')
+  somar(pedidos.rows, 'em_pedido')
+  somar(contratos.rows, 'em_contrato')
+  somar(realizado.rows, 'realizado')
   return mapa
 }
 
