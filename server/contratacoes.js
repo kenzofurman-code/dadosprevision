@@ -370,11 +370,13 @@ export function calcularTrilha({ item, docs, eventos, medicoes, regras }) {
   }
   // Documento posterior já existe no Mega (cotação, pedido, contrato, medição):
   // o passo anterior seguiu adiante, então conta como aprovado com as
-  // aprovações que teve. Medições não se cobrem entre si.
+  // aprovações que teve. Medições não se cobrem entre si, e o mapa não cobre o
+  // estouro (os dois usam o número da mesma cotação).
   for (let i = 0; i < passos.length; i++) {
     const p = passos[i]
     if (p.passo === 'MEDICAO' || p.status === 'APROVADO' || p.status === 'DISPENSADO') continue
-    if (passos.slice(i + 1).some((q) => q.numero != null)) passos[i] = { ...p, status: 'APROVADO', implicito: true }
+    const posterior = passos.slice(i + 1).some((q) => q.numero != null && !(p.passo === 'ESTOURO' && q.passo === 'MAPA'))
+    if (posterior) passos[i] = { ...p, status: 'APROVADO', implicito: true }
   }
   const parado_em = passos.find((p) => p.status === 'PENDENTE' || p.status === 'REPROVADO' || p.status === 'NAO_INICIADO') || null
   return { passos, parado_em }
@@ -393,13 +395,17 @@ export function resumirMedicoes(passos, hoje) {
   }
 }
 
-// Valor do item na tela: o último conhecido. Pedido (valor do item no pedido),
-// senão contrato (unitário do contrato × quantidade solicitada), senão a
-// solicitação — o valor da solicitação nem sempre vem certo.
+// Valor do item na tela: o último conhecido. Unitário do pedido, senão do
+// contrato, × quantidade solicitada (um pedido pode juntar o mesmo insumo de
+// várias solicitações); senão a solicitação, que nem sempre vem certa.
 export function valorDoItem({ solicitacao, pedido = null, contrato = null }) {
   const qtde = Number(solicitacao?.qtde) || 0
-  if (pedido) return { fonte: 'PEDIDO', unitario: pedido.unitario, total: pedido.total }
-  if (contrato) return { fonte: 'CONTRATO', unitario: contrato.unitario, total: Math.round(contrato.unitario * qtde * 100) / 100 }
+  for (const [fonte, doc] of [['PEDIDO', pedido], ['CONTRATO', contrato]]) {
+    const u = doc?.unitario
+    if (u !== null && u !== undefined && Number.isFinite(Number(u))) {
+      return { fonte, unitario: Number(u), total: Math.round(Number(u) * qtde * 100) / 100 }
+    }
+  }
   const total = Number(solicitacao?.total) || 0
   return { fonte: 'SOLICITACAO', unitario: solicitacao?.unitario ?? (qtde ? total / qtde : null), total }
 }

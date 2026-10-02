@@ -444,7 +444,17 @@ test('calcularTrilha: reprovação seguida de documento posterior também conta 
 test('valorDoItem: último valor conhecido — pedido, contrato, senão solicitação', () => {
   const sol = { total: 80, qtde: 40, unitario: null }
   assert.deepEqual(valorDoItem({ solicitacao: sol }), { fonte: 'SOLICITACAO', unitario: 2, total: 80 })
-  assert.deepEqual(valorDoItem({ solicitacao: sol, pedido: { unitario: 1.5, total: 66 } }), { fonte: 'PEDIDO', unitario: 1.5, total: 66 })
+  assert.deepEqual(valorDoItem({ solicitacao: sol, pedido: { unitario: 1.5 } }), { fonte: 'PEDIDO', unitario: 1.5, total: 60 })
+  assert.deepEqual(valorDoItem({ solicitacao: sol, pedido: { unitario: null }, contrato: { unitario: NaN } }), { fonte: 'SOLICITACAO', unitario: 2, total: 80 })
   assert.deepEqual(valorDoItem({ solicitacao: sol, contrato: { unitario: 3 } }), { fonte: 'CONTRATO', unitario: 3, total: 120 })
   assert.deepEqual(valorDoItem({ solicitacao: { total: 10, qtde: 0, unitario: null } }), { fonte: 'SOLICITACAO', unitario: null, total: 10 })
+})
+
+test('calcularTrilha: estouro pendente não é coberto pelo mapa da mesma cotação', () => {
+  const docs = new Map([['ESTOURO|2', { valor: 500000 }]])
+  const eventos = new Map([['SOLICITACAO|1', [ev('Aprovação', 'A', '1'), ev('Aprovação', 'B', '2')]]])
+  const t = calcularTrilha({ item: { solicitacao: 1, cotacao: 2, pedido: null, contrato: null }, docs, eventos, medicoes: [], regras: REGRAS_PADRAO })
+  assert.equal(t.parado_em.passo, 'ESTOURO')
+  const comPedido = calcularTrilha({ item: { solicitacao: 1, cotacao: 2, pedido: 3, contrato: null }, docs, eventos, medicoes: [], regras: REGRAS_PADRAO })
+  assert.equal(comPedido.passos.find((p) => p.passo === 'ESTOURO').status, 'APROVADO')
 })

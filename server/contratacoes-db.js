@@ -497,21 +497,23 @@ export async function obterMicro(projetoId, grupoId, hoje = hojeNoBrasil()) {
   // Valor no pedido (item do pedido pelo insumo) e unitário do contrato (Análise de Saldo, última extração).
   const [pedRes, ctrRes] = await Promise.all([
     pedidos.length
-      ? query(`SELECT numero_do_pedido, raw_data->>'cod_item' AS cod, SUM((raw_data->>'vlr_total_item')::numeric) AS total,
-                      MAX((raw_data->>'vlr_unitario')::numeric) AS unitario
+      ? query(`SELECT numero_do_pedido, raw_data->>'cod_item' AS cod, MAX((raw_data->>'vlr_unitario')::numeric) AS unitario
                FROM mega.pedidos_compra WHERE obra = $1 AND numero_do_pedido = ANY($2::bigint[]) GROUP BY 1, 2`, [obra, pedidos])
       : { rows: [] },
     contratos.length
-      ? query(`SELECT codigo_contrato, raw_data->>'cod_insumo' AS cod, MAX(valor_unitario) AS unitario
+      ? query(`SELECT DISTINCT ON (codigo_contrato, raw_data->>'cod_insumo') codigo_contrato, raw_data->>'cod_insumo' AS cod,
+                      valor_unitario AS unitario
                FROM mega.analise_contratos_hist
-               WHERE obra = $1 AND codigo_contrato = ANY($2::bigint[])
-                 AND data_extracao = (SELECT MAX(data_extracao) FROM mega.analise_contratos_hist WHERE obra = $1)
-               GROUP BY 1, 2`, [obra, contratos])
+               WHERE obra = $1 AND codigo_contrato = ANY($2::bigint[]) AND valor_unitario IS NOT NULL
+               ORDER BY codigo_contrato, raw_data->>'cod_insumo', data_extracao DESC`, [obra, contratos])
       : { rows: [] },
   ])
-  const chaveInsumo = (doc, cod) => `${doc}|${Number(cod)}`
-  const valorPedido = new Map(pedRes.rows.map((p) => [chaveInsumo(p.numero_do_pedido, p.cod), { unitario: Number(p.unitario), total: Number(p.total) }]))
-  const unitContrato = new Map(ctrRes.rows.map((c) => [chaveInsumo(c.codigo_contrato, c.cod), { unitario: Number(c.unitario) }]))
+  // Código de insumo vazio não casa com nada (evita 'doc|0').
+  const chaveInsumo = (doc, cod) => (cod === null || cod === undefined || cod === '' || !Number.isFinite(Number(cod)) ? null : `${doc}|${Number(cod)}`)
+  const porChave = (rows, doc) => new Map(rows.filter((x) => x.unitario !== null && chaveInsumo(x[doc], x.cod))
+    .map((x) => [chaveInsumo(x[doc], x.cod), { unitario: Number(x.unitario) }]))
+  const valorPedido = porChave(pedRes.rows, 'numero_do_pedido')
+  const unitContrato = porChave(ctrRes.rows, 'codigo_contrato')
   const medRes = contratos.length
     ? await query(`SELECT DISTINCT numero_contrato, numero_medicao FROM mega.medicoes_contratos
                    WHERE obra = $1 AND numero_contrato = ANY($2::bigint[]) ORDER BY 2`, [obra, contratos])
