@@ -1526,6 +1526,18 @@ td strong {
   font-weight: 500;
 }
 
+.gestao-panel-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.gestao-panel-filters .gestao-panel-data-filter {
+  margin-top: 0;
+}
+
 .gestao-panel-data-filter {
   display: inline-flex;
   align-items: center;
@@ -2381,6 +2393,7 @@ td strong {
     display: none !important;
   }
 
+  .gestao-panel-filters,
   .gestao-panel-data-filter,
   .gestao-service-drag svg {
     display: none !important;

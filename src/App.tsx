@@ -69,6 +69,7 @@ type ReorderableGestaoPanel = GestaoTablePanel | 'panel4'
 
 interface GestaoPanelPreference {
   onlyWithData: boolean
+  onlyWithVariation?: boolean
   serviceOrder: string[]
 }
 
@@ -2080,6 +2081,7 @@ function App() {
       return {
         services: [] as GestaoServiceItem[],
         floors: [] as GestaoFloorItem[],
+        mMinus4: null,
         mMinus3: null,
         mMinus2: null,
         mMinus1: null,
@@ -2106,6 +2108,7 @@ function App() {
       return { start, end, label, startFormatted, endFormatted }
     }
 
+    const mMinus4 = getMonthRange(year, monthIdx - 4)
     const mMinus3 = getMonthRange(year, monthIdx - 3)
     const mMinus2 = getMonthRange(year, monthIdx - 2)
     const mMinus1 = getMonthRange(year, monthIdx - 1)
@@ -2218,12 +2221,14 @@ function App() {
     }
 
     const panel1Rows = services.map((s) => {
+      const pM4 = calcProgressAt(s.activities, mMinus4)
       const pM3 = calcProgressAt(s.activities, mMinus3)
       const pM2 = calcProgressAt(s.activities, mMinus2)
       const pM1 = calcProgressAt(s.activities, mMinus1)
       return {
         service: s.name,
         groupRank: s.groupRank,
+        m4: pM4,
         m3: pM3,
         m2: pM2,
         m1: pM1,
@@ -2283,6 +2288,7 @@ function App() {
     return {
       services,
       floors,
+      mMinus4,
       mMinus3,
       mMinus2,
       mMinus1,
@@ -2300,15 +2306,16 @@ function App() {
   const gestaoPanelPreferenceKey = selectedProject || '__all_projects__'
   const currentGestaoPanelPreferences = useMemo(() => {
     const saved = gestaoPanelPreferences[gestaoPanelPreferenceKey]
-    const emptyPreference = (): GestaoPanelPreference => ({
-      onlyWithData: false,
-      serviceOrder: [],
+    const normalizePreference = (pref?: Partial<GestaoPanelPreference>): GestaoPanelPreference => ({
+      onlyWithData: pref?.onlyWithData ?? false,
+      onlyWithVariation: pref?.onlyWithVariation ?? false,
+      serviceOrder: Array.isArray(pref?.serviceOrder) ? pref.serviceOrder : [],
     })
     return {
-      panel1: saved?.panel1 || emptyPreference(),
-      panel2: saved?.panel2 || emptyPreference(),
-      panel3: saved?.panel3 || emptyPreference(),
-      panel4: saved?.panel4 || emptyPreference(),
+      panel1: normalizePreference(saved?.panel1),
+      panel2: normalizePreference(saved?.panel2),
+      panel3: normalizePreference(saved?.panel3),
+      panel4: normalizePreference(saved?.panel4),
     }
   }, [gestaoPanelPreferenceKey, gestaoPanelPreferences])
 
@@ -2317,6 +2324,7 @@ function App() {
       rows: T[],
       preference: GestaoPanelPreference,
       hasData: (row: T) => boolean,
+      hasVariation?: (row: T) => boolean,
     ) {
       const naturalOrder = rows.map((row) => row.service)
       const completeOrder = [
@@ -2325,7 +2333,11 @@ function App() {
       ]
       const orderIndex = new Map(completeOrder.map((service, index) => [service, index]))
       return rows
-        .filter((row) => !preference.onlyWithData || hasData(row))
+        .filter((row) => {
+          if (preference.onlyWithData && !hasData(row)) return false
+          if (preference.onlyWithVariation && hasVariation && !hasVariation(row)) return false
+          return true
+        })
         .slice()
         .sort(
           (a, b) =>
@@ -2343,6 +2355,24 @@ function App() {
           row.m3.prev > 0 || row.m3.real > 0 ||
           row.m2.prev > 0 || row.m2.real > 0 ||
           row.m1.prev > 0 || row.m1.real > 0,
+        (row) => {
+          const epsilon = 0.001
+          const diffM3Prev = Math.abs(row.m3.prev - row.m4.prev)
+          const diffM3Real = Math.abs(row.m3.real - row.m4.real)
+          const diffM2Prev = Math.abs(row.m2.prev - row.m3.prev)
+          const diffM2Real = Math.abs(row.m2.real - row.m3.real)
+          const diffM1Prev = Math.abs(row.m1.prev - row.m2.prev)
+          const diffM1Real = Math.abs(row.m1.real - row.m2.real)
+
+          return (
+            diffM3Prev > epsilon ||
+            diffM3Real > epsilon ||
+            diffM2Prev > epsilon ||
+            diffM2Real > epsilon ||
+            diffM1Prev > epsilon ||
+            diffM1Real > epsilon
+          )
+        },
       ),
       panel2: orderRows(
         gestaoData.panel2Rows,
@@ -2364,14 +2394,19 @@ function App() {
     ) => {
       setGestaoPanelPreferences((previous) => {
         const projectPreferences = previous[gestaoPanelPreferenceKey]
-        const current = projectPreferences?.[panel] || { onlyWithData: false, serviceOrder: [] }
+        const fallbackPref = (): GestaoPanelPreference => ({
+          onlyWithData: false,
+          onlyWithVariation: false,
+          serviceOrder: [],
+        })
+        const current = projectPreferences?.[panel] || fallbackPref()
         return {
           ...previous,
           [gestaoPanelPreferenceKey]: {
-            panel1: projectPreferences?.panel1 || { onlyWithData: false, serviceOrder: [] },
-            panel2: projectPreferences?.panel2 || { onlyWithData: false, serviceOrder: [] },
-            panel3: projectPreferences?.panel3 || { onlyWithData: false, serviceOrder: [] },
-            panel4: projectPreferences?.panel4 || { onlyWithData: false, serviceOrder: [] },
+            panel1: projectPreferences?.panel1 || fallbackPref(),
+            panel2: projectPreferences?.panel2 || fallbackPref(),
+            panel3: projectPreferences?.panel3 || fallbackPref(),
+            panel4: projectPreferences?.panel4 || fallbackPref(),
             [panel]: update(current),
           },
         }
@@ -3025,6 +3060,7 @@ function App() {
             .print-preview-actions button.primary { border-color: #173f38; background: #173f38; color: #ffffff; }
             .print-preview-content { padding: 20px; overflow: auto; }
             .print-preview-content .gestao-print-source { width: 100%; min-width: 0; margin: 0 auto; overflow: visible; }
+            .gestao-print-source .gestao-panel-filters,
             .gestao-print-source .gestao-panel-data-filter,
             .gestao-print-source .gestao-service-drag svg,
             .gestao-print-source .panel5-service-column,
@@ -4157,20 +4193,39 @@ function App() {
                         <span className="a4-sheet-subtitle">
                           Histórico Previsto vs. Realizado dos últimos 3 meses fechados ({gestaoData.mMinus3?.label} a {gestaoData.mMinus1?.label})
                         </span>
-                        <label className="gestao-panel-data-filter">
-                          <input
-                            type="checkbox"
-                            checked={currentGestaoPanelPreferences.panel1.onlyWithData}
-                            onChange={(event) =>
-                              updateGestaoPanelPreference('panel1', (preference) => ({
-                                ...preference,
-                                onlyWithData: event.target.checked,
-                              }))
-                            }
-                          />
-                          <Flag size={12} />
-                          Somente serviços com quantidade
-                        </label>
+                        <div className="gestao-panel-filters">
+                          <label className="gestao-panel-data-filter">
+                            <input
+                              type="checkbox"
+                              checked={currentGestaoPanelPreferences.panel1.onlyWithData}
+                              onChange={(event) =>
+                                updateGestaoPanelPreference('panel1', (preference) => ({
+                                  ...preference,
+                                  onlyWithData: event.target.checked,
+                                }))
+                              }
+                            />
+                            <Flag size={12} />
+                            Somente serviços com quantidade
+                          </label>
+                          <label
+                            className="gestao-panel-data-filter"
+                            title="Oculta serviços que não tiveram nenhuma variação de previsão ou realizado nos últimos 3 meses fechados"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={!!currentGestaoPanelPreferences.panel1.onlyWithVariation}
+                              onChange={(event) =>
+                                updateGestaoPanelPreference('panel1', (preference) => ({
+                                  ...preference,
+                                  onlyWithVariation: event.target.checked,
+                                }))
+                              }
+                            />
+                            <Flag size={12} />
+                            Somente serviços nos 3 meses fechados
+                          </label>
+                        </div>
                       </div>
                       <div className="a4-sheet-meta">
                         <div className="a4-sheet-meta-item">
