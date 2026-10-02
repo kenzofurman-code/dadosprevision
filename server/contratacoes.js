@@ -372,6 +372,14 @@ export function calcularTrilha({ item, docs, eventos, medicoes, regras }) {
   } else {
     passos.push(avaliarPasso({ passo: 'COMPRA', numero: null, doc: null, eventos: [], exigidas: regras.compra_ate }))
   }
+  // Documento posterior já existe no Mega (cotação, pedido, contrato, medição):
+  // o passo anterior seguiu adiante, então conta como aprovado com as
+  // aprovações que teve. Medições não se cobrem entre si.
+  for (let i = 0; i < passos.length; i++) {
+    const p = passos[i]
+    if (p.passo === 'MEDICAO' || p.status === 'APROVADO' || p.status === 'DISPENSADO') continue
+    if (passos.slice(i + 1).some((q) => q.numero != null)) passos[i] = { ...p, status: 'APROVADO', implicito: true }
+  }
   const parado_em = passos.find((p) => p.status === 'PENDENTE' || p.status === 'REPROVADO' || p.status === 'NAO_INICIADO') || null
   return { passos, parado_em }
 }

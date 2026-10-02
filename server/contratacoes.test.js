@@ -280,10 +280,13 @@ test('calcularTrilha monta a cadeia com estouro, alçada e medições', () => {
     ['SOLICITACAO', 'APROVADO', 2],
     ['ESTOURO', 'APROVADO', 1],
     ['MAPA', 'APROVADO', 1],
-    ['CONTRATO', 'PENDENTE', 2],
+    ['CONTRATO', 'APROVADO', 2],
     ['MEDICAO', 'PENDENTE', 3],
   ])
-  assert.equal(t.parado_em.passo, 'CONTRATO')
+  // Já tem medição: o contrato seguiu adiante, então conta como aprovado (1 aprovação bastou).
+  assert.equal(t.passos[3].implicito, true)
+  assert.equal(t.passos[3].feitas, 1)
+  assert.equal(t.parado_em.passo, 'MEDICAO')
 })
 
 test('calcularTrilha: estouro pequeno dispensado, pedido até a alçada, passos futuros não iniciados', () => {
@@ -419,4 +422,23 @@ test('resumirMedicoes: total, aprovadas e a primeira pendente com dias', () => {
   const r = resumirMedicoes([m(1, 'APROVADO', '2026-08-01T10:00'), m(2, 'APROVADO', null), m(3, 'PENDENTE', '2026-09-26T09:00'), m(4, 'NAO_INICIADO', null), m(5, 'REPROVADO', '2026-09-20T09:00')], '2026-09-29')
   assert.deepEqual(r, { total: 5, aprovadas: 2, reprovadas: 1, pendente: { numero: 3, dias: 3 } })
   assert.deepEqual(resumirMedicoes([], '2026-09-29'), { total: 0, aprovadas: 0, reprovadas: 0, pendente: null })
+})
+
+test('calcularTrilha: passo anterior a um documento que já existe conta como aprovado', () => {
+  const eventos = new Map([['SOLICITACAO|1', [ev('Aprovação', 'A', '1')]]])
+  const t = calcularTrilha({ item: { solicitacao: 1, cotacao: 2, pedido: 3, contrato: null }, docs: new Map(), eventos, medicoes: [], regras: REGRAS_PADRAO })
+  assert.deepEqual(t.passos.map((p) => [p.passo, p.status, Boolean(p.implicito)]), [
+    ['SOLICITACAO', 'APROVADO', true], ['MAPA', 'APROVADO', true], ['PEDIDO', 'NAO_INICIADO', false],
+  ])
+  assert.equal(t.parado_em.passo, 'PEDIDO')
+  const sem = calcularTrilha({ item: { solicitacao: 1, cotacao: null, pedido: null, contrato: null }, docs: new Map(), eventos, medicoes: [], regras: REGRAS_PADRAO })
+  assert.equal(sem.passos[0].status, 'PENDENTE')
+  assert.equal(sem.parado_em.passo, 'SOLICITACAO')
+})
+
+test('calcularTrilha: reprovação seguida de documento posterior também conta como aprovado', () => {
+  const eventos = new Map([['MAPA|2', [ev('Reprovação', 'N', '1')]]])
+  const t = calcularTrilha({ item: { solicitacao: 1, cotacao: 2, pedido: null, contrato: 9 }, docs: new Map(), eventos, medicoes: [7], regras: REGRAS_PADRAO })
+  assert.deepEqual(t.passos.slice(0, 3).map((p) => p.status), ['APROVADO', 'APROVADO', 'APROVADO'])
+  assert.equal(t.parado_em.passo, 'MEDICAO')
 })
