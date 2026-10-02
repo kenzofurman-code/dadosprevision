@@ -160,6 +160,10 @@ export async function obterConfig(projetoId) {
   const orcamentoTotal = [...proj.mapa.values()].reduce((s, v) => s + v, 0)
   return {
     aplicado: grupos.length > 0, grupos, importacao, orcamentoTotal, projecaoSemInsumo: proj.semDescricao,
+    etapas: nivel5.map(([codigo_etapa, nome]) => ({
+      codigo_etapa, nome,
+      custos: { MATERIAL: custo(codigo_etapa, 'MATERIAL'), MAO_DE_OBRA: custo(codigo_etapa, 'MAO_DE_OBRA') },
+    })).sort((a, b) => a.codigo_etapa.localeCompare(b.codigo_etapa)),
     pendencias: { MATERIAL: pendenciasDo('MATERIAL'), MAO_DE_OBRA: pendenciasDo('MAO_DE_OBRA') },
     classificacao: { empresa: classif.empresa, obra: classif.obra, sem_classificacao: proj.semClassificacao },
   }

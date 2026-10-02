@@ -4,6 +4,7 @@ export interface Grupo { id?: number; tipo: Tipo; item: string; insumos: string 
 export interface Pendencia { codigo_etapa: string; nome: string; custo_projetado: number | null; sugestao: { grupo_id: number; item: string; codigo_padrao: string } | null }
 export interface InsumoSemClassificacao { descricao: string; tipo: Tipo; projetado: number }
 export interface Config {
+  etapas: { codigo_etapa: string; nome: string; custos: Record<Tipo, number | null> }[]
   aplicado: boolean; grupos: Grupo[]; pendencias: Record<Tipo, Pendencia[]>
   importacao: { referencia: string; total: string; importado_em: string; arquivo: string | null } | null; orcamentoTotal: number
   projecaoSemInsumo: boolean

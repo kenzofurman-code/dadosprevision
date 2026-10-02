@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { api, type Config, type Conflito, type Grupo, type Previa, type Tipo } from './contratacoes-api'
 import { ContratacoesAprovacoes } from './ContratacoesAprovacoes'
+import { ContratacoesVinculos } from './ContratacoesVinculos'
 import './ContratacoesConfig.css'
 
 const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
@@ -159,6 +160,7 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
 
       {aba === 'grupos' && (
         <div className="cc-secao">
+          <ContratacoesVinculos key={projectId} projectId={projectId} config={config} onChanged={carregar} />
           <div className="cc-acoes">
             <button type="button" className="cc-btn" onClick={() => setEditando(novoGrupo('MATERIAL', config.grupos.length + 1))}>Novo grupo</button>
             {!confirmarRestaurar
