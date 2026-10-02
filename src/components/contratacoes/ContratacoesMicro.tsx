@@ -7,16 +7,21 @@ const NOMES: Record<string, string> = {
 }
 const STATUS: Record<StatusPasso, string> = { NAO_INICIADO: 'Não iniciado', PENDENTE: 'Pendente', APROVADO: 'Aprovado', REPROVADO: 'Reprovado', DISPENSADO: 'Dispensado' }
 const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+const moedaUnit = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 4 })
+const FONTE: Record<ItemMicro['valor_fonte'], string> = { PEDIDO: 'pedido', CONTRATO: 'contrato', SOLICITACAO: 'solicitação' }
 // Horário já vem no fuso das obras (AAAA-MM-DDTHH:MM); só reordena.
 const dataHora = (d: string | null) => (d ? `${d.slice(0, 10).split('-').reverse().join('/')}${d.length > 10 ? ` ${d.slice(11, 16)}` : ''}` : '')
 
 // Um passo numa célula: status, aprovações x/y e quem aprovou (no title).
+// Passo que já tem documento posterior conta como aprovado com o que teve.
 function Celula({ p }: { p: Passo | undefined }) {
   if (!p) return <span className="cm-muted">—</span>
+  const titulo = [p.implicito ? 'Seguiu adiante: já existe documento posterior' : '', p.aprovadores.join(', '), dataHora(p.ultimo)]
   return (
-    <span className={`cm-cel cm-p-${p.status}`} title={[p.aprovadores.join(', '), dataHora(p.ultimo)].filter(Boolean).join(' · ')}>
+    <span className={`cm-cel cm-p-${p.status}`} title={titulo.filter(Boolean).join(' · ')}>
       {p.numero != null && <small>{p.numero} </small>}
-      {STATUS[p.status]}{p.exigidas ? ` ${p.feitas}/${p.exigidas}` : ''}
+      {STATUS[p.status]}
+      {p.implicito ? (p.feitas ? ` (${p.feitas} aprov.)` : '') : p.exigidas ? ` ${p.feitas}/${p.exigidas}` : ''}
       {p.status === 'NAO_INICIADO' && p.numero != null && <small> · sem registro no Approvo</small>}
     </span>
   )
@@ -67,7 +72,7 @@ export function ContratacoesMicro({ projectId, grupoId }: { projectId: string; g
       <table className="cm-tabela cm-micro">
         <thead>
           <tr>
-            <th>Solicitação</th><th>Insumo</th><th>Etapa</th><th>Fornecedor</th><th className="cm-num">Valor</th>
+            <th>Solicitação</th><th>Insumo</th><th>Etapa</th><th>Fornecedor</th><th className="cm-num">Qtde</th><th className="cm-num">Unitário</th><th className="cm-num">Total</th>
             <th>Mapa</th><th>Pedido/Contrato</th><th>Medições</th><th>Parado em</th>
           </tr>
         </thead>
@@ -88,7 +93,9 @@ export function ContratacoesMicro({ projectId, grupoId }: { projectId: string; g
                   </td>
                   <td title={it.etapas.map((e) => `${e.codigo} ${e.nome ?? ''}`).join('\n')}>{it.etapas.map((e) => e.codigo).join(', ')}</td>
                   <td>{it.fornecedor ?? '—'}</td>
-                  <td className="cm-num">{moeda.format(it.valor)}</td>
+                  <td className="cm-num">{it.qtde ?? '—'}</td>
+                  <td className="cm-num">{it.valor_unitario != null ? moedaUnit.format(it.valor_unitario) : '—'}</td>
+                  <td className="cm-num">{moeda.format(it.valor)}<br /><small className="cm-muted">{FONTE[it.valor_fonte]}</small></td>
                   <td><Celula p={passo(it, 'MAPA')} /></td>
                   <td>
                     <Celula p={passo(it, 'PEDIDO', 'CONTRATO', 'COMPRA')} />

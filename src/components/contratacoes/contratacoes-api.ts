@@ -13,8 +13,8 @@ export interface Previa { itens: { codigo_etapa: string; custo_projetado: number
 export interface Conflito { codigo_etapa: string; grupo_id: number; item: string }
 export type Sinal = 'ATRASADO' | 'ATENCAO' | 'PENDENCIA' | 'NO_PRAZO' | 'SEM_DATA' | 'SEM_PROJECAO' | 'CONCLUIDO'
 type Pct = { solicitado: number | null; pedido: number | null; contrato: number | null; comprometido: number | null; realizado: number | null }
-export type Fase = 'LEVANTAMENTO' | 'SOLICITACAO' | 'MAPA' | 'PEDIDO_CONTRATO'
-export type EstadoFlag = 'FEITO' | 'ATRASADO' | 'ATENCAO' | 'NO_PRAZO' | 'LEMBRETE' | 'SEM_DATA'
+export type Fase = 'SOLICITACAO' | 'MAPA' | 'PEDIDO_CONTRATO'
+export type EstadoFlag = 'FEITO' | 'ATRASADO' | 'ATENCAO' | 'NO_PRAZO' | 'SEM_DATA'
 export interface Flag { fase: Fase; limite: string | null; dias: number | null; estado: EstadoFlag }
 export interface LinhaMacro {
   id: number; tipo: Tipo; item: string; insumos: string | null; lead_time: number; etapas: number
@@ -30,10 +30,11 @@ export interface Macro {
 
 export interface Regras { solicitacao: number; estouro: number; estouro_minimo: number; mapa: number; compra_ate: number; compra_acima: number; alcada_valor: number; aditivo: number; medicao: number }
 export type StatusPasso = 'NAO_INICIADO' | 'PENDENTE' | 'APROVADO' | 'REPROVADO' | 'DISPENSADO'
-export interface Passo { passo: string; numero: number | null; status: StatusPasso; exigidas: number; feitas: number; aprovadores: string[]; ultimo: string | null; valor: number | null }
+export interface Passo { passo: string; numero: number | null; status: StatusPasso; exigidas: number; feitas: number; aprovadores: string[]; ultimo: string | null; valor: number | null; implicito?: boolean }
 export interface ResumoMedicoes { total: number; aprovadas: number; reprovadas: number; pendente: { numero: number; dias: number | null } | null }
 export interface ItemMicro {
-  solicitacao: number; sequencia: number; descricao: string | null; insumo: string | null; fornecedor: string | null; valor: number
+  solicitacao: number; sequencia: number; descricao: string | null; insumo: string | null; fornecedor: string | null
+  valor: number; valor_unitario: number | null; valor_fonte: 'PEDIDO' | 'CONTRATO' | 'SOLICITACAO'; qtde: number | null
   etapas: { codigo: string; nome: string | null }[]; cotacao: number | null; pedido: number | null; contrato: number | null
   passos: Passo[]; medicoes: Passo[]; resumo_medicoes: ResumoMedicoes; parado_em: Passo | null; dias_parado: number | null; alerta: string | null
 }

@@ -1,26 +1,32 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { api, type EstadoFlag, type Fase, type Macro, type Sinal, type Tipo } from './contratacoes-api'
+import { api, type Fase, type LinhaMacro, type Macro, type Tipo } from './contratacoes-api'
 import { ContratacoesMicro } from './ContratacoesMicro'
 import './ContratacoesMacro.css'
 
 const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
 const pctFmt = (v: number | null) => (v === null ? '—' : `${Math.round(v * 100)}%`)
 const dataFmt = (d: string | null) => (d ? d.split('-').reverse().join('/') : '—')
-const SINAIS: Record<Sinal, string> = {
-  ATRASADO: 'Atrasado', ATENCAO: 'Atenção', PENDENCIA: 'Rever projeção/dados', NO_PRAZO: 'No prazo',
+// Situação do grupo na fase escolhida. Rever projeção, sem projeção e
+// concluído valem para todas as fases; o resto vem da flag da fase.
+type Situacao = 'ATRASADO' | 'ATENCAO' | 'PENDENCIA' | 'NO_PRAZO' | 'FEITO' | 'SEM_DATA' | 'SEM_PROJECAO' | 'CONCLUIDO'
+const SITUACOES: Record<Situacao, string> = {
+  ATRASADO: 'Atrasado', ATENCAO: 'Atenção', PENDENCIA: 'Rever projeção/dados', NO_PRAZO: 'No prazo', FEITO: 'Fase feita',
   SEM_DATA: 'Sem data no cronograma', SEM_PROJECAO: 'Sem custo projetado', CONCLUIDO: 'Concluído',
 }
+const ORDEM = Object.keys(SITUACOES) as Situacao[]
+const flagDa = (g: LinhaMacro, fase: Fase) => g.flags.find((f) => f.fase === fase)
+const situacao = (g: LinhaMacro, fase: Fase): Situacao =>
+  g.sinal === 'PENDENCIA' || g.sinal === 'SEM_PROJECAO' || g.sinal === 'CONCLUIDO' ? g.sinal : flagDa(g, fase)?.estado ?? 'SEM_DATA'
 const TIPOS: Record<Tipo, string> = { MATERIAL: 'Material', MAO_DE_OBRA: 'Mão de obra' }
-const FASES: Record<Fase, string> = { LEVANTAMENTO: 'Lev', SOLICITACAO: 'Sol', MAPA: 'Mapa', PEDIDO_CONTRATO: 'Ped/Ctr' }
-const FASES_LONGO: Record<Fase, string> = { LEVANTAMENTO: 'Levantamento (lembrete)', SOLICITACAO: 'Solicitação', MAPA: 'Mapa de cotação', PEDIDO_CONTRATO: 'Pedido/Contrato' }
-const ESTADOS: Record<EstadoFlag, string> = { FEITO: 'feito', ATRASADO: 'atrasado', ATENCAO: 'atenção', NO_PRAZO: 'no prazo', LEMBRETE: 'começar', SEM_DATA: 'sem data' }
+const FASES: Record<Fase, string> = { SOLICITACAO: 'Solicitação', MAPA: 'Mapa de cotação', PEDIDO_CONTRATO: 'Pedido/Contrato' }
 const limiteTexto = (d: number | null) => (d === null ? '' : d < 0 ? `há ${-d} dias` : d === 0 ? 'hoje' : `em ${d} dias`)
 
 export function ContratacoesMacro({ projectId, onConfigurar }: { projectId: string; onConfigurar: () => void }) {
   const [macro, setMacro] = useState<Macro | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [tipo, setTipo] = useState<Tipo>('MATERIAL')
-  const [filtro, setFiltro] = useState<Sinal | null>(null)
+  const [fase, setFase] = useState<Fase>('SOLICITACAO')
+  const [filtro, setFiltro] = useState<Situacao | null>(null)
   const [aberto, setAberto] = useState<number | null>(null)
 
   useEffect(() => {
@@ -30,7 +36,15 @@ export function ContratacoesMacro({ projectId, onConfigurar }: { projectId: stri
     return () => { vivo = false }
   }, [projectId])
 
-  const linhas = useMemo(() => (macro?.grupos || []).filter((g) => g.tipo === tipo && (!filtro || g.sinal === filtro)), [macro, tipo, filtro])
+  const doTipo = useMemo(() => (macro?.grupos || []).filter((g) => g.tipo === tipo), [macro, tipo])
+  const contagem = useMemo(() => {
+    const c = Object.fromEntries(ORDEM.map((s) => [s, 0])) as Record<Situacao, number>
+    for (const g of doTipo) c[situacao(g, fase)]++
+    return c
+  }, [doTipo, fase])
+  const linhas = useMemo(() => doTipo.filter((g) => !filtro || situacao(g, fase) === filtro)
+    .sort((a, b) => ORDEM.indexOf(situacao(a, fase)) - ORDEM.indexOf(situacao(b, fase))
+      || String(flagDa(a, fase)?.limite ?? '9').localeCompare(String(flagDa(b, fase)?.limite ?? '9'))), [doTipo, filtro, fase])
 
   if (erro) return <div className="cm-card"><p className="cm-erro">{erro}</p></div>
   if (!macro) return <div className="cm-card"><p className="cm-muted">Carregando contratações…</p></div>
@@ -67,6 +81,13 @@ export function ContratacoesMacro({ projectId, onConfigurar }: { projectId: stri
             {TIPOS[t]} · {moeda.format(macro.resumo[t].projetado_obra)}
           </button>
         ))}
+        <span className="cm-separador" aria-hidden="true">|</span>
+        {(Object.keys(FASES) as Fase[]).map((f) => (
+          <button type="button" role="tab" key={f} aria-selected={fase === f} className="cm-fase"
+            onClick={() => { setFase(f); setFiltro(null) }}>
+            Limite {FASES[f].toLowerCase()}
+          </button>
+        ))}
         <span className="cm-muted cm-total">Total da obra {moeda.format(macro.resumo.total_obra)}</span>
       </div>
       <div className="cm-resumo">
@@ -77,10 +98,10 @@ export function ContratacoesMacro({ projectId, onConfigurar }: { projectId: stri
         <div><span>Falta fechar</span><strong>{moeda.format(r.falta_fechar)}</strong></div>
         <div><span>Falta solicitar</span><strong>{moeda.format(r.falta_solicitar)}</strong></div>
         <div className="cm-fichas">
-          {(Object.keys(SINAIS) as Sinal[]).filter((s) => r.porSinal[s]).map((s) => (
+          {ORDEM.filter((s) => contagem[s]).map((s) => (
             <button type="button" key={s} className={`cm-sinal cm-${s} ${filtro === s ? 'ativo' : ''}`} aria-pressed={filtro === s}
               onClick={() => setFiltro(filtro === s ? null : s)}>
-              {SINAIS[s]} · {r.porSinal[s]}
+              {SITUACOES[s]} · {contagem[s]}
             </button>
           ))}
         </div>
@@ -94,7 +115,7 @@ export function ContratacoesMacro({ projectId, onConfigurar }: { projectId: stri
                 <th>Grupo</th><th className="cm-num">Projetado</th><th className="cm-num">Solicitado</th>
                 <th className="cm-num">Pedido</th><th className="cm-num">Contrato</th><th className="cm-num">Comprometido</th>
                 <th className="cm-num">Realizado</th><th className="cm-num">Falta solicitar</th><th className="cm-num">Falta fechar</th>
-                <th>Início</th><th>Limite solicitação</th><th>Fases</th><th>Situação</th>
+                <th>Início</th><th>Limite {FASES[fase].toLowerCase()}</th><th>Situação</th>
               </tr>
             </thead>
             <tbody>
@@ -111,19 +132,11 @@ export function ContratacoesMacro({ projectId, onConfigurar }: { projectId: stri
                     <td className="cm-num">{g.projetado ? moeda.format(g.falta_solicitar) : '—'}</td>
                     <td className="cm-num">{g.projetado ? moeda.format(g.falta_fechar) : '—'}</td>
                     <td>{dataFmt(g.inicio)}</td>
-                    <td>{dataFmt(g.limite)} <span className="cm-muted">{limiteTexto(g.dias_ate_limite)}</span></td>
-                    <td className="cm-flags">
-                      {g.flags.map((f) => (
-                        <span key={f.fase} className={`cm-flag cm-f-${f.estado}`}
-                          title={`${FASES_LONGO[f.fase]}: ${ESTADOS[f.estado]}${f.limite ? ` · limite ${dataFmt(f.limite)} ${limiteTexto(f.dias)}` : ''}`}>
-                          {FASES[f.fase]}
-                        </span>
-                      ))}
-                    </td>
-                    <td><span className={`cm-sinal cm-${g.sinal}`}>{SINAIS[g.sinal]}</span></td>
+                    <td>{dataFmt(flagDa(g, fase)?.limite ?? null)} <span className="cm-muted">{limiteTexto(flagDa(g, fase)?.dias ?? null)}</span></td>
+                    <td><span className={`cm-sinal cm-${situacao(g, fase)}`}>{SITUACOES[situacao(g, fase)]}</span></td>
                   </tr>
                   {aberto === g.id && (
-                    <tr className="cm-sub"><td colSpan={13}><ContratacoesMicro projectId={projectId} grupoId={g.id} /></td></tr>
+                    <tr className="cm-sub"><td colSpan={12}><ContratacoesMicro projectId={projectId} grupoId={g.id} /></td></tr>
                   )}
                 </Fragment>
               ))}
