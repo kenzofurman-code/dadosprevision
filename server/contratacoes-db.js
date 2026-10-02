@@ -6,7 +6,7 @@ import { query, withTransaction } from './db.js'
 import {
   etapaParaMega, nivelDoCodigo, resolverEtapasPadrao, expandirParaNivel5,
   sugestoesPorNome, lerCustoProjetado, calcularMacro, hojeNoBrasil,
-  calcularTrilha, REGRAS_PADRAO, resumirMedicoes, classificador, lerClassificacaoInsumos, origemParaCanal, normalizarNome,
+  calcularTrilha, REGRAS_PADRAO, resumirMedicoes, valorDoItem, classificador, lerClassificacaoInsumos, origemParaCanal, normalizarNome,
 } from './contratacoes.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -427,7 +427,7 @@ export async function obterMacro(projetoId, hoje = hojeNoBrasil()) {
     projetadoPorTipo(importacao?.id, classif.tipoDe),
     valoresPorEtapa(obra, classif.tipoDe),
     inicioPorEtapa(projetoId),
-    query(`SELECT id, tipo, item, insumos, lead_time, levantamento, prazo_solicitacao, prazo_emissao, prazo_entrega
+    query(`SELECT id, tipo, item, insumos, lead_time, prazo_emissao, prazo_entrega
            FROM contratacao_grupos WHERE projeto_id = $1 ORDER BY ordem, id`, [projetoId]),
     query('SELECT grupo_id, codigo_etapa FROM contratacao_grupo_etapas WHERE projeto_id = $1', [projetoId]),
   ])
@@ -485,13 +485,33 @@ export async function obterMicro(projetoId, grupoId, hoje = hojeNoBrasil()) {
   const itensRes = await query(
     `SELECT v.solicitacao, v.sequencia, MAX(v.descricao) AS descricao, MAX(v.fornecedor) AS fornecedor, MAX(v.valor_total) AS valor,
             MAX(v.cod_cotacao)::bigint AS cotacao, MAX(v.cod_pedido)::bigint AS pedido, MAX(v.cod_contrato)::bigint AS contrato,
-            MAX(s.numero_insumo)::text AS cod_insumo, MAX(s.descricao_insumo) AS insumo, ARRAY_AGG(DISTINCT s.codigo_etapa) AS etapas
+            MAX(s.numero_insumo)::text AS cod_insumo, MAX(s.descricao_insumo) AS insumo, ARRAY_AGG(DISTINCT s.codigo_etapa) AS etapas,
+            MAX(v.qtde_solicitada) AS qtde, MAX((v.raw_data->>'preco_de_solicitacao')::numeric) AS unit_solicitacao
      FROM mega.solicitacoes_por_etapa s
      JOIN mega.visualizacao_itens v ON v.obra = s.obra AND v.solicitacao = s.codigo_solicitacao AND v.sequencia = s.sequencial_item
      WHERE s.obra = $1 AND s.codigo_etapa = ANY($2)
      GROUP BY v.solicitacao, v.sequencia`, [obra, [...nomeEtapa.keys()]])
   const linhas = itensRes.rows.filter((r) => classif.tipoDe(r.insumo, r.cod_insumo).tipo === tipoGrupo)
   const contratos = [...new Set(linhas.map((r) => r.contrato).filter(Boolean).map(String))]
+  const pedidos = [...new Set(linhas.map((r) => r.pedido).filter(Boolean).map(String))]
+  // Valor no pedido (item do pedido pelo insumo) e unitário do contrato (Análise de Saldo, última extração).
+  const [pedRes, ctrRes] = await Promise.all([
+    pedidos.length
+      ? query(`SELECT numero_do_pedido, raw_data->>'cod_item' AS cod, SUM((raw_data->>'vlr_total_item')::numeric) AS total,
+                      MAX((raw_data->>'vlr_unitario')::numeric) AS unitario
+               FROM mega.pedidos_compra WHERE obra = $1 AND numero_do_pedido = ANY($2::bigint[]) GROUP BY 1, 2`, [obra, pedidos])
+      : { rows: [] },
+    contratos.length
+      ? query(`SELECT codigo_contrato, raw_data->>'cod_insumo' AS cod, MAX(valor_unitario) AS unitario
+               FROM mega.analise_contratos_hist
+               WHERE obra = $1 AND codigo_contrato = ANY($2::bigint[])
+                 AND data_extracao = (SELECT MAX(data_extracao) FROM mega.analise_contratos_hist WHERE obra = $1)
+               GROUP BY 1, 2`, [obra, contratos])
+      : { rows: [] },
+  ])
+  const chaveInsumo = (doc, cod) => `${doc}|${Number(cod)}`
+  const valorPedido = new Map(pedRes.rows.map((p) => [chaveInsumo(p.numero_do_pedido, p.cod), { unitario: Number(p.unitario), total: Number(p.total) }]))
+  const unitContrato = new Map(ctrRes.rows.map((c) => [chaveInsumo(c.codigo_contrato, c.cod), { unitario: Number(c.unitario) }]))
   const medRes = contratos.length
     ? await query(`SELECT DISTINCT numero_contrato, numero_medicao FROM mega.medicoes_contratos
                    WHERE obra = $1 AND numero_contrato = ANY($2::bigint[]) ORDER BY 2`, [obra, contratos])
@@ -536,7 +556,15 @@ export async function obterMicro(projetoId, grupoId, hoje = hojeNoBrasil()) {
     const desde = parado_em?.ultimo?.slice(0, 10) ?? null
     const medicoes = passos.filter((p) => p.passo === 'MEDICAO')
     itens.push({
-      ...item, sequencia: r.sequencia, descricao: r.descricao, insumo: r.insumo, fornecedor: r.fornecedor, valor: Number(r.valor) || 0,
+      ...item, sequencia: r.sequencia, descricao: r.descricao, insumo: r.insumo, fornecedor: r.fornecedor,
+      ...(() => {
+        const v = valorDoItem({
+          solicitacao: { total: Number(r.valor) || 0, qtde: Number(r.qtde) || 0, unitario: r.unit_solicitacao != null ? Number(r.unit_solicitacao) : null },
+          pedido: r.pedido ? valorPedido.get(chaveInsumo(r.pedido, r.cod_insumo)) ?? null : null,
+          contrato: r.contrato ? unitContrato.get(chaveInsumo(r.contrato, r.cod_insumo)) ?? null : null,
+        })
+        return { valor: v.total, valor_unitario: v.unitario, valor_fonte: v.fonte, qtde: Number(r.qtde) || null }
+      })(),
       etapas: etapas.map((c) => ({ codigo: c, nome: nomeEtapa.get(c) })),
       passos: passos.filter((p) => p.passo !== 'MEDICAO'), medicoes, resumo_medicoes: resumirMedicoes(medicoes, hoje), parado_em,
       dias_parado: desde ? Math.round((Date.parse(`${hoje}T00:00:00Z`) - Date.parse(`${desde}T00:00:00Z`)) / 86400000) : null,

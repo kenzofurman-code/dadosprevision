@@ -234,25 +234,21 @@ export function origemParaCanal(origem, tipo) {
 }
 
 // Flags por fase, de trás para frente a partir do início no cronograma:
-// solicitação = início − lead time; levantamento (só lembrete) = limite da
-// solicitação − (levantamento + prazo de solicitação); mapa = início −
-// (emissão + entrega); pedido/contrato = início − entrega.
-export function flagsDoGrupo({ inicio, lead_time, levantamento, prazo_solicitacao, prazo_emissao, prazo_entrega,
-  P, solicitado, cotado, comprometido, hoje }) {
+// solicitação = início − lead time; mapa = início − (emissão + entrega);
+// pedido/contrato = início − entrega. (Levantamento é lembrete: tela própria.)
+export function flagsDoGrupo({ inicio, lead_time, prazo_emissao, prazo_entrega, P, solicitado, cotado, comprometido, hoje }) {
   const n = (x) => Number(x) || 0
   const limSolic = inicio ? subtrairDias(inicio, n(lead_time)) : null
   const fases = [
-    { fase: 'LEVANTAMENTO', limite: limSolic ? subtrairDias(limSolic, n(levantamento) + n(prazo_solicitacao)) : null, feito: solicitado >= P, lembrete: true },
     { fase: 'SOLICITACAO', limite: limSolic, feito: solicitado >= P },
     { fase: 'MAPA', limite: inicio ? subtrairDias(inicio, n(prazo_emissao) + n(prazo_entrega)) : null, feito: Math.max(cotado, comprometido) >= P },
     { fase: 'PEDIDO_CONTRATO', limite: inicio ? subtrairDias(inicio, n(prazo_entrega)) : null, feito: comprometido >= P },
   ]
-  return fases.map(({ fase, limite, feito, lembrete }) => {
+  return fases.map(({ fase, limite, feito }) => {
     const dias = limite ? diasEntre(hoje, limite) : null
     let estado
     if (P > 0 && feito) estado = 'FEITO'
     else if (!limite) estado = 'SEM_DATA'
-    else if (lembrete) estado = dias <= 7 ? 'LEMBRETE' : 'NO_PRAZO'
     else if (dias < 0) estado = 'ATRASADO'
     else if (dias <= 7) estado = 'ATENCAO'
     else estado = 'NO_PRAZO'
@@ -395,4 +391,15 @@ export function resumirMedicoes(passos, hoje) {
     reprovadas: passos.filter((p) => p.status === 'REPROVADO').length,
     pendente: pend ? { numero: pend.numero, dias: desde ? diasEntre(desde, hoje) : null } : null,
   }
+}
+
+// Valor do item na tela: o último conhecido. Pedido (valor do item no pedido),
+// senão contrato (unitário do contrato × quantidade solicitada), senão a
+// solicitação — o valor da solicitação nem sempre vem certo.
+export function valorDoItem({ solicitacao, pedido = null, contrato = null }) {
+  const qtde = Number(solicitacao?.qtde) || 0
+  if (pedido) return { fonte: 'PEDIDO', unitario: pedido.unitario, total: pedido.total }
+  if (contrato) return { fonte: 'CONTRATO', unitario: contrato.unitario, total: Math.round(contrato.unitario * qtde * 100) / 100 }
+  const total = Number(solicitacao?.total) || 0
+  return { fonte: 'SOLICITACAO', unitario: solicitacao?.unitario ?? (qtde ? total / qtde : null), total }
 }

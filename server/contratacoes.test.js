@@ -4,7 +4,7 @@ import {
   normalizarNome, nivelDoCodigo, etapaParaMega, resolverEtapasPadrao,
   expandirParaNivel5, sugestoesPorNome, lerCustoProjetado, calcularMacro, subtrairDias, hojeNoBrasil,
   avaliarPasso, calcularTrilha, REGRAS_PADRAO,
-  definicaoParaTipo, lerClassificacaoInsumos, classificador, origemParaCanal, flagsDoGrupo, resumirMedicoes,
+  definicaoParaTipo, lerClassificacaoInsumos, classificador, origemParaCanal, flagsDoGrupo, resumirMedicoes, valorDoItem,
 } from './contratacoes.js'
 
 test('normalizarNome ignora acento, caixa e espaços extras', () => {
@@ -387,20 +387,18 @@ const flag = (fs, fase) => fs.find((f) => f.fase === fase)
 test('flags: datas-limite de trás para frente a partir do início', () => {
   const fs = flagsDoGrupo({ ...prazos, inicio: '2026-12-31', P: 100, solicitado: 0, cotado: 0, comprometido: 0, hoje: '2026-09-01' })
   assert.equal(flag(fs, 'SOLICITACAO').limite, '2026-11-16')
-  assert.equal(flag(fs, 'LEVANTAMENTO').limite, '2026-10-17')
   assert.equal(flag(fs, 'MAPA').limite, '2026-12-16')
   assert.equal(flag(fs, 'PEDIDO_CONTRATO').limite, '2026-12-26')
   assert.ok(fs.every((f) => f.estado === 'NO_PRAZO'))
 })
 
-test('flags: atrasado, atenção, feito e levantamento só como lembrete', () => {
+test('flags: atrasado, atenção e feito; sem levantamento', () => {
   const fs = flagsDoGrupo({ ...prazos, inicio: '2026-10-05', P: 100, solicitado: 100, cotado: 60, comprometido: 40, hoje: '2026-09-29' })
   assert.equal(flag(fs, 'SOLICITACAO').estado, 'FEITO')
-  assert.equal(flag(fs, 'LEVANTAMENTO').estado, 'FEITO')
   assert.equal(flag(fs, 'MAPA').estado, 'ATRASADO')
   assert.equal(flag(fs, 'PEDIDO_CONTRATO').estado, 'ATENCAO')
   const lembrete = flagsDoGrupo({ ...prazos, inicio: '2026-10-05', P: 100, solicitado: 0, cotado: 0, comprometido: 0, hoje: '2026-09-29' })
-  assert.equal(flag(lembrete, 'LEVANTAMENTO').estado, 'LEMBRETE')
+  assert.equal(flag(lembrete, 'LEVANTAMENTO'), undefined)
   assert.equal(flag(lembrete, 'SOLICITACAO').estado, 'ATRASADO')
 })
 
@@ -413,7 +411,7 @@ test('flags: comprometido conta como cotado; sem início fica sem data', () => {
 
 test('macro: grupo traz as flags', () => {
   const g = macro({ ...base(['a']), ...prazos, lead_time: 30 }, { proj: { a: 100 }, val: { a: v(50) }, ini: { a: '2026-10-20' } })
-  assert.equal(g.flags.length, 4)
+  assert.equal(g.flags.length, 3)
   assert.equal(flag(g.flags, 'SOLICITACAO').estado, 'ATRASADO')
 })
 
@@ -441,4 +439,12 @@ test('calcularTrilha: reprovação seguida de documento posterior também conta 
   const t = calcularTrilha({ item: { solicitacao: 1, cotacao: 2, pedido: null, contrato: 9 }, docs: new Map(), eventos, medicoes: [7], regras: REGRAS_PADRAO })
   assert.deepEqual(t.passos.slice(0, 3).map((p) => p.status), ['APROVADO', 'APROVADO', 'APROVADO'])
   assert.equal(t.parado_em.passo, 'MEDICAO')
+})
+
+test('valorDoItem: último valor conhecido — pedido, contrato, senão solicitação', () => {
+  const sol = { total: 80, qtde: 40, unitario: null }
+  assert.deepEqual(valorDoItem({ solicitacao: sol }), { fonte: 'SOLICITACAO', unitario: 2, total: 80 })
+  assert.deepEqual(valorDoItem({ solicitacao: sol, pedido: { unitario: 1.5, total: 66 } }), { fonte: 'PEDIDO', unitario: 1.5, total: 66 })
+  assert.deepEqual(valorDoItem({ solicitacao: sol, contrato: { unitario: 3 } }), { fonte: 'CONTRATO', unitario: 3, total: 120 })
+  assert.deepEqual(valorDoItem({ solicitacao: { total: 10, qtde: 0, unitario: null } }), { fonte: 'SOLICITACAO', unitario: null, total: 10 })
 })
