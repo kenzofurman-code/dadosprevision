@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
 import './Diario.css'
 import { diarioApi, type IndicadoresDiario, type ObraDiario } from './diario-api'
 import { BarrasHorizontais, GraficoClimaChuva, SecaoPreenchimentoDiario } from './graficos'
-import { fmtInteiro, fmtNumero, somarDias } from './formatos'
-
-const hoje = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' })
+import { fmtInteiro, fmtNumero, hoje, somarDias } from './formatos'
 
 function Cartao({ rotulo, valor, detalhe, alerta = false }: { rotulo: string; valor: string; detalhe?: string; alerta?: boolean }) {
   return (
@@ -43,11 +41,19 @@ export function DiarioIndicadores() {
 
   function periodo(dias: number | null) {
     if (dias === null) { setDataInicio(''); setDataFim(''); return }
+    if (dias === 0) { setDataInicio(hoje()); setDataFim(hoje()); return }
     setDataFim(hoje())
     setDataInicio(somarDias(hoje(), -dias))
   }
 
-  const semDados = dados && dados.preenchimento.totais.relatorios === 0
+  function navegarDia(delta: number) {
+    const base = dataFim || dataInicio || hoje()
+    const novo = somarDias(base, delta)
+    setDataInicio(novo)
+    setDataFim(novo)
+  }
+
+  const semDados = dados && dados.preenchimento.totais.relatorios === 0 && dados.preenchimento.totais.diasCorridos === 0
 
   return (
     <div className="gestao-card dd-indicadores">
@@ -60,11 +66,90 @@ export function DiarioIndicadores() {
             {obras.map((o) => <option key={o.obra_id} value={o.obra_id}>{o.nome}</option>)}
           </select>
         </label>
-        <label><span>De</span><input type="date" value={dataInicio} max={dataFim || undefined} onChange={(e) => setDataInicio(e.target.value)} /></label>
-        <label><span>Até</span><input type="date" value={dataFim} min={dataInicio || undefined} onChange={(e) => setDataFim(e.target.value)} /></label>
-        <button type="button" className="dd-btn" onClick={() => periodo(30)}>30 dias</button>
-        <button type="button" className="dd-btn" onClick={() => periodo(90)}>90 dias</button>
-        <button type="button" className="dd-btn" onClick={() => periodo(null)}>Tudo</button>
+
+        <div className="dd-data-controles">
+          <button
+            type="button"
+            className="dd-btn dd-btn-nav"
+            onClick={() => navegarDia(-1)}
+            title="Recuar 1 dia (dia anterior)"
+          >
+            <ChevronLeft size={16} />
+          </button>
+
+          <label>
+            <span>De</span>
+            <input
+              type="date"
+              value={dataInicio}
+              onChange={(e) => {
+                const val = e.target.value
+                setDataInicio(val)
+                if (dataFim && val > dataFim) setDataFim(val)
+              }}
+            />
+          </label>
+
+          <label>
+            <span>Até</span>
+            <input
+              type="date"
+              value={dataFim}
+              onChange={(e) => {
+                const val = e.target.value
+                setDataFim(val)
+                if (dataInicio && val < dataInicio) setDataInicio(val)
+              }}
+            />
+          </label>
+
+          <button
+            type="button"
+            className="dd-btn dd-btn-nav"
+            onClick={() => navegarDia(1)}
+            title="Avançar 1 dia (próximo dia)"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+
+        <div className="dd-botoes-periodo">
+          <button
+            type="button"
+            className={`dd-btn ${dataInicio === somarDias(hoje(), -7) && dataFim === hoje() ? 'ativo' : ''}`}
+            onClick={() => periodo(7)}
+          >
+            7 dias
+          </button>
+          <button
+            type="button"
+            className={`dd-btn ${dataInicio === somarDias(hoje(), -30) && dataFim === hoje() ? 'ativo' : ''}`}
+            onClick={() => periodo(30)}
+          >
+            30 dias
+          </button>
+          <button
+            type="button"
+            className={`dd-btn ${dataInicio === somarDias(hoje(), -90) && dataFim === hoje() ? 'ativo' : ''}`}
+            onClick={() => periodo(90)}
+          >
+            90 dias
+          </button>
+          <button
+            type="button"
+            className={`dd-btn ${dataInicio === '' && dataFim === '' ? 'ativo' : ''}`}
+            onClick={() => periodo(null)}
+          >
+            Tudo
+          </button>
+        </div>
+
+        {dataInicio === dataFim && dataInicio !== '' && (
+          <span className="dd-tag-dia-selecionado">
+            Visualizando dia: <strong>{dataInicio.slice(8, 10)}/{dataInicio.slice(5, 7)}/{dataInicio.slice(0, 4)}</strong>
+          </span>
+        )}
+
         {carregando && <RefreshCw size={16} className="spin" />}
       </div>
 

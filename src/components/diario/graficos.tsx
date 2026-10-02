@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import './Diario.css'
-import { fmtData, fmtInteiro, fmtNumero, somarDias } from './formatos'
+import { fmtData, fmtInteiro, fmtNumero, hoje, somarDias } from './formatos'
 
 // Uma barra por dia corrido nos últimos `dias` dias até `fim` (dia sem diário fica vazio), com o valor no topo e dd/mm embaixo.
 export function BarrasUltimosDias({ dados, fim, dias = 14 }: { dados: { data: string; total: number }[]; fim: string | null; dias?: number }) {
@@ -720,24 +720,47 @@ export function SecaoPreenchimentoDiario({
 export function GraficoEvolucaoEfetivo({
   dados,
   mediaGeral = 0,
+  inicio,
   fim,
 }: {
   dados: { data: string; total: number }[]
   mediaGeral?: number
-  fim: string | null
+  inicio?: string | null
+  fim?: string | null
 }) {
   const [zoom, setZoom] = useState<'14' | '30' | 'tudo'>('30')
 
-  if (!dados.length) return <p className="dd-vazio">Sem dados no período.</p>
+  if (!dados.length && !inicio) return <p className="dd-vazio">Sem dados no período.</p>
 
-  const limiteDias = zoom === '14' ? 14 : zoom === '30' ? 30 : dados.length
-  const ultimo = fim && fim < dados[dados.length - 1].data ? fim : dados[dados.length - 1].data
   const porData = new Map(dados.map((d) => [d.data, d.total]))
 
-  const janela = Array.from({ length: Math.min(limiteDias, 90) }, (_, i) => {
-    const data = somarDias(ultimo, i - (Math.min(limiteDias, 90) - 1))
-    return { data, total: porData.get(data) ?? null }
-  })
+  // Se período fixo de até 60 dias definido por início e fim (ex: Hoje, 3 dias, 7 dias, 30 dias)
+  let diasFixos: string[] | null = null
+  if (inicio && fim) {
+    const dInicio = new Date(`${inicio}T12:00:00Z`)
+    const dFim = new Date(`${fim}T12:00:00Z`)
+    const diffDias = Math.round((dFim.getTime() - dInicio.getTime()) / 86400000)
+    if (diffDias >= 0 && diffDias <= 60) {
+      diasFixos = []
+      for (let i = 0; i <= diffDias; i++) {
+        diasFixos.push(somarDias(inicio, i))
+      }
+    }
+  }
+
+  let janela: { data: string; total: number | null }[]
+  if (diasFixos) {
+    janela = diasFixos.map((data) => ({ data, total: porData.get(data) ?? null }))
+  } else {
+    const limiteDias = zoom === '14' ? 14 : zoom === '30' ? 30 : dados.length
+    const ultimo = fim && dados.length > 0 && fim < dados[dados.length - 1].data
+      ? fim
+      : (dados.length > 0 ? dados[dados.length - 1].data : (fim || hoje()))
+    janela = Array.from({ length: Math.min(limiteDias, 90) }, (_, i) => {
+      const data = somarDias(ultimo, i - (Math.min(limiteDias, 90) - 1))
+      return { data, total: porData.get(data) ?? null }
+    })
+  }
 
   const largura = 780
   const altura = 230
@@ -745,7 +768,7 @@ export function GraficoEvolucaoEfetivo({
   const base = altura - 30
   const areaY = base - topo
   const max = Math.max(...janela.map((d) => d.total ?? 0), mediaGeral, 1)
-  const numBarras = janela.length
+  const numBarras = Math.max(1, janela.length)
   const faixa = largura / numBarras
 
   const yMedia = base - (mediaGeral / max) * areaY
@@ -762,17 +785,19 @@ export function GraficoEvolucaoEfetivo({
             </span>
           )}
         </div>
-        <div className="dd-botoes-modo">
-          <button type="button" className={`dd-btn-modo ${zoom === '14' ? 'ativo' : ''}`} onClick={() => setZoom('14')}>
-            14 dias
-          </button>
-          <button type="button" className={`dd-btn-modo ${zoom === '30' ? 'ativo' : ''}`} onClick={() => setZoom('30')}>
-            30 dias
-          </button>
-          <button type="button" className={`dd-btn-modo ${zoom === 'tudo' ? 'ativo' : ''}`} onClick={() => setZoom('tudo')}>
-            Todo o período
-          </button>
-        </div>
+        {!diasFixos && (
+          <div className="dd-botoes-modo">
+            <button type="button" className={`dd-btn-modo ${zoom === '14' ? 'ativo' : ''}`} onClick={() => setZoom('14')}>
+              14 dias
+            </button>
+            <button type="button" className={`dd-btn-modo ${zoom === '30' ? 'ativo' : ''}`} onClick={() => setZoom('30')}>
+              30 dias
+            </button>
+            <button type="button" className={`dd-btn-modo ${zoom === 'tudo' ? 'ativo' : ''}`} onClick={() => setZoom('tudo')}>
+              Todo o período
+            </button>
+          </div>
+        )}
       </div>
 
       <svg viewBox={`0 0 ${largura} ${altura}`} className="dd-svg" role="img" aria-label="Evolução do Efetivo Diário">
@@ -794,7 +819,7 @@ export function GraficoEvolucaoEfetivo({
           const valor = d.total ?? 0
           const h = (valor / max) * areaY
           const x = i * faixa
-          const largBarra = Math.max(3, faixa * 0.65)
+          const largBarra = Math.max(3, Math.min(faixa * 0.65, 80))
           const xBarra = x + (faixa - largBarra) / 2
 
           return (

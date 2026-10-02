@@ -3,6 +3,8 @@ const decimal = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 })
 
 const vazio = (v: unknown) => v === null || v === undefined || v === ''
 
+export const hoje = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' })
+
 export function fmtInteiro(v: unknown): string {
   return vazio(v) || !Number.isFinite(Number(v)) ? '-' : inteiro.format(Number(v))
 }
