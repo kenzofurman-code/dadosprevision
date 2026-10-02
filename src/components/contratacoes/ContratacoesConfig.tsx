@@ -133,7 +133,7 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
   const sugeridas = config.grupos.reduce((s, g) => s + (g.etapas || []).filter((e) => e.situacao === 'SUGERIDO').length, 0)
 
   return (
-    <div className="cc-card">
+    <div className={`cc-card ${aba === 'grupos' ? 'cc-config-vinculos' : ''}`}>
       <div className="cc-topo">
         <div className="cc-abas" role="tablist">
           <button type="button" role="tab" aria-selected={aba === 'grupos'} onClick={() => setAba('grupos')}>
@@ -161,6 +161,8 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
       {aba === 'grupos' && (
         <div className="cc-secao">
           <ContratacoesVinculos key={projectId} projectId={projectId} config={config} onChanged={carregar} />
+          <details className="cc-gerenciar-grupos">
+            <summary>Gerenciar grupos · criar, editar e revisar vínculos</summary>
           <div className="cc-acoes">
             <button type="button" className="cc-btn" onClick={() => setEditando(novoGrupo('MATERIAL', config.grupos.length + 1))}>Novo grupo</button>
             {!confirmarRestaurar
@@ -268,6 +270,7 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
               </table>
             </div>
           ))}
+          </details>
         </div>
       )}
 

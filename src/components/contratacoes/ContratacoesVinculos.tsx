@@ -35,6 +35,8 @@ export function ContratacoesVinculos({ projectId, config, onChanged }: {
   const ativos = tipos.filter((t) => selecionadas[t].size > 0)
   const destinosValidos = ativos.every((t) => config.grupos.some((g) => g.id === destinos[t] && g.tipo === t))
   const temSelecao = ativos.length > 0 && tipos.some((t) => destinos[t] !== null)
+  const totalProjetado = config.importacao ? etapas.reduce((soma, etapa) =>
+    soma + (etapa.custos.MATERIAL || 0) + (etapa.custos.MAO_DE_OBRA || 0), 0) : null
 
   const marcar = (tipo: Tipo, codigo: string, checked: boolean) => {
     setSelecionadas((atual) => {
@@ -72,15 +74,17 @@ export function ContratacoesVinculos({ projectId, config, onChanged }: {
         <section className="cc-vinculo-painel" aria-label="Etapas da EAP">
           <div className="cc-vinculo-cabecalho">
             <h4>Etapas da EAP <span className="cc-muted">({etapas.length})</span></h4>
-            <span className="cc-muted">Custo projetado · R$ mil</span>
-            <input type="search" aria-label="Buscar etapas da EAP" placeholder="Buscar código ou etapa" value={buscaEtapas} onChange={(e) => setBuscaEtapas(e.target.value)} />
+            <div className="cc-vinculo-filtros">
+              <span className="cc-custo-resumo">Custo projetado<strong>{mil(totalProjetado)} R$ mil</strong></span>
+              <input type="search" aria-label="Buscar etapas da EAP" placeholder="Buscar código ou etapa" value={buscaEtapas} onChange={(e) => setBuscaEtapas(e.target.value)} />
+            </div>
           </div>
           <div className="cc-vinculo-lista">
             <table className="cc-tabela cc-eap">
               <thead><tr><th>Etapa</th><th>Material<br />R$ mil</th><th>Mão de obra<br />R$ mil</th></tr></thead>
               <tbody>{etapas.map((etapa) => (
                 <tr key={etapa.codigo_etapa}>
-                  <td><span className="cc-mono">{etapa.codigo_etapa}</span><strong>{etapa.nome}</strong></td>
+                  <td><span className="cc-mono">{etapa.codigo_etapa}</span><strong title={etapa.nome}>{etapa.nome}</strong></td>
                   {tipos.map((tipo) => {
                     const grupo = vinculos.get(`${etapa.codigo_etapa}|${tipo}`)
                     return <td key={tipo}>

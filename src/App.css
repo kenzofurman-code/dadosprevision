@@ -3149,8 +3149,16 @@ td strong {
 }
 
 .group-order-modal.group-order-modal-largo {
-  width: min(100%, 1180px);
+  width: min(100%, 1440px);
+  height: calc(100dvh - 40px);
+  max-height: calc(100dvh - 40px);
 }
 .group-order-modal-largo .group-order-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  overflow-x: hidden;
   overflow-y: auto;
 }
+.group-order-modal-largo .settings-classification-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); flex-shrink: 0; }
