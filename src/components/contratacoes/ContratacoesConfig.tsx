@@ -32,6 +32,8 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
   const [grupoDestino, setGrupoDestino] = useState('')
   const [novoNome, setNovoNome] = useState('')
   const [tipoPend, setTipoPend] = useState<Tipo>('MATERIAL')
+  const [destinosSugeridos, setDestinosSugeridos] = useState<Record<string, string>>({})
+  const [filtroSugestoes, setFiltroSugestoes] = useState('todas')
   const [conflitos, setConflitos] = useState<{ grupoId: number; codigos: string[]; lista: Conflito[] } | null>(null)
   const [arquivo, setArquivo] = useState<{ nome: string; matriz: unknown[][] } | null>(null)
   const [previa, setPrevia] = useState<Previa | null>(null)
@@ -44,6 +46,7 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     setConfig(null); setSelecionadas(new Set()); setPrevia(null); setArquivo(null); setConflitos(null)
+    setDestinosSugeridos({})
     carregar()
   }, [carregar])
 
@@ -55,8 +58,10 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
 
   const pendenciasFiltradas = useMemo(() => {
     const q = busca.trim().toLowerCase()
-    return (config?.pendencias[tipoPend] || []).filter((p) => !q || `${p.codigo_etapa} ${p.nome}`.toLowerCase().includes(q))
-  }, [config, busca, tipoPend])
+    return (config?.pendencias[tipoPend] || []).filter((p) =>
+      (!q || `${p.codigo_etapa} ${p.nome} ${p.sugestao?.item || ''} ${p.sugestao?.insumos || ''} ${p.sugestao?.pacote_servicos || ''}`.toLowerCase().includes(q))
+      && (filtroSugestoes === 'todas' || (filtroSugestoes === 'sem' ? !p.sugestao : filtroSugestoes === 'revisar' ? p.sugestao?.confianca === 'BAIXA' : !!p.sugestao)))
+  }, [config, busca, tipoPend, filtroSugestoes])
 
   // Nível 4 digitado: quantas etapas nível 5 fora de grupo ele inclui.
   const ramoValido = /^\d{2}(\.\d{2}){3}$/.test(ramo.trim())
@@ -289,8 +294,16 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
             {config.importacao && !config.projecaoSemInsumo ? ` e com custo projetado de ${TIPO_LABEL[tipoPend].toLowerCase()}` : ''}.
             Uma etapa pode ter um grupo de material e um de mão de obra.
           </p>
+          <p className="cc-muted">Sugestões calculadas por etapa, insumos e contexto do orçamento. Confira o detalhamento antes de atrelar; nenhuma sugestão cria vínculo automaticamente.</p>
           <div className="cc-acoes">
-            <input id="cc-busca" type="search" placeholder="Buscar código ou nome" value={busca} onChange={(e) => setBusca(e.target.value)} />
+            <input id="cc-busca" type="search" aria-label="Buscar pendências" placeholder="Buscar etapa ou grupo sugerido" value={busca} onChange={(e) => setBusca(e.target.value)} />
+            <label>Exibir <select aria-label="Filtrar sugestões" value={filtroSugestoes} onChange={(e) => setFiltroSugestoes(e.target.value)}>
+              <option value="todas">Todas as pendências</option><option value="com">Com sugestão</option><option value="revisar">Sugestões com baixa confiança</option><option value="sem">Sem correspondência</option>
+            </select></label>
+            <span className="cc-muted">{config.pendencias[tipoPend].filter((p) => p.sugestao).length} com sugestão · {config.pendencias[tipoPend].filter((p) => !p.sugestao).length} sem correspondência</span>
+          </div>
+          <details className="cc-manual-pendencias"><summary>Vinculação manual em lote ou criação de grupo</summary>
+          <div className="cc-acoes">
             <span className="cc-muted">{selecionadas.size} selecionada(s)</span>
             <select id="cc-grupo-destino" value={grupoDestino} onChange={(e) => setGrupoDestino(e.target.value)}>
               <option value="">Atrelar a grupo existente…</option>
@@ -314,6 +327,7 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
               Criar grupo com as selecionadas
             </button>
           </div>
+          </details>
           {conflitos && (
             <div className="cc-confirma cc-bloco">
               <p>{conflitos.lista.length} etapa(s) já estão em outro grupo: {conflitos.lista.map((c) => `${c.codigo_etapa} (${c.item})`).join(', ')}.</p>
@@ -321,7 +335,7 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
               <button type="button" className="cc-btn cc-sutil" onClick={() => setConflitos(null)}>Cancelar</button>
             </div>
           )}
-          <table className="cc-tabela">
+          <table className="cc-tabela cc-pendencias">
             <thead><tr>
               <th>
                 <input id="cc-sel-todas" type="checkbox" aria-label="Selecionar todas"
@@ -345,9 +359,24 @@ export function ContratacoesConfig({ projectId }: { projectId: string }) {
                   <td>{p.nome}</td>
                   <td className="cc-num">{fmt(p.custo_projetado)}</td>
                   <td>
-                    {p.sugestao
-                      ? <button type="button" className="cc-btn cc-sutil" onClick={() => atrelar(p.sugestao!.grupo_id, [p.codigo_etapa])}>Atrelar a “{p.sugestao.item}” (padrão {p.sugestao.codigo_padrao})</button>
-                      : <span className="cc-muted">—</span>}
+                    <div className="cc-sugestao">
+                      {p.sugestao ? <>
+                        <strong>{p.sugestao.item} · {p.sugestao.insumos || p.sugestao.pacote_servicos || TIPO_LABEL[tipoPend]}</strong>
+                        <span className={`cc-confianca cc-confianca-${p.sugestao.confianca.toLowerCase()}`}>Confiança {p.sugestao.confianca === 'ALTA' ? 'alta' : p.sugestao.confianca === 'MEDIA' ? 'média' : 'baixa · revisar'}</span>
+                        <details><summary>Por que este grupo?</summary><p>{p.sugestao.motivo}</p>
+                          {p.sugestao.alternativas.length > 0 && <p>Alternativas: {p.sugestao.alternativas.map((g) => `${g.item} · ${g.insumos || g.pacote_servicos || TIPO_LABEL[tipoPend]}`).join('; ')}.</p>}
+                        </details>
+                      </> : <span className="cc-muted">Sem correspondência suficiente. Escolha um grupo ou crie um novo.</span>}
+                      <div className="cc-acoes">
+                        <select aria-label={`Grupo sugerido para ${p.codigo_etapa}`} value={destinosSugeridos[`${tipoPend}|${p.codigo_etapa}`] ?? String(p.sugestao?.grupo_id || '')}
+                          onChange={(e) => setDestinosSugeridos({ ...destinosSugeridos, [`${tipoPend}|${p.codigo_etapa}`]: e.target.value })}>
+                          <option value="">Escolher grupo…</option>
+                          {config.grupos.filter((g) => g.tipo === tipoPend).map((g) => <option key={g.id} value={g.id}>{g.item} · {[g.insumos, g.pacote_servicos].filter(Boolean).join(' · ') || TIPO_LABEL[tipoPend]}</option>)}
+                        </select>
+                        <button type="button" className="cc-btn cc-primario" disabled={ocupado || !(destinosSugeridos[`${tipoPend}|${p.codigo_etapa}`] ?? p.sugestao?.grupo_id)}
+                          onClick={() => atrelar(Number(destinosSugeridos[`${tipoPend}|${p.codigo_etapa}`] ?? p.sugestao?.grupo_id), [p.codigo_etapa])}>Atrelar</button>
+                      </div>
+                    </div>
                   </td>
                 </tr>
               ))}

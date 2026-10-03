@@ -1,7 +1,8 @@
 export type Tipo = 'MATERIAL' | 'MAO_DE_OBRA'
 export interface EtapaGrupo { codigo_etapa: string; situacao: 'CONFIRMADO' | 'SUGERIDO'; nome_padrao: string | null; nome_obra: string | null; origem_nivel4: string | null; custo_projetado: number | null }
 export interface Grupo { id?: number; tipo: Tipo; item: string; insumos: string | null; pacote_servicos: string | null; ordem: number; lead_time: number; levantamento: number; etapas?: EtapaGrupo[] }
-export interface Pendencia { codigo_etapa: string; nome: string; custo_projetado: number | null; sugestao: { grupo_id: number; item: string; codigo_padrao: string } | null }
+export interface SugestaoGrupo { grupo_id: number; item: string; insumos: string | null; pacote_servicos: string | null; motivo: string }
+export interface Pendencia { codigo_etapa: string; nome: string; custo_projetado: number | null; sugestao: (SugestaoGrupo & { confianca: 'ALTA' | 'MEDIA' | 'BAIXA'; alternativas: SugestaoGrupo[] }) | null }
 export interface InsumoSemClassificacao { descricao: string; tipo: Tipo; projetado: number }
 export interface Config {
   etapas: { codigo_etapa: string; nome: string; nivel: 4 | 5; filhos: string[]; custos: Record<Tipo, number | null> }[]

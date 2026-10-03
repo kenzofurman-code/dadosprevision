@@ -78,6 +78,22 @@
 .cc-custo-resumo strong { font-size: 13px; color: #173f38; font-variant-numeric: tabular-nums; }
 .cc-gerenciar-grupos summary { cursor: pointer; padding: 8px 0; font-size: 13px; color: #52635f; }
 .cc-gerenciar-grupos > .cc-acoes { margin: 10px 0; }
+.cc-pendencias { min-width: 0; table-layout: fixed; }
+.cc-pendencias th, .cc-pendencias td { white-space: normal; overflow-wrap: anywhere; }
+.cc-pendencias th:first-child { width: 34px; }
+.cc-pendencias th:nth-child(2) { width: 140px; }
+.cc-pendencias th:nth-child(3) { width: 23%; }
+.cc-pendencias th:nth-child(4) { width: 110px; }
+.cc-secao:has(.cc-pendencias) > p { margin: 0; font-size: 13px; }
+.cc-manual-pendencias summary { cursor: pointer; font-size: 13px; color: #52635f; padding: 4px 0; }
+.cc-manual-pendencias > .cc-acoes { margin-top: 8px; }
+.cc-sugestao { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.cc-sugestao select { min-width: 0; max-width: 100%; flex: 1; }
+.cc-sugestao details { font-size: 12px; }
+.cc-sugestao summary { cursor: pointer; }
+.cc-confianca { align-self: flex-start; font-size: 11px; padding: 2px 7px; border-radius: 5px; background: #e3ebf8; color: #2f5fa8; }
+.cc-confianca-alta { background: #e4f2e8; color: #2f7a4a; }
+.cc-confianca-baixa { background: #fbeedb; color: #8a5300; }
 .cc-config-vinculos { flex: 1; min-height: 0; }
 .cc-config-vinculos > .cc-secao, .cc-config-vinculos .cc-vinculacao { flex: 1; min-height: 0; }
 .cc-config-vinculos .cc-vinculo-paineis { flex: 1; min-height: 0; }

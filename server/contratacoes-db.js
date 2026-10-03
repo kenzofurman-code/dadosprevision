@@ -3,9 +3,10 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { query, withTransaction } from './db.js'
+import { sugerirGrupos } from './contratacoes-sugestoes.js'
 import {
   etapaParaMega, nivelDoCodigo, resolverEtapasPadrao, expandirParaNivel5, montarEtapasEap,
-  sugestoesPorNome, lerCustoProjetado, calcularMacro, hojeNoBrasil,
+  lerCustoProjetado, calcularMacro, hojeNoBrasil,
   calcularTrilha, REGRAS_PADRAO, resumirMedicoes, valorDoItem, classificador, lerClassificacaoInsumos, origemParaCanal, normalizarNome,
 } from './contratacoes.js'
 
@@ -92,18 +93,22 @@ async function classificadorDaObra(projetoId) {
 // toda como material, com aviso para reimportar.
 async function projetadoPorTipo(importacaoId, tipoDe) {
   const mapa = new Map()
+  const detalhes = new Map()
   const somar = (c, t, v) => mapa.set(`${c}|${t}`, (mapa.get(`${c}|${t}`) || 0) + v)
-  if (!importacaoId) return { mapa, semDescricao: false, semClassificacao: [] }
+  if (!importacaoId) return { mapa, detalhes, semDescricao: false, semClassificacao: [] }
   const { rows } = await query('SELECT codigo_etapa, descricao, custo_projetado FROM custo_projetado_insumos WHERE importacao_id = $1', [importacaoId])
   if (!rows.length) {
     for (const [c, v] of await custosDaImportacao(importacaoId)) somar(c, 'MATERIAL', v)
-    return { mapa, semDescricao: true, semClassificacao: [] }
+    return { mapa, detalhes, semDescricao: true, semClassificacao: [] }
   }
   const semClassificacao = new Map()
   for (const r of rows) {
     const v = Number(r.custo_projetado) || 0
     const { tipo, fonte } = tipoDe(r.descricao)
     somar(r.codigo_etapa, tipo, v)
+    const chave = `${r.codigo_etapa}|${tipo}`
+    if (!detalhes.has(chave)) detalhes.set(chave, [])
+    detalhes.get(chave).push({ descricao: r.descricao, custo_projetado: v })
     if (fonte === 'HEURISTICA') {
       const d = normalizarNome(r.descricao)
       const atual = semClassificacao.get(d) || { descricao: d, tipo, projetado: 0 }
@@ -111,17 +116,21 @@ async function projetadoPorTipo(importacaoId, tipoDe) {
       semClassificacao.set(d, atual)
     }
   }
-  return { mapa, semDescricao: false, semClassificacao: [...semClassificacao.values()].sort((a, b) => b.projetado - a.projetado) }
+  return { mapa, detalhes, semDescricao: false, semClassificacao: [...semClassificacao.values()].sort((a, b) => b.projetado - a.projetado) }
 }
 
 export async function obterConfig(projetoId) {
-  const [orcamento, importacao, gruposRes, etapasRes, padraoRes] = await Promise.all([
+  const [orcamento, importacao, gruposRes, etapasRes, padraoRes, contextosRes] = await Promise.all([
     orcamentoDaObra(projetoId),
     ultimaImportacao(projetoId),
     query('SELECT * FROM contratacao_grupos WHERE projeto_id = $1 ORDER BY ordem, id', [projetoId]),
     query('SELECT * FROM contratacao_grupo_etapas WHERE projeto_id = $1 ORDER BY codigo_etapa', [projetoId]),
     query(`SELECT e.codigo_etapa, e.nome_padrao, g.ordem, g.id AS padrao_id FROM contratacao_grupo_etapas e
            JOIN contratacao_grupos g ON g.id = e.grupo_id WHERE e.projeto_id IS NULL`),
+    query(`SELECT codigo, MAX(descricao) AS nome FROM (
+      SELECT codigo, descricao FROM pesos_orcamento WHERE projeto_id = $1
+      UNION ALL SELECT codigo, descricao FROM cff_itens WHERE projeto_id = $1
+    ) o WHERE codigo ~ '^\\d{2}(\\.\\d{2}){1,3}$' GROUP BY codigo`, [projetoId]),
   ])
   const classif = await classificadorDaObra(projetoId)
   const proj = await projetadoPorTipo(importacao?.id, classif.tipoDe)
@@ -137,24 +146,33 @@ export async function obterConfig(projetoId) {
   }
   const grupos = gruposRes.rows.map((g) => ({ ...g, etapas: porGrupo.get(g.id) || [] }))
   const nivel5 = [...orcamento.entries()].filter(([c]) => nivelDoCodigo(c) === 5)
-  const sugestoes = sugestoesPorNome(nivel5.map(([codigo, nome]) => ({ codigo, nome })),
-    padraoRes.rows.map((r) => ({ codigo: r.codigo_etapa, nome: r.nome_padrao, ordem: r.ordem })))
-  const grupoPorPadraoOrdem = new Map()
-  const ordemPorPadraoId = new Map(padraoRes.rows.map((r) => [r.padrao_id, r.ordem]))
-  for (const g of grupos) {
-    const ordemPadrao = ordemPorPadraoId.get(g.padrao_grupo_id)
-    if (ordemPadrao !== undefined) grupoPorPadraoOrdem.set(ordemPadrao, g)
+  const grupoPorPadrao = new Map(grupos.map((g) => [g.padrao_grupo_id, g]))
+  const referencias = padraoRes.rows.flatMap((r) => {
+    const g = grupoPorPadrao.get(r.padrao_id)
+    return g ? [{ grupo_id: g.id, codigo: r.codigo_etapa, nome: r.nome_padrao }] : []
+  })
+  for (const g of grupos) for (const e of g.etapas.filter((e) => e.situacao === 'CONFIRMADO')) {
+    referencias.push({ grupo_id: g.id, codigo: e.codigo_etapa, nome: e.nome_obra || e.nome_padrao })
+  }
+  const contextoDaEtapa = (codigo) => {
+    const partes = codigo.split('.')
+    const nomes = partes.slice(1, -1).map((_, i) => contextosRes.rows.find((r) => r.codigo === partes.slice(0, i + 2).join('.'))?.nome).filter(Boolean)
+    if (nomes.length) return nomes.join(' · ')
+    // O padrão também dá contexto quando o orçamento não traz os nomes dos pais.
+    const proximas = referencias.filter((r) => r.codigo.split('.').slice(0, 3).join('.') === partes.slice(0, 3).join('.'))
+    const contextos = proximas.map((r) => grupos.find((g) => g.id === r.grupo_id)).filter(Boolean)
+      .map((g) => `${g.item} ${g.pacote_servicos || ''}`)
+    return [...new Set([...nomes, ...contextos])].join(' · ')
   }
   // Pendências por tipo: etapa sem grupo daquele tipo. Com a projeção por
   // insumo, só entram etapas com custo daquele tipo.
   const pendenciasDo = (t) => nivel5
     .filter(([c]) => !usadas[t].has(c) && (proj.semDescricao || !importacao || (custo(c, t) ?? 0) > 0))
     .map(([codigo, nome]) => {
-      const s = sugestoes.get(codigo)
-      const g = s ? grupoPorPadraoOrdem.get(s.ordem) : null
       return {
         codigo_etapa: codigo, nome, custo_projetado: custo(codigo, t),
-        sugestao: g && g.tipo === t ? { grupo_id: g.id, item: g.item, codigo_padrao: s.codigo_padrao } : null,
+        sugestao: sugerirGrupos({ codigo, nome, tipo: t, grupos, referencias,
+          contexto: contextoDaEtapa(codigo), insumos: proj.detalhes.get(`${codigo}|${t}`) || [] }),
       }
     }).sort((a, b) => (b.custo_projetado ?? -1) - (a.custo_projetado ?? -1) || a.codigo_etapa.localeCompare(b.codigo_etapa))
   const orcamentoTotal = [...proj.mapa.values()].reduce((s, v) => s + v, 0)
