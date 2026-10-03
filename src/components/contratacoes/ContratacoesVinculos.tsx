@@ -28,29 +28,52 @@ export function ContratacoesVinculos({ projectId, config, onChanged }: {
     }
     return mapa
   }, [config.grupos])
-  const etapas = config.etapas.filter((e) => normalizar(`${e.codigo_etapa} ${e.nome}`).includes(normalizar(buscaEtapas)))
+  const etapas = useMemo(() => {
+    const q = normalizar(buscaEtapas)
+    const correspondentes = new Set(config.etapas.filter((e) => normalizar(`${e.codigo_etapa} ${e.nome}`).includes(q)).map((e) => e.codigo_etapa))
+    const visiveis = new Set(correspondentes)
+    for (const etapa of config.etapas.filter((e) => e.nivel === 4)) {
+      if (correspondentes.has(etapa.codigo_etapa)) etapa.filhos.forEach((c) => visiveis.add(c))
+      if (etapa.filhos.some((c) => correspondentes.has(c))) visiveis.add(etapa.codigo_etapa)
+    }
+    return config.etapas.filter((e) => visiveis.has(e.codigo_etapa))
+  }, [config.etapas, buscaEtapas])
   const termos = normalizar(busca).split(/\s+/).filter(Boolean)
   const grupos = config.grupos.filter((g) => filtros[g.tipo] && termos.every((termo) =>
     normalizar(`${g.item} ${g.insumos || ''} ${g.pacote_servicos || ''}`).includes(termo)))
   const ativos = tipos.filter((t) => selecionadas[t].size > 0)
   const destinosValidos = ativos.every((t) => config.grupos.some((g) => g.id === destinos[t] && g.tipo === t))
   const temSelecao = ativos.length > 0 && tipos.some((t) => destinos[t] !== null)
-  const totalProjetado = config.importacao ? etapas.reduce((soma, etapa) =>
+  const totalProjetado = config.importacao ? etapas.filter((e) => e.nivel === 5).reduce((soma, etapa) =>
     soma + (etapa.custos.MATERIAL || 0) + (etapa.custos.MAO_DE_OBRA || 0), 0) : null
 
-  const marcar = (tipo: Tipo, codigo: string, checked: boolean) => {
+  const marcar = (tipo: Tipo, codigos: string[], checked: boolean) => {
     setSelecionadas((atual) => {
       const proxima = new Set(atual[tipo])
-      if (checked) proxima.add(codigo); else proxima.delete(codigo)
+      for (const codigo of codigos) {
+        if (checked) proxima.add(codigo); else proxima.delete(codigo)
+      }
       return { ...atual, [tipo]: proxima }
     })
     setConflito(null); setAviso(null)
   }
 
+  const codigosParaVincular = (tipo: Tipo) => {
+    const codigos = new Set(selecionadas[tipo])
+    // Reaproveita a expansão de nível 4 da API e preserva a origem do vínculo.
+    for (const etapa of config.etapas.filter((e) => e.nivel === 4)) {
+      if (etapa.filhos.length && etapa.filhos.every((c) => codigos.has(c))) {
+        etapa.filhos.forEach((c) => codigos.delete(c))
+        codigos.add(etapa.codigo_etapa)
+      }
+    }
+    return [...codigos]
+  }
+
   const vincular = async (mover = false) => {
     setOcupado(true); setErro(null); setAviso(null)
     // Cada tipo usa a mesma API e a mesma proteção contra substituição de vínculos.
-    const tarefas = mover && conflito ? [conflito] : ativos.map((tipo) => ({ tipo, grupoId: destinos[tipo]!, codigos: [...selecionadas[tipo]] }))
+    const tarefas = mover && conflito ? [conflito] : ativos.map((tipo) => ({ tipo, grupoId: destinos[tipo]!, codigos: codigosParaVincular(tipo) }))
     try {
       for (const tarefa of tarefas) {
         const resultado = await api.atrelar(projectId, tarefa.grupoId, tarefa.codigos, mover)
@@ -68,7 +91,6 @@ export function ContratacoesVinculos({ projectId, config, onChanged }: {
 
   return (
     <div className="cc-vinculacao">
-      <p className="cc-muted">Marque Material e/ou Mão de obra nas etapas e escolha um grupo de destino para cada tipo.</p>
       {config.projecaoSemInsumo && <p className="cc-alerta-texto">Reimporte o custo projetado para separar os valores de Material e Mão de obra.</p>}
       <div className="cc-vinculo-paineis">
         <section className="cc-vinculo-painel" aria-label="Etapas da EAP">
@@ -83,18 +105,21 @@ export function ContratacoesVinculos({ projectId, config, onChanged }: {
             <table className="cc-tabela cc-eap">
               <thead><tr><th>Etapa</th><th>Material<br />R$ mil</th><th>Mão de obra<br />R$ mil</th></tr></thead>
               <tbody>{etapas.map((etapa) => (
-                <tr key={etapa.codigo_etapa}>
-                  <td><span className="cc-mono">{etapa.codigo_etapa}</span><strong title={etapa.nome}>{etapa.nome}</strong></td>
+                <tr key={etapa.codigo_etapa} className={etapa.nivel === 4 ? 'cc-eap-ramo' : 'cc-eap-filha'}>
+                  <td><span className="cc-mono">{etapa.codigo_etapa}</span>{etapa.nivel === 4 && <small className="cc-chip cc-alerta" title="Seleciona todas as etapas de nível 5 deste ramo">Nível 4 · {etapa.filhos.length} etapas</small>}<strong title={etapa.nome}>{etapa.nome}</strong></td>
                   {tipos.map((tipo) => {
                     const grupo = vinculos.get(`${etapa.codigo_etapa}|${tipo}`)
+                    const codigos = etapa.nivel === 4 ? etapa.filhos : [etapa.codigo_etapa]
+                    const checked = codigos.length > 0 && codigos.every((c) => selecionadas[tipo].has(c))
+                    const parcial = !checked && codigos.some((c) => selecionadas[tipo].has(c))
                     return <td key={tipo}>
                       <label className="cc-etapa-flag">
-                        <input type="checkbox" disabled={ocupado} checked={selecionadas[tipo].has(etapa.codigo_etapa)}
+                        <input type="checkbox" disabled={ocupado} checked={checked} ref={(input) => { if (input) input.indeterminate = parcial }}
                           aria-label={`${labels[tipo]} da etapa ${etapa.codigo_etapa} ${etapa.nome}`}
-                          onChange={(e) => marcar(tipo, etapa.codigo_etapa, e.target.checked)} />
+                          onChange={(e) => marcar(tipo, codigos, e.target.checked)} />
                         <span>{mil(etapa.custos[tipo])}</span>
                       </label>
-                      <small className="cc-vinculo-atual" title={grupo}>{grupo || 'Sem vínculo'}</small>
+                      <small className="cc-vinculo-atual" title={grupo}>{etapa.nivel === 4 ? `${codigos.filter((c) => vinculos.has(`${c}|${tipo}`)).length}/${codigos.length} vinculadas` : grupo || 'Sem vínculo'}</small>
                     </td>
                   })}
                 </tr>
@@ -116,10 +141,11 @@ export function ContratacoesVinculos({ projectId, config, onChanged }: {
               <label key={grupo.id} className={`cc-grupo-opcao ${destinos[grupo.tipo] === grupo.id ? 'cc-grupo-selecionado' : ''}`}>
                 <input type="checkbox" disabled={ocupado} checked={destinos[grupo.tipo] === grupo.id}
                   onChange={(e) => { setDestinos({ ...destinos, [grupo.tipo]: e.target.checked ? grupo.id! : null }); setConflito(null) }} />
-                <span><small className="cc-chip cc-alerta">{labels[grupo.tipo]}</small><strong>{grupo.item}</strong>
-                  {grupo.insumos && <small className="cc-muted">{grupo.insumos}</small>}
-                  {grupo.pacote_servicos && <small className="cc-muted">{grupo.pacote_servicos}</small>}
-                  <small className="cc-muted">{grupo.etapas?.length || 0} etapa(s) vinculada(s)</small>
+                <span className="cc-grupo-conteudo">
+                  <span className="cc-grupo-titulo"><strong title={grupo.item}>{grupo.item}</strong><small className="cc-chip cc-alerta">{labels[grupo.tipo]}</small>
+                    <small className="cc-grupo-vinculadas" tabIndex={0} title={grupo.etapas?.length ? grupo.etapas.map((e) => `${e.codigo_etapa} — ${e.nome_obra || e.nome_padrao || ''}`).join('\n') : 'Nenhuma etapa vinculada'}>{grupo.etapas?.length || 0} etapa(s) vinculada(s)</small>
+                  </span>
+                  {(grupo.insumos || grupo.pacote_servicos) && <small className="cc-grupo-detalhe cc-muted" title={[grupo.insumos, grupo.pacote_servicos].filter(Boolean).join(' · ')}>{[grupo.insumos, grupo.pacote_servicos].filter(Boolean).join(' · ')}</small>}
                 </span>
               </label>
             ))}

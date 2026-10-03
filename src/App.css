@@ -3149,7 +3149,7 @@ td strong {
 }
 
 .group-order-modal.group-order-modal-largo {
-  width: min(100%, 1440px);
+  width: 100%;
   height: calc(100dvh - 40px);
   max-height: calc(100dvh - 40px);
 }

@@ -29,6 +29,25 @@ function filhosNivel5(prefixo, orcamento) {
     .sort()
 }
 
+export function montarEtapasEap(orcamento, custo) {
+  const etapas = [...orcamento.entries()].filter(([c]) => nivelDoCodigo(c) === 5)
+    .map(([codigo_etapa, nome]) => ({ codigo_etapa, nome, nivel: 5, filhos: [],
+      custos: { MATERIAL: custo(codigo_etapa, 'MATERIAL'), MAO_DE_OBRA: custo(codigo_etapa, 'MAO_DE_OBRA') } }))
+  const ramos = new Map()
+  for (const etapa of etapas) {
+    const codigo = etapa.codigo_etapa.split('.').slice(0, 4).join('.')
+    if (!ramos.has(codigo)) ramos.set(codigo, [])
+    ramos.get(codigo).push(etapa)
+  }
+  for (const [codigo_etapa, filhas] of ramos) {
+    const somar = (tipo) => filhas.some((e) => e.custos[tipo] !== null)
+      ? filhas.reduce((s, e) => s + (e.custos[tipo] ?? 0), 0) : null
+    etapas.push({ codigo_etapa, nome: orcamento.get(codigo_etapa) || `Ramo ${codigo_etapa}`, nivel: 4,
+      filhos: filhas.map((e) => e.codigo_etapa), custos: { MATERIAL: somar('MATERIAL'), MAO_DE_OBRA: somar('MAO_DE_OBRA') } })
+  }
+  return etapas.sort((a, b) => a.codigo_etapa.localeCompare(b.codigo_etapa))
+}
+
 export function expandirParaNivel5(codigos, orcamento) {
   const saida = []
   const vistos = new Set()

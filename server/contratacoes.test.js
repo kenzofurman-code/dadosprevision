@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  normalizarNome, nivelDoCodigo, etapaParaMega, resolverEtapasPadrao,
+  normalizarNome, nivelDoCodigo, etapaParaMega, resolverEtapasPadrao, montarEtapasEap,
   expandirParaNivel5, sugestoesPorNome, lerCustoProjetado, calcularMacro, subtrairDias, hojeNoBrasil,
   avaliarPasso, calcularTrilha, REGRAS_PADRAO,
   definicaoParaTipo, lerClassificacaoInsumos, classificador, origemParaCanal, flagsDoGrupo, resumirMedicoes, valorDoItem,
@@ -9,6 +9,23 @@ import {
 
 test('normalizarNome ignora acento, caixa e espaços extras', () => {
   assert.equal(normalizarNome('  Aço  CA50 '), 'ACO CA50')
+})
+
+test('EAP: nível 4 soma apenas seus filhos por tipo e expande sem duplicar etapas', () => {
+  const pai = '01.01.01.01'
+  const a = `${pai}.001`, b = `${pai}.002`, outro = '01.01.01.02.001'
+  const orcamento = new Map([[pai, 'Estrutura'], [a, 'Aço'], [b, 'Concreto'], [outro, 'Outro']])
+  const custos = new Map([[`${a}|MATERIAL`, 1200], [`${b}|MATERIAL`, 3400], [`${b}|MAO_DE_OBRA`, 600], [`${pai}|MATERIAL`, 999999]])
+  const etapas = montarEtapasEap(orcamento, (c, t) => custos.get(`${c}|${t}`) ?? null)
+  assert.equal(etapas.length, 5)
+  const ramo = etapas.find((e) => e.codigo_etapa === pai)
+  assert.equal(ramo.nome, 'Estrutura')
+  assert.deepEqual(ramo.custos, { MATERIAL: 4600, MAO_DE_OBRA: 600 })
+  assert.deepEqual(ramo.filhos, [a, b])
+  assert.deepEqual(expandirParaNivel5([pai, a], orcamento).map((e) => e.codigo_etapa), [a, b])
+  const semCusto = etapas.find((e) => e.codigo_etapa === '01.01.01.02')
+  assert.deepEqual(semCusto.custos, { MATERIAL: null, MAO_DE_OBRA: null })
+  assert.equal(semCusto.nivel, 4)
 })
 
 test('etapaParaMega converte Prevision e mantém Mega e nível 4', () => {
