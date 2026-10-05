@@ -891,7 +891,7 @@ export async function getMegaCargasStatusDiario(dataInput) {
   let datasDisponiveis = []
   try {
     const { rows } = await query(
-      'SELECT DISTINCT data_extracao::text as data FROM mega.carga ORDER BY data_extracao DESC LIMIT 90'
+      'SELECT DISTINCT data_extracao::text as data FROM mega.carga ORDER BY data DESC LIMIT 90'
     )
     datasDisponiveis = rows.map((r) => r.data)
   } catch (err) {
