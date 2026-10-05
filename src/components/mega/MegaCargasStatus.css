@@ -1,0 +1,595 @@
+/* MegaCargasStatus.css — Matriz de Status Diário das Cargas Mega ERP */
+
+.mega-cargas-status-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+/* 1. Toolbar de Datas */
+.mega-cargas-header-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface-bg, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.mega-cargas-date-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mega-cargas-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #cbd5e1);
+  background: var(--surface-bg, #ffffff);
+  color: var(--text-color, #1e293b);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mega-cargas-nav-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.05);
+  transform: translateY(-1px);
+}
+
+.mega-cargas-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mega-cargas-date-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: 6px;
+  padding: 4px 10px;
+  background: var(--surface-bg, #ffffff);
+}
+
+.mega-cargas-calendar-icon {
+  color: var(--text-muted, #64748b);
+}
+
+.mega-cargas-date-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-color, #1e293b);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mega-cargas-date-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-color, #1e293b);
+  margin-left: 6px;
+  text-transform: capitalize;
+}
+
+.mega-cargas-quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mega-cargas-quick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #cbd5e1);
+  background: transparent;
+  color: var(--text-color, #1e293b);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mega-cargas-quick-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.mega-cargas-quick-btn.active {
+  background: var(--primary-color, #173f38);
+  color: #ffffff;
+  border-color: var(--primary-color, #173f38);
+}
+
+.mega-cargas-quick-btn.refresh {
+  color: var(--primary-color, #173f38);
+}
+
+.mega-cargas-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* 2. Cards de Resumo */
+.mega-cargas-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.mega-cargas-card {
+  background: var(--surface-bg, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mega-cargas-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mega-cargas-card-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #64748b);
+  text-transform: uppercase;
+}
+
+.mega-cargas-card-body {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.mega-cargas-metric {
+  display: flex;
+  flex-direction: column;
+}
+
+.mega-cargas-metric-value {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.mega-cargas-metric-value.ok,
+.mega-cargas-metric-value.success {
+  color: #059669;
+}
+
+.mega-cargas-metric-value.fail {
+  color: #dc2626;
+}
+
+.mega-cargas-metric-value.neutral {
+  color: var(--text-color, #1e293b);
+}
+
+.mega-cargas-metric-label {
+  font-size: 11px;
+  color: var(--text-muted, #64748b);
+  margin-top: 2px;
+}
+
+.mega-cargas-metric-separator {
+  width: 1px;
+  height: 28px;
+  background: var(--border-color, #e2e8f0);
+}
+
+.mega-cargas-progress-bar-wrap {
+  flex: 1;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 999px;
+  overflow: hidden;
+  align-self: center;
+}
+
+.mega-cargas-progress-bar-fill {
+  height: 100%;
+  background: #059669;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.mega-cargas-time-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  color: var(--text-color, #1e293b);
+}
+
+.mega-cargas-time-range strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.mega-cargas-time-range span {
+  font-size: 12px;
+  color: var(--text-muted, #64748b);
+}
+
+.mega-cargas-no-time {
+  font-size: 12.5px;
+  color: var(--text-muted, #64748b);
+}
+
+/* 3. Matriz */
+.mega-cargas-matrix-container {
+  background: var(--surface-bg, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mega-cargas-matrix-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mega-cargas-matrix-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-color, #1e293b);
+}
+
+.mega-cargas-matrix-subtitle {
+  margin: 2px 0 0 0;
+  font-size: 12px;
+  color: var(--text-muted, #64748b);
+}
+
+.mega-cargas-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--text-muted, #64748b);
+}
+
+.mega-cargas-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mega-cargas-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.mega-cargas-dot.ok { background: #059669; }
+.mega-cargas-dot.fail { background: #dc2626; }
+.mega-cargas-dot.sem-mov { background: #d97706; }
+.mega-cargas-dot.none { background: #cbd5e1; }
+
+.mega-cargas-matrix-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 6px;
+}
+
+.mega-cargas-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  min-width: 980px;
+}
+
+.mega-cargas-table th {
+  background: var(--surface-subtle, #f8fafc);
+  padding: 10px 12px;
+  text-align: center;
+  font-weight: 700;
+  border-bottom: 2px solid var(--border-color, #cbd5e1);
+  border-right: 1px solid var(--border-color, #e2e8f0);
+}
+
+.mega-cargas-table th.relatorio-col {
+  text-align: left;
+  min-width: 220px;
+  width: 220px;
+}
+
+.mega-cargas-table th.obra-col {
+  min-width: 92px;
+}
+
+.mega-cargas-table th.summary-col {
+  min-width: 130px;
+  border-right: none;
+}
+
+.obra-header-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.obra-header-code-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.obra-code {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-color, #1e293b);
+}
+
+.obra-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.obra-status-dot.ok { background: #059669; }
+.obra-status-dot.fail { background: #dc2626; }
+
+.obra-name-short {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 85px;
+}
+
+.modulo-group-row td {
+  background: rgba(23, 63, 56, 0.06);
+  padding: 6px 12px;
+  border-top: 1px solid var(--border-color, #cbd5e1);
+  border-bottom: 1px solid var(--border-color, #cbd5e1);
+}
+
+.modulo-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--primary-color, #173f38);
+}
+
+.mega-cargas-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  border-right: 1px solid var(--border-color, #e2e8f0);
+  vertical-align: middle;
+}
+
+.mega-cargas-table td:last-child {
+  border-right: none;
+}
+
+.relatorio-name-cell {
+  background: var(--surface-subtle, #f8fafc);
+}
+
+.relatorio-name-box {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.relatorio-title {
+  font-weight: 600;
+  color: var(--text-color, #1e293b);
+  font-size: 12px;
+}
+
+.relatorio-subtag {
+  font-size: 10px;
+  color: var(--text-muted, #64748b);
+}
+
+.status-cell {
+  text-align: center;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status-badge.ok {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.status-badge.fail {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.status-badge.clickable {
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.status-badge.clickable:hover {
+  background: rgba(239, 68, 68, 0.22);
+  transform: translateY(-1px);
+}
+
+.status-badge.sem-mov {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.status-badge.none {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.summary-cell {
+  text-align: center;
+}
+
+.summary-pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.summary-pill.ok {
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+}
+
+.summary-pill.fail {
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.summary-pill.neutral {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-color, #1e293b);
+}
+
+.summary-pill.none {
+  color: #94a3b8;
+  font-size: 10.5px;
+}
+
+/* 4. Acordeão de Log */
+.mega-cargas-log-section {
+  background: var(--surface-bg, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.mega-cargas-log-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-color, #1e293b);
+  transition: background 0.15s ease;
+}
+
+.mega-cargas-log-toggle:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.mega-cargas-log-toggle-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.mega-cargas-log-badge {
+  background: rgba(23, 63, 56, 0.1);
+  color: var(--primary-color, #173f38);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+
+.mega-cargas-log-toggle-action {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary-color, #173f38);
+}
+
+.mega-cargas-log-content {
+  padding: 12px 16px 16px 16px;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mega-cargas-log-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.log-pill {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.log-pill.ok {
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+}
+
+.log-pill.fail {
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+}
+
+/* Modais */
+.text-danger { color: #dc2626; }
+.text-success { color: #059669; }
+.text-muted { color: var(--text-muted, #64748b); }

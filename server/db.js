@@ -875,5 +875,235 @@ export async function getMegaTable(tableType, { obra = '', projectId = '', page 
   }
 }
 
+export async function getMegaCargasStatusDiario(dataInput) {
+  // 1. Data alvo (se não enviada, busca a mais recente do banco)
+  let data = String(dataInput || '').trim()
+  if (!data || !/^\d{4}-\d{2}-\d{2}$/.test(data)) {
+    try {
+      const { rows } = await query('SELECT MAX(data_extracao)::text as latest FROM mega.carga')
+      data = rows[0]?.latest || new Date().toISOString().slice(0, 10)
+    } catch {
+      data = new Date().toISOString().slice(0, 10)
+    }
+  }
+
+  // 2. Datas disponíveis nos últimos 90 dias
+  let datasDisponiveis = []
+  try {
+    const { rows } = await query(
+      'SELECT DISTINCT data_extracao::text as data FROM mega.carga ORDER BY data_extracao DESC LIMIT 90'
+    )
+    datasDisponiveis = rows.map((r) => r.data)
+  } catch (err) {
+    console.error('Erro ao buscar datas disponíveis de carga:', err)
+  }
+
+  // 3. Obras do Mega
+  let obras = []
+  try {
+    const obrasFromDb = await getMegaObras()
+    if (Array.isArray(obrasFromDb) && obrasFromDb.length > 0) {
+      obras = obrasFromDb.map((o) => ({
+        obra: String(o.obra),
+        nome: String(o.obra_nome || `Obra ${o.obra}`),
+      }))
+    }
+  } catch (err) {
+    console.error('Erro ao buscar obras para status diário:', err)
+  }
+
+  if (obras.length === 0) {
+    obras = [
+      { obra: '340', nome: 'BALNEARIO DE GUARATUBA' },
+      { obra: '410', nome: 'PIEMONTE CROMA' },
+      { obra: '430', nome: 'PIEMONTE 909' },
+      { obra: '480', nome: 'PIEMONTE COMPORTA' },
+      { obra: '490', nome: 'PIEMONTE P70 RUA BUENOS AIRES' },
+      { obra: '601', nome: 'PIEMONTE P73 RUA GUARATUBA AHU' },
+      { obra: '630', nome: 'PIEMONTE P74 CARMELO RANGEL' },
+      { obra: '650', nome: 'PIEMONTE P78 CARNEIRO LOBO' },
+    ]
+  }
+
+  // 4. Definição dos 10 Relatórios
+  const relatorios = [
+    { key: 'itens_solicitados', label: 'Itens Solicitados', modulo: 'Suprimentos', relatorio: 'itens_solicitados', arquivoPattern: null },
+    { key: 'analise_pedidos', label: 'Análise Saldo - Pedidos', modulo: 'Suprimentos', relatorio: 'analise_saldo_solicitacao', arquivoPattern: 'Pedidos' },
+    { key: 'analise_contratos', label: 'Análise Saldo - Contratos', modulo: 'Suprimentos', relatorio: 'analise_saldo_solicitacao', arquivoPattern: 'Contratos' },
+    { key: 'analise_realizado', label: 'Análise Saldo - Realizado', modulo: 'Suprimentos', relatorio: 'analise_saldo_solicitacao', arquivoPattern: 'Realizado' },
+    { key: 'visualizacao_itens', label: 'Visualização de Itens', modulo: 'Suprimentos', relatorio: 'visualizacao_itens', arquivoPattern: null },
+    { key: 'pedidos_compra', label: 'Pedidos de Compra', modulo: 'Suprimentos', relatorio: 'pedidos_compra', arquivoPattern: null },
+    { key: 'solicitacoes_por_etapa', label: 'Solicitações por Etapa', modulo: 'Suprimentos', relatorio: 'solicitacoes_por_etapa', arquivoPattern: null },
+    { key: 'medicoes_contratos', label: 'Medições de Contratos', modulo: 'Contratos', relatorio: 'medicoes_contratos', arquivoPattern: null },
+    { key: 'contratos_itens', label: 'Follow-up de Contratos', modulo: 'Contratos', relatorio: 'contratos_itens', arquivoPattern: null },
+    { key: 'approvo_completo', label: 'Approvo (Aprovações)', modulo: 'Approvo', relatorio: 'approvo_completo', arquivoPattern: null, isGlobal: true },
+  ]
+
+  // 5. Cargas brutas do dia
+  let cargas = []
+  try {
+    const { rows } = await query(
+      `SELECT id, relatorio, arquivo, data_extracao::text as data_extracao,
+              obras_ok, obras_sem_movimento, obras_falhou, bloqueado, motivo_bloqueio,
+              to_char(executado_em, 'HH24:MI:SS') as horario,
+              executado_em::text as executado_em
+       FROM mega.carga
+       WHERE data_extracao = $1
+       ORDER BY executado_em ASC, id ASC`,
+      [data]
+    )
+    cargas = rows
+  } catch (err) {
+    console.error('Erro ao buscar mega.carga do dia:', err)
+  }
+
+  // 6. Contagens de registros gravados por tabela e obra no dia
+  const contagens = {}
+  try {
+    const countSql = `
+      SELECT 'itens_solicitados' as relatorio_key, obra, count(*)::int as total FROM mega.itens_solicitados WHERE data_extracao = $1 GROUP BY obra
+      UNION ALL
+      SELECT 'analise_pedidos', obra, count(*)::int FROM mega.analise_pedidos_hist WHERE data_extracao = $1 GROUP BY obra
+      UNION ALL
+      SELECT 'analise_contratos', obra, count(*)::int FROM mega.analise_contratos_hist WHERE data_extracao = $1 GROUP BY obra
+      UNION ALL
+      SELECT 'analise_realizado', obra, count(*)::int FROM mega.analise_realizado WHERE data_extracao = $1 GROUP BY obra
+      UNION ALL
+      SELECT 'visualizacao_itens', obra, count(*)::int FROM mega.visualizacao_itens WHERE data_extracao = $1 GROUP BY obra
+      UNION ALL
+      SELECT 'pedidos_compra', obra, count(*)::int FROM mega.pedidos_compra WHERE data_extracao = $1 GROUP BY obra
+      UNION ALL
+      SELECT 'solicitacoes_por_etapa', obra, count(*)::int FROM mega.solicitacoes_por_etapa WHERE data_extracao = $1 GROUP BY obra
+      UNION ALL
+      SELECT 'medicoes_contratos', obra, count(*)::int FROM mega.medicoes_contratos WHERE data_extracao = $1 GROUP BY obra
+      UNION ALL
+      SELECT 'contratos_itens', obra, count(*)::int FROM mega.contratos_itens WHERE data_extracao = $1 GROUP BY obra
+      UNION ALL
+      SELECT 'approvo_completo', 'TODAS', count(*)::int FROM mega.approvo_documentos WHERE data_extracao = $1
+    `
+    const { rows } = await query(countSql, [data])
+    for (const r of rows) {
+      if (!contagens[r.relatorio_key]) contagens[r.relatorio_key] = {}
+      contagens[r.relatorio_key][r.obra] = Number(r.total || 0)
+    }
+  } catch (err) {
+    console.warn('Erro ao contar registros por tabela/obra:', err.message)
+  }
+
+  // 7. Montar a Matriz [relatorio_key][obra]
+  const matriz = {}
+  for (const rel of relatorios) {
+    matriz[rel.key] = {}
+
+    const cargasDoRelatorio = cargas.filter((c) => {
+      if (c.relatorio !== rel.relatorio) return false
+      if (rel.arquivoPattern) {
+        return String(c.arquivo || '').toLowerCase().includes(rel.arquivoPattern.toLowerCase())
+      }
+      return true
+    })
+
+    for (const ob of obras) {
+      const codigoObra = ob.obra
+      let status = 'nao_executado'
+      let motivo = null
+      let horario = null
+      let idCarga = null
+
+      for (let i = cargasDoRelatorio.length - 1; i >= 0; i--) {
+        const c = cargasDoRelatorio[i]
+        const okList = Array.isArray(c.obras_ok) ? c.obras_ok : []
+        const failList = Array.isArray(c.obras_falhou) ? c.obras_falhou : []
+        const semMovList = Array.isArray(c.obras_sem_movimento) ? c.obras_sem_movimento : []
+        const isGlobalOk = rel.isGlobal && okList.includes('TODAS')
+        const isGlobalFail = rel.isGlobal && (failList.includes('TODAS') || c.bloqueado)
+
+        if (isGlobalOk || okList.includes(codigoObra)) {
+          status = 'ok'
+          horario = c.horario
+          idCarga = c.id
+          break
+        } else if (isGlobalFail || failList.includes(codigoObra) || (c.bloqueado && String(c.motivo_bloqueio || '').includes(codigoObra))) {
+          status = 'falhou'
+          motivo = c.motivo_bloqueio || 'Carga bloqueada'
+          horario = c.horario
+          idCarga = c.id
+          break
+        } else if (semMovList.includes(codigoObra)) {
+          status = 'sem_movimento'
+          horario = c.horario
+          idCarga = c.id
+          break
+        }
+      }
+
+      const count = contagens[rel.key]?.[rel.isGlobal ? 'TODAS' : codigoObra] ?? (status === 'ok' ? null : 0)
+
+      matriz[rel.key][codigoObra] = {
+        status,
+        count: count !== null ? Number(count) : undefined,
+        motivo,
+        horario,
+        idCarga,
+      }
+    }
+  }
+
+  // 8. Resumo Geral do Dia
+  let totalOk = 0
+  let totalFalhou = 0
+  let totalSemMovimento = 0
+  let totalNaoExecutado = 0
+  let obras100Porcento = 0
+
+  for (const ob of obras) {
+    let obraOk = true
+    let teveExecucao = false
+    for (const rel of relatorios) {
+      const cell = matriz[rel.key][ob.obra]
+      if (cell.status === 'ok') {
+        teveExecucao = true
+      } else if (cell.status === 'falhou') {
+        obraOk = false
+        teveExecucao = true
+      }
+    }
+    if (obraOk && teveExecucao) obras100Porcento++
+  }
+
+  for (const rel of relatorios) {
+    for (const ob of obras) {
+      const cell = matriz[rel.key][ob.obra]
+      if (cell.status === 'ok') totalOk++
+      else if (cell.status === 'falhou') totalFalhou++
+      else if (cell.status === 'sem_movimento') totalSemMovimento++
+      else totalNaoExecutado++
+    }
+  }
+
+  const inicio = cargas.length > 0 ? cargas[0].horario : null
+  const fim = cargas.length > 0 ? cargas[cargas.length - 1].horario : null
+
+  return {
+    data,
+    datasDisponiveis,
+    obras,
+    relatorios,
+    matriz,
+    resumo: {
+      totalCargas: cargas.length,
+      totalOk,
+      totalFalhou,
+      totalSemMovimento,
+      totalNaoExecutado,
+      obras100Porcento,
+      totalObras: obras.length,
+      inicio,
+      fim,
+    },
+    cargas,
+  }
+}
+
 export default pool
 

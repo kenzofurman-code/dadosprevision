@@ -35,6 +35,7 @@ import { MegaColumnModal } from './components/mega/MegaColumnModal'
 import { MegaSaveViewModal } from './components/mega/MegaSaveViewModal'
 import { MegaSavedViewsMenu } from './components/mega/MegaSavedViewsMenu'
 import { MegaReportModal } from './components/mega/MegaReportModal'
+import { MegaCargasStatus } from './components/mega/MegaCargasStatus'
 
 export type MegaTabKey =
   | 'conciliacao_contratacoes'
@@ -280,6 +281,7 @@ export function MegaView() {
 
   // Carregar dados da tabela ativa
   const loadData = useCallback(async () => {
+    if (activeTab === 'cargas') return
     setLoading(true)
     try {
       const params = new URLSearchParams({
@@ -306,7 +308,7 @@ export function MegaView() {
     } finally {
       setLoading(false)
     }
-  }, [currentTableKey, selectedObra, page, pageSize, search])
+  }, [activeTab, currentTableKey, selectedObra, page, pageSize, search])
 
   // Buscar registros completos para relatórios (até 5.000)
   const fetchFilteredRecords = async (limit: number = 5000): Promise<any[]> => {
@@ -670,10 +672,15 @@ export function MegaView() {
         )}
       </div>
 
-      {/* 3. Toolbar de Filtros e Ações */}
-      <div className="mega-toolbar">
+      {/* 3. Conteúdo da Aba */}
+      {activeTab === 'cargas' ? (
+        <MegaCargasStatus />
+      ) : (
+        <>
+          {/* 3. Toolbar de Filtros e Ações */}
+          <div className="mega-toolbar">
         <div className="mega-toolbar-left">
-          {activeTab !== 'cargas' && activeTab !== 'follow_itenscontratos_historico' && (
+          {activeTab !== 'follow_itenscontratos_historico' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Building2 size={16} style={{ color: 'var(--text-muted)' }} />
               <select
@@ -886,8 +893,10 @@ export function MegaView() {
           </div>
         </div>
       </div>
+    </>
+  )}
 
-      {/* Modais de Configuração, Salvar Visão e Geração de Relatórios */}
+  {/* Modais de Configuração, Salvar Visão e Geração de Relatórios */}
       <MegaColumnModal
         isOpen={isColumnModalOpen}
         onClose={() => setIsColumnModalOpen(false)}

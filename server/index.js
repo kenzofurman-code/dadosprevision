@@ -23,6 +23,7 @@ import {
   getMegaObras,
   getMegaSummary,
   getMegaTable,
+  getMegaCargasStatusDiario,
 } from './db.js'
 import { syncProjects, syncRestrictions } from './sync.js'
 import {
@@ -272,6 +273,17 @@ app.get('/api/mega/data', async (req, res) => {
   } catch (err) {
     console.error('Erro em /api/mega/data:', err)
     res.status(500).json({ error: err.message || 'Erro ao consultar tabela do Mega' })
+  }
+})
+
+app.get('/api/mega/cargas/status-diario', async (req, res) => {
+  try {
+    const data = String(req.query.data || '').trim()
+    const result = await getMegaCargasStatusDiario(data)
+    res.json({ ok: true, ...result })
+  } catch (err) {
+    console.error('Erro em /api/mega/cargas/status-diario:', err)
+    res.status(500).json({ error: err.message || 'Erro ao consultar status diário das cargas' })
   }
 })
 
