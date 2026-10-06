@@ -127,7 +127,7 @@ def main():
 
     cron_approvo = os.environ.get("CRON_SCHEDULE_APPROVO", "0 22 * * *")
     cron_noite = os.environ.get("CRON_SCHEDULE_MEGA", "0 0 * * *")
-    cron_retry = os.environ.get("CRON_SCHEDULE_MEGA_RETRY", "30 7 * * *")
+    cron_retry = os.environ.get("CRON_SCHEDULE_MEGA_RETRY", "30 6 * * *")
 
     print("[AGENDADOR] Iniciado com cron_approvo=%r, cron_noite=%r, cron_retry=%r" % (
         cron_approvo, cron_noite, cron_retry), flush=True)

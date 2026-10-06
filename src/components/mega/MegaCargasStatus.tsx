@@ -340,7 +340,7 @@ export function MegaCargasStatus() {
                   </div>
                   {dados.resumo.janelaRetry && (
                     <div className="mega-cargas-window-item retry">
-                      <span className="mega-cargas-window-label">Retry (07:30):</span>
+                      <span className="mega-cargas-window-label">Retry (Manhã):</span>
                       <strong>{dados.resumo.janelaRetry.inicio}</strong>
                       <span>até</span>
                       <strong>{dados.resumo.janelaRetry.fim}</strong>

@@ -343,7 +343,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Checagem e retry de relatorios do Mega ERP.")
     parser.add_argument("--data", default=dt.date.today().isoformat(), help="Data de referencia ISO.")
-    parser.add_argument("--tempo", type=int, default=int(os.environ.get("RETRY_TEMPO_MAX_MINUTOS", "60")),
+    parser.add_argument("--tempo", type=int, default=int(os.environ.get("RETRY_TEMPO_MAX_MINUTOS", "120")),
                         help="Tempo maximo em minutos.")
     args = parser.parse_args()
 
