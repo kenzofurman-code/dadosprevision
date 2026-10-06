@@ -70,6 +70,9 @@ export interface CargasStatusResponse {
     totalObras: number
     inicio: string | null
     fim: string | null
+    janelaNoturna?: { inicio: string; fim: string; total: number } | null
+    janelaRetry?: { inicio: string; fim: string; total: number } | null
+    janelaApprovo?: { inicio: string; fim: string; total: number } | null
   }
   cargas: CargaRaw[]
 }
@@ -327,7 +330,30 @@ export function MegaCargasStatus() {
               <Clock size={18} className="text-muted" />
             </div>
             <div className="mega-cargas-card-body">
-              {dados.resumo.inicio ? (
+              {dados.resumo.janelaNoturna ? (
+                <div className="mega-cargas-windows-list">
+                  <div className="mega-cargas-window-item">
+                    <span className="mega-cargas-window-label">Madrugada (Mega):</span>
+                    <strong>{dados.resumo.janelaNoturna.inicio}</strong>
+                    <span>até</span>
+                    <strong>{dados.resumo.janelaNoturna.fim}</strong>
+                  </div>
+                  {dados.resumo.janelaRetry && (
+                    <div className="mega-cargas-window-item retry">
+                      <span className="mega-cargas-window-label">Retry (07:30):</span>
+                      <strong>{dados.resumo.janelaRetry.inicio}</strong>
+                      <span>até</span>
+                      <strong>{dados.resumo.janelaRetry.fim}</strong>
+                    </div>
+                  )}
+                  {dados.resumo.janelaApprovo && (
+                    <div className="mega-cargas-window-item approvo">
+                      <span className="mega-cargas-window-label">Approvo (Noite):</span>
+                      <strong>{dados.resumo.janelaApprovo.fim}</strong>
+                    </div>
+                  )}
+                </div>
+              ) : dados.resumo.inicio ? (
                 <div className="mega-cargas-time-range">
                   <strong>{dados.resumo.inicio}</strong>
                   <span>até</span>

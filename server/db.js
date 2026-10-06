@@ -1081,8 +1081,23 @@ export async function getMegaCargasStatusDiario(dataInput) {
     }
   }
 
-  const inicio = cargas.length > 0 ? cargas[0].horario : null
-  const fim = cargas.length > 0 ? cargas[cargas.length - 1].horario : null
+  // 9. Janelas de Execução discriminadas por etapa (Madrugada, Retry, Approvo)
+  const noturnas = cargas.filter((c) => c.relatorio !== 'approvo_completo' && c.horario < '06:00:00')
+  const retries = cargas.filter((c) => c.relatorio !== 'approvo_completo' && c.horario >= '06:00:00' && c.horario < '14:00:00')
+  const approvos = cargas.filter((c) => c.relatorio === 'approvo_completo')
+
+  const janelaNoturna = noturnas.length > 0
+    ? { inicio: noturnas[0].horario, fim: noturnas[noturnas.length - 1].horario, total: noturnas.length }
+    : null
+  const janelaRetry = retries.length > 0
+    ? { inicio: retries[0].horario, fim: retries[retries.length - 1].horario, total: retries.length }
+    : null
+  const janelaApprovo = approvos.length > 0
+    ? { inicio: approvos[0].horario, fim: approvos[approvos.length - 1].horario, total: approvos.length }
+    : null
+
+  const inicio = janelaNoturna ? janelaNoturna.inicio : (cargas[0]?.horario || null)
+  const fim = janelaNoturna ? janelaNoturna.fim : (cargas[cargas.length - 1]?.horario || null)
 
   return {
     data,
@@ -1100,6 +1115,9 @@ export async function getMegaCargasStatusDiario(dataInput) {
       totalObras: obras.length,
       inicio,
       fim,
+      janelaNoturna,
+      janelaRetry,
+      janelaApprovo,
     },
     cargas,
   }

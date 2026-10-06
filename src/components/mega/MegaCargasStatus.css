@@ -223,6 +223,45 @@
   transition: width 0.3s ease;
 }
 
+.mega-cargas-windows-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mega-cargas-window-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-color, #1e293b);
+}
+
+.mega-cargas-window-item.retry {
+  color: #d97706;
+}
+
+.mega-cargas-window-item.approvo {
+  color: #0284c7;
+}
+
+.mega-cargas-window-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted, #64748b);
+  min-width: 105px;
+}
+
+.mega-cargas-window-item strong {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.mega-cargas-window-item span:not(.mega-cargas-window-label) {
+  font-size: 11px;
+  color: var(--text-muted, #64748b);
+}
+
 .mega-cargas-time-range {
   display: flex;
   align-items: center;
