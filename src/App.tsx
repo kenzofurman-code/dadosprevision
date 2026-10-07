@@ -40,6 +40,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import './App.css'
 import { CurvasView } from './CurvasView'
+import { CurvasFinanceirasView } from './CurvasFinanceirasView'
 import { MegaView } from './MegaView'
 import { DiarioView } from './DiarioView'
 import { DiarioIndicadores } from './components/diario/DiarioIndicadores'
@@ -59,6 +60,7 @@ type DataView =
   | 'budgets'
   | 'dashboard'
   | 'curvas'
+  | 'curvas_financeiras'
   | 'dados_mega'
   | 'dados_diario'
   | 'gestao_a_vista'
@@ -606,6 +608,7 @@ const columns: Record<DataView, Column[]> = {
     },
   ],
   curvas: [],
+  curvas_financeiras: [],
   dados_mega: [],
   dados_diario: [],
   gestao_a_vista: [],
@@ -1030,7 +1033,7 @@ function App() {
   const [curveBaselines, setCurveBaselines] = useState<DataRecord[]>([])
   const [gestaoMilestones, setGestaoMilestones] = useState<DataRecord[]>([])
   const [activeView, setActiveView] = useState<DataView>('gestao_a_vista')
-  const lastDataView = useRef<Exclude<DataView, 'gestao_a_vista' | 'curvas' | 'dados_mega' | 'dados_diario'>>('projects')
+  const lastDataView = useRef<Exclude<DataView, 'gestao_a_vista' | 'curvas' | 'curvas_financeiras' | 'dados_mega' | 'dados_diario'>>('projects')
   const [activityMode, setActivityMode] = useState<ActivityMode>('planning')
   const [budgetMode, setBudgetMode] = useState<BudgetMode>('reports')
   const [dashboardMode, setDashboardMode] = useState<DashboardMode>('general')
@@ -3385,12 +3388,14 @@ function App() {
     printWindow.focus()
   }
 
-  const isTelaExterna = activeView === 'dados_mega' || activeView === 'dados_diario'
+  const isTelaExterna = activeView === 'dados_mega' || activeView === 'dados_diario' || activeView === 'curvas_financeiras'
   const isMilestoneDashboard = activeView === 'gestao_a_vista' && gestaoPanelTab === 'milestones'
   const activeTab = isMilestoneDashboard
     ? { label: 'Dashboard de Marcos', icon: Flag }
     : activeView === 'curvas'
       ? { label: 'Curvas', icon: TrendingUp }
+      : activeView === 'curvas_financeiras'
+        ? { label: 'Curvas Financeiras', icon: WalletCards }
       : activeView === 'dados_mega'
         ? { label: 'Dados Mega', icon: Layers3 }
         : activeView === 'dados_diario'
@@ -3403,14 +3408,14 @@ function App() {
         ? budgetColumns[budgetMode]
         : activeView === 'dashboard'
           ? dashboardColumns[dashboardMode]
-          : activeView === 'curvas'
+          : activeView === 'curvas' || activeView === 'curvas_financeiras'
             ? []
             : activeView === 'dados_mega'
               ? []
               : columns[activeView]
 
   function changeView(view: DataView) {
-    if (view !== 'gestao_a_vista' && view !== 'curvas' && view !== 'dados_mega' && view !== 'dados_diario') lastDataView.current = view
+    if (view !== 'gestao_a_vista' && view !== 'curvas' && view !== 'curvas_financeiras' && view !== 'dados_mega' && view !== 'dados_diario') lastDataView.current = view
     setActiveView(view)
     setPage(0)
     setSearch('')
@@ -3509,6 +3514,14 @@ function App() {
             Curvas
           </button>
           <button
+            className={`header-view-button ${activeView === 'curvas_financeiras' ? 'active' : ''}`}
+            type="button"
+            onClick={() => changeView('curvas_financeiras')}
+          >
+            <WalletCards size={16} />
+            Curvas Financeiras
+          </button>
+          <button
             className={`header-view-button ${activeView === 'gestao_a_vista' && !isMilestoneDashboard ? 'active' : ''}`}
             type="button"
             onClick={() => {
@@ -3531,7 +3544,7 @@ function App() {
             Dashboard de Marcos
           </button>
           <button
-            className={`header-view-button ${activeView !== 'gestao_a_vista' && activeView !== 'curvas' && activeView !== 'dados_mega' && activeView !== 'dados_diario' ? 'active' : ''}`}
+            className={`header-view-button ${activeView !== 'gestao_a_vista' && activeView !== 'curvas' && activeView !== 'curvas_financeiras' && activeView !== 'dados_mega' && activeView !== 'dados_diario' ? 'active' : ''}`}
             type="button"
             onClick={() => changeView(lastDataView.current)}
           >
@@ -3922,6 +3935,13 @@ function App() {
             <MegaView />
           ) : activeView === 'dados_diario' ? (
             <DiarioView />
+          ) : activeView === 'curvas_financeiras' ? (
+            <CurvasFinanceirasView
+              projectId={selectedProject}
+              projectName={projects.find((project) => project.id_prevision === selectedProject)?.nome_projeto || ''}
+              projects={projects.filter((p) => p.id_prevision && effectiveActiveProjectIds.has(String(p.id_prevision))).map((p) => ({ id_prevision: String(p.id_prevision), nome_projeto: String(p.nome_projeto || '') }))}
+              onSelectProject={changeProject}
+            />
           ) : loading ? (
             <div className="state-message">
               <RefreshCw size={20} className="spin" />

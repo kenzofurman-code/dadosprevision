@@ -698,3 +698,29 @@ UPDATE contratacao_grupo_etapas e SET tipo = g.tipo FROM contratacao_grupos g WH
 DROP INDEX IF EXISTS uq_contratacao_etapa_obra;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_contratacao_etapa_obra_tipo
   ON contratacao_grupo_etapas (projeto_id, codigo_etapa, tipo) WHERE projeto_id IS NOT NULL;
+
+-- Curvas de Competência e Financeira: Parâmetros de projeção por obra e etapa
+CREATE TABLE IF NOT EXISTS curva_parametros_obra (
+  projeto_id TEXT PRIMARY KEY REFERENCES projetos(id_prevision) ON DELETE CASCADE,
+  dias_antecedencia_padrao INTEGER NOT NULL DEFAULT 10,
+  prazo_pagamento_padrao_dias INTEGER NOT NULL DEFAULT 28,
+  dia_corte_medicao_mo INTEGER NOT NULL DEFAULT 20,
+  dia_pagamento_mo INTEGER NOT NULL DEFAULT 5,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS curva_parametros_etapa (
+  id SERIAL PRIMARY KEY,
+  projeto_id TEXT NOT NULL REFERENCES projetos(id_prevision) ON DELETE CASCADE,
+  codigo_etapa TEXT NOT NULL,
+  tipo TEXT NOT NULL CHECK (tipo IN ('MATERIAL', 'MAO_DE_OBRA')),
+  dias_antecedencia INTEGER,
+  num_entregas INTEGER,
+  tipo_pagamento TEXT DEFAULT 'DIAS',
+  prazo_dias INTEGER DEFAULT 28,
+  parcelas_dias INTEGER[],
+  observacao TEXT,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (projeto_id, codigo_etapa, tipo)
+);
+CREATE INDEX IF NOT EXISTS idx_curva_param_etapa ON curva_parametros_etapa (projeto_id, codigo_etapa);

@@ -34,6 +34,9 @@ import {
 import {
   repoDiario, consultarDiario, obrasDiario, resumoDiario, obterRelatorioDiario, indicadoresDiario,
 } from './diario-db.js'
+import {
+  obterDadosCurvasFinanceiras, salvarParametrosCurvas,
+} from './curvas-financeiras-db.js'
 import { criarCliente } from './diario-client.js'
 import { executarSincronizacaoDiario } from './diario-sync.js'
 import { validarData } from './diario-consulta.js'
@@ -345,6 +348,17 @@ app.post('/api/contratacoes/custo/importar', rota((req) =>
   importarCusto(exigirProjeto(req.body?.projectId), {
     referencia: req.body?.referencia, arquivo: req.body?.arquivo,
     matriz: Array.isArray(req.body?.matriz) ? req.body.matriz : [],
+  })))
+
+// ---- Curvas de Competência e Financeira -----------------------------------
+app.get('/api/curvas-financeiras/dados', rota((req) =>
+  obterDadosCurvasFinanceiras(exigirProjeto(req.query.projectId))))
+
+app.post('/api/curvas-financeiras/parametros', rota((req) =>
+  salvarParametrosCurvas(exigirProjeto(req.body?.projectId), {
+    parametrosObra: req.body?.parametrosObra,
+    parametrosEtapa: req.body?.parametrosEtapa,
+    parametrosEtapas: req.body?.parametrosEtapas,
   })))
 
 // ---- Diário de Obra ------------------------------------------------------
