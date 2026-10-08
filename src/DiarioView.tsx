@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
-  AlertCircle, Building2, Camera, ChevronLeft, ChevronRight, ClipboardList, ListChecks,
+  AlertCircle, Building2, Camera, ChevronLeft, ChevronRight, ClipboardList, FileText, ListChecks,
   RefreshCw, Search, Server, SlidersHorizontal, Users, Wrench,
 } from 'lucide-react'
 import './MegaView.css'
@@ -11,6 +11,7 @@ import type { MegaColumnDef } from './components/mega/mega-columns'
 import { diarioApi, type ObraDiario, type ResumoDiario, type TabelaDiario } from './components/diario/diario-api'
 import { COLUNAS_DIARIO } from './components/diario/diario-columns'
 import { DiarioRelatorioModal } from './components/diario/DiarioRelatorioModal'
+import { DiarioExportModal } from './components/diario/DiarioExportModal'
 import { fmtData, fmtInteiro, fmtNumero } from './components/diario/formatos'
 
 type Registro = Record<string, unknown>
@@ -84,12 +85,39 @@ export function DiarioView() {
   const [colunasAbertas, setColunasAbertas] = useState(false)
   const [colunasAtivas, setColunasAtivas] = useState<string[]>([])
   const [relatorioAberto, setRelatorioAberto] = useState<string | null>(null)
+  const [exportModalAberto, setExportModalAberto] = useState(false)
 
   const todasColunas = COLUNAS_DIARIO[aba]
   const definicoes = useMemo(
     () => colunasAtivas.map((id) => todasColunas.find((c) => c.id === id)).filter((c): c is MegaColumnDef => Boolean(c)),
     [colunasAtivas, todasColunas],
   )
+
+  const fetchFilteredRecords = async (limit: number = 5000): Promise<Registro[]> => {
+    try {
+      const all: Registro[] = []
+      let p = 0
+      const pageSize = 200
+      while (all.length < limit) {
+        const res = await diarioApi.dados(aba, {
+          obra,
+          page: p,
+          limit: pageSize,
+          search: buscaAplicada,
+        })
+        if (!res.records || res.records.length === 0) break
+        all.push(...res.records)
+        if (all.length >= res.total || !res.hasMore || res.records.length < pageSize) {
+          break
+        }
+        p++
+      }
+      return all.length > 0 ? all : registros
+    } catch (err) {
+      console.error('Erro ao buscar registros para relatório do Diário:', err)
+      return registros
+    }
+  }
 
   useEffect(() => {
     diarioApi.obras().then(setObras).catch((e: Error) => setErro(e.message))
@@ -179,6 +207,16 @@ export function DiarioView() {
             <SlidersHorizontal size={14} className="text-primary" />
             <span>Colunas ({colunasAtivas.length}/{todasColunas.length})</span>
           </button>
+          <button
+            type="button"
+            className="mega-btn"
+            onClick={() => setExportModalAberto(true)}
+            disabled={registros.length === 0}
+            title="Gerar e exportar relatório (Excel, PDF/Impressão ou CSV)"
+          >
+            <FileText size={14} className="text-primary" />
+            <span>Gerar relatório</span>
+          </button>
           <button type="button" className="mega-btn" onClick={() => setRecarga((n) => n + 1)} title="Atualizar dados">
             <RefreshCw size={14} className={carregando ? 'mega-loading-spinner' : ''} />
             <span>Atualizar</span>
@@ -247,6 +285,20 @@ export function DiarioView() {
         allColumns={todasColunas}
         activeColumnIds={colunasAtivas}
         onApplyColumns={aplicarColunas}
+      />
+      <DiarioExportModal
+        isOpen={exportModalAberto}
+        onClose={() => setExportModalAberto(false)}
+        tableTitle={ABAS.find((a) => a.chave === aba)?.rotulo || 'Diário de Obra'}
+        tableKey={aba}
+        selectedObra={obra}
+        obraNome={obras.find((o) => o.obra_id === obra)?.nome}
+        search={buscaAplicada}
+        activeColumns={colunasAtivas}
+        allColumns={todasColunas}
+        currentRecords={registros}
+        totalRecords={total}
+        fetchFilteredRecords={fetchFilteredRecords}
       />
       <DiarioRelatorioModal relatorioId={relatorioAberto} onClose={() => setRelatorioAberto(null)} />
     </div>
