@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import type { MegaColumnDef } from '../mega/mega-columns'
 import { getRecordValue } from '../mega/mega-columns'
-import { fmtData, fmtNumero } from './formatos'
+import { fmtData, fmtInteiro, fmtNumero } from './formatos'
 
 interface DiarioExportModalProps {
   isOpen: boolean
@@ -22,9 +22,12 @@ interface DiarioExportModalProps {
   search: string
   activeColumns: string[]
   allColumns: MegaColumnDef[]
-  currentRecords: Record<string, unknown>[]
+  currentRecords?: Record<string, unknown>[]
   totalRecords: number
-  fetchFilteredRecords: (limit?: number) => Promise<Record<string, unknown>[]>
+  fetchFilteredRecords: (
+    limit?: number,
+    onProgress?: (carregados: number, total: number) => void,
+  ) => Promise<Record<string, unknown>[]>
 }
 
 export function DiarioExportModal({
@@ -37,11 +40,11 @@ export function DiarioExportModal({
   search,
   activeColumns,
   allColumns,
-  currentRecords,
+  currentRecords: _currentRecords,
   totalRecords,
   fetchFilteredRecords,
 }: DiarioExportModalProps) {
-  const [scope, setScope] = useState<'page' | 'all'>('all')
+  const [scope, setScope] = useState<'all' | '5k'>('all')
   const [columnsScope, setColumnsScope] = useState<'visible' | 'all'>('visible')
   const [isExporting, setIsExporting] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
@@ -56,11 +59,15 @@ export function DiarioExportModal({
 
   // Função para buscar as linhas de acordo com o escopo selecionado
   const getRows = async (): Promise<Record<string, unknown>[]> => {
-    if (scope === 'page') {
-      return currentRecords
+    if (scope === '5k') {
+      return await fetchFilteredRecords(5000, (carregados, tot) => {
+        setStatusMessage(`Baixando registros: ${carregados} de ${tot}...`)
+      })
     }
-    // Baixa até 5.000 registros para o relatório completo
-    return await fetchFilteredRecords(5000)
+    // 'all' -> sem limite de registros
+    return await fetchFilteredRecords(undefined, (carregados, tot) => {
+      setStatusMessage(`Baixando registros: ${carregados} de ${tot}...`)
+    })
   }
 
   // 1. Exportar para Excel (.xlsx)
@@ -176,6 +183,17 @@ export function DiarioExportModal({
     setStatusMessage('Preparando página de impressão...')
     try {
       const rows = await getRows()
+
+      if (rows.length > 3000) {
+        const continua = window.confirm(
+          `A visualização de impressão contém ${fmtNumero(rows.length)} registros e pode sobrecarregar o navegador. Para grandes volumes, recomendamos utilizar a exportação para Planilha Excel (.xlsx). Deseja continuar com a impressão mesmo assim?`,
+        )
+        if (!continua) {
+          setIsExporting(false)
+          setStatusMessage(null)
+          return
+        }
+      }
 
       const printWindow = window.open('', '_blank', 'width=1100,height=800')
       if (!printWindow) {
@@ -322,28 +340,32 @@ export function DiarioExportModal({
                   name="diario-scope"
                   checked={scope === 'all'}
                   onChange={() => setScope('all')}
+                  style={{ width: '16px', height: '16px', minWidth: '16px', maxWidth: '16px', padding: 0, margin: '3px 0 0', flexShrink: 0, cursor: 'pointer' }}
                 />
                 <div>
-                  <strong>Todos os Registros Filtrados</strong>
+                  <strong>Todos os Registros</strong>
                   <small>
-                    Exporta até {Math.min(5000, totalRecords)} registros da consulta
+                    Exporta o banco completo ({fmtInteiro(totalRecords)} registros)
                   </small>
                 </div>
               </label>
 
               <label
-                className={`mega-report-option ${scope === 'page' ? 'active' : ''}`}
-                onClick={() => setScope('page')}
+                className={`mega-report-option ${scope === '5k' ? 'active' : ''}`}
+                onClick={() => setScope('5k')}
               >
                 <input
                   type="radio"
                   name="diario-scope"
-                  checked={scope === 'page'}
-                  onChange={() => setScope('page')}
+                  checked={scope === '5k'}
+                  onChange={() => setScope('5k')}
+                  style={{ width: '16px', height: '16px', minWidth: '16px', maxWidth: '16px', padding: 0, margin: '3px 0 0', flexShrink: 0, cursor: 'pointer' }}
                 />
                 <div>
-                  <strong>Apenas Página Atual</strong>
-                  <small>{currentRecords.length} registros visíveis na tela</small>
+                  <strong>Até 5.000 Registros</strong>
+                  <small>
+                    Lote inicial ({Math.min(5000, totalRecords)} registros)
+                  </small>
                 </div>
               </label>
             </div>
@@ -362,6 +384,7 @@ export function DiarioExportModal({
                   name="diario-colsScope"
                   checked={columnsScope === 'visible'}
                   onChange={() => setColumnsScope('visible')}
+                  style={{ width: '16px', height: '16px', minWidth: '16px', maxWidth: '16px', padding: 0, margin: '3px 0 0', flexShrink: 0, cursor: 'pointer' }}
                 />
                 <div>
                   <strong>Colunas da Visão Atual</strong>
@@ -378,6 +401,7 @@ export function DiarioExportModal({
                   name="diario-colsScope"
                   checked={columnsScope === 'all'}
                   onChange={() => setColumnsScope('all')}
+                  style={{ width: '16px', height: '16px', minWidth: '16px', maxWidth: '16px', padding: 0, margin: '3px 0 0', flexShrink: 0, cursor: 'pointer' }}
                 />
                 <div>
                   <strong>Todas as Colunas Disponíveis</strong>

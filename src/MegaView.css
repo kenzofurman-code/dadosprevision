@@ -1032,6 +1032,8 @@
   cursor: pointer;
   background: var(--surface-bg, #ffffff);
   transition: all 0.15s ease;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .mega-report-option:hover {
@@ -1044,8 +1046,20 @@
 }
 
 .mega-report-option input[type="radio"] {
-  margin-top: 3px;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  max-width: 16px !important;
+  padding: 0 !important;
+  margin: 3px 0 0 0 !important;
   accent-color: var(--primary-color, #1e40af);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.mega-report-option > div {
+  min-width: 0;
+  flex: 1;
 }
 
 .mega-report-option strong {

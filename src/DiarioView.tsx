@@ -93,12 +93,16 @@ export function DiarioView() {
     [colunasAtivas, todasColunas],
   )
 
-  const fetchFilteredRecords = async (limit: number = 5000): Promise<Registro[]> => {
+  const fetchFilteredRecords = async (
+    limit?: number,
+    onProgress?: (carregados: number, total: number) => void,
+  ): Promise<Registro[]> => {
     try {
       const all: Registro[] = []
       let p = 0
       const pageSize = 200
-      while (all.length < limit) {
+      const maxLimit = limit ?? Infinity
+      while (all.length < maxLimit) {
         const res = await diarioApi.dados(aba, {
           obra,
           page: p,
@@ -107,6 +111,9 @@ export function DiarioView() {
         })
         if (!res.records || res.records.length === 0) break
         all.push(...res.records)
+        if (onProgress) {
+          onProgress(all.length, Math.min(maxLimit, res.total))
+        }
         if (all.length >= res.total || !res.hasMore || res.records.length < pageSize) {
           break
         }
