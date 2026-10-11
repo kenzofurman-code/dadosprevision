@@ -7,11 +7,37 @@ Estao comentadas onde aparecem para que ninguem as "simplifique" depois.
 import time
 from pathlib import Path
 
+import cv2
+import numpy as np
+
 from visao import Visao, centro
 
 
 class FalhaDeEtapa(Exception):
     """Interrompe a obra atual. O robo registra, captura a tela e segue."""
+
+
+def achar_botao_fechar(img):
+    """Acha o X vermelho do titulo de uma janela do ERP numa captura BGR.
+
+    O OCR nao le botoes coloridos (ver Operador.responder_sessao_duplicada),
+    entao o "Confirmar" do modal de detalhe do item nunca era achado e o modal
+    sobrevivia a todas as tentativas de abrir_tela (2026-10-09, obra 410). O X
+    vermelho (~37x17 px, RGB 198,81,82) e a unica marca igual em todos os modais
+    do ERP - arvore de empresas, detalhe de item, visualizador Crystal. Medido
+    em 282 capturas de falha: so aparece quando ha um modal na tela.
+    Devolve (x, y) do centro, ou None.
+    """
+    b, g, r = (img[:, :, i].astype(int) for i in range(3))
+    mascara = ((abs(r - 198) < 28) & (abs(g - 81) < 28)
+               & (abs(b - 82) < 28)).astype(np.uint8)
+    mascara = cv2.morphologyEx(mascara, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
+    n, _, stats, _ = cv2.connectedComponentsWithStats(mascara)
+    for i in range(1, n):
+        x, y, w, h, area = (int(v) for v in stats[i])
+        if 26 <= w <= 50 and 14 <= h <= 28 and area / (w * h) > 0.5 and 100 < y < 840:
+            return (x + w // 2, y + h // 2)
+    return None
 
 
 class Operador:
@@ -378,7 +404,7 @@ class Operador:
         # aqui dava falso negativo quando a arvore so demorava um pouco mais a
         # renderizar sob uso prolongado.
         try:
-            caixa_arvore = self.esperar_texto("ORGANIZACOES POR USUARIO", timeout=15)
+            caixa_arvore = self.esperar_texto("ORGANIZACOES POR USUARIO", timeout=30)
         except FalhaDeEtapa:
             raise FalhaDeEtapa("nao consegui abrir a arvore de empresas")
         return self._digitar_codigo(codigo, caixa_arvore)
@@ -770,6 +796,17 @@ class Operador:
                     time.sleep(2.0)
                     fechou_algo = True
                     break
+
+            # Fallback pelo X vermelho do titulo: os botoes coloridos nao sao
+            # lidos pelo OCR. Ate 3 voltas, para modais empilhados.
+            for _ in range(3):
+                x_fechar = achar_botao_fechar(self.tela(cutucar=False))
+                if not x_fechar:
+                    break
+                self.log("   modal pendente; clicando no X do titulo (%d, %d)" % x_fechar)
+                self.pagina.mouse.click(*x_fechar)
+                time.sleep(2.0)
+                fechou_algo = True
 
             self.tecla("Escape", pausa=0.3)
         except Exception as e:

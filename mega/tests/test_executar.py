@@ -19,6 +19,7 @@ class _OperadorFalso:
     """Dubla Operador: registra trocas de empresa, simula falha em algumas."""
     def __init__(self, falha_trocar=()):
         self.trocas = []
+        self.limpezas = 0
         self.pagina = _PaginaFalsa()
         self._falha_trocar = set(falha_trocar)
 
@@ -26,6 +27,10 @@ class _OperadorFalso:
         self.trocas.append(codigo)
         if codigo in self._falha_trocar:
             raise RuntimeError("nao consegui abrir a arvore de empresas")
+
+    def fechar_modais_ou_janelas_ativas(self):
+        self.limpezas += 1
+        return False
 
 
 REL_A = {"id": "rel_a", "exportacoes": []}
@@ -113,3 +118,95 @@ def test_executar_por_obra_respeita_tempo_limite(monkeypatch):
     assert chamadas == []
     assert op.trocas == []
     assert resultado["rel_a"] == {"ok": [], "sem_movimento": [], "falhou": []}
+
+
+def test_troca_de_empresa_tenta_de_novo_e_a_obra_nao_cai(monkeypatch):
+    """BUG REAL 2026-10-10: a arvore de empresas abriu mas o robo desistiu cedo,
+    e a obra 340 inteira falhou. A segunda tentativa deve salvar a obra."""
+    chamadas = []
+    monkeypatch.setattr(executar, "_rodar_relatorio_na_obra_ativa",
+                        lambda op, v, rel, obra, d, p: chamadas.append(obra["codigo"]) or ("sem_movimento", []))
+
+    class OperadorFlaky(_OperadorFalso):
+        def trocar_empresa(self, codigo, nome=None):
+            self.trocas.append(codigo)
+            if codigo == "200" and self.trocas.count("200") == 1:
+                raise RuntimeError("nao consegui abrir a arvore de empresas")
+
+    op = OperadorFlaky()
+    resultado = executar.executar_por_obra(
+        op, v=object(), s=object(), relatorios=[REL_A], obras=OBRAS,
+        data_iso="2026-10-10", pasta=Path("."), falhas_dir=Path("."), log=_sem_log)
+
+    assert op.trocas == ["100", "200", "200", "300"]
+    assert op.limpezas == 1          # limpou o estado entre as tentativas
+    assert chamadas == ["100", "200", "300"]
+    assert resultado["rel_a"]["falhou"] == []
+
+
+def test_troca_desiste_apos_tres_tentativas(monkeypatch):
+    monkeypatch.setattr(executar, "_rodar_relatorio_na_obra_ativa",
+                        lambda *a: ("sem_movimento", []))
+    op = _OperadorFalso(falha_trocar={"200"})
+    executar.executar_por_obra(
+        op, v=object(), s=object(), relatorios=[REL_A], obras=OBRAS,
+        data_iso="2026-10-10", pasta=Path("."), falhas_dir=Path("."), log=_sem_log)
+    assert op.trocas.count("200") == 3
+
+
+def _rodar_com_falha_em(monkeypatch, falha_em, op):
+    """Roda 1 obra com 3 relatorios; o relatorio `falha_em` levanta erro."""
+    rels = [{"id": "r1", "exportacoes": []}, {"id": "r2", "exportacoes": []},
+            {"id": "r3", "exportacoes": []}]
+    chamadas = []
+
+    def rodar(op_, v, rel, obra, data_iso, pasta):
+        chamadas.append(rel["id"])
+        if rel["id"] == falha_em:
+            raise RuntimeError("o painel de busca de telas nao abriu")
+        return ("sem_movimento", [])
+
+    monkeypatch.setattr(executar, "_rodar_relatorio_na_obra_ativa", rodar)
+    resultado = executar.executar_por_obra(
+        op, v=object(), s=object(), relatorios=rels, obras=OBRAS[:1],
+        data_iso="2026-10-10", pasta=Path("."), falhas_dir=Path("."), log=_sem_log)
+    return resultado, chamadas
+
+
+def test_falha_de_relatorio_reinicia_o_estado_antes_do_proximo(monkeypatch):
+    """Cascata de 2026-10-09/10: um modal deixado por um relatorio derrubava
+    todos os seguintes. Apos a falha, limpa a tela e troca de empresa de novo."""
+    op = _OperadorFalso()
+    resultado, chamadas = _rodar_com_falha_em(monkeypatch, "r1", op)
+
+    assert chamadas == ["r1", "r2", "r3"]
+    assert op.trocas == ["100", "100"]       # troca inicial + recuperacao
+    assert op.limpezas == 1
+    assert [f["obra"] for f in resultado["r1"]["falhou"]] == ["100"]
+    assert resultado["r2"]["sem_movimento"] == ["100"]
+
+
+def test_falha_no_ultimo_relatorio_nao_gasta_recuperacao(monkeypatch):
+    op = _OperadorFalso()
+    _rodar_com_falha_em(monkeypatch, "r3", op)
+    assert op.trocas == ["100"]
+
+
+def test_recuperacao_que_falha_reinicia_a_sessao_e_depois_desiste(monkeypatch):
+    class OperadorQuebra(_OperadorFalso):
+        def trocar_empresa(self, codigo, nome=None):
+            self.trocas.append(codigo)
+            if len(self.trocas) > 1:          # a troca inicial passa; depois nao
+                raise RuntimeError("nao consegui abrir a arvore de empresas")
+
+    reconexoes = []
+    novo = OperadorQuebra()
+    novo.trocas.append("antes")             # a sessao nova tambem nao consegue trocar
+    monkeypatch.setattr(executar, "reconectar_sessao",
+                        lambda s, log: reconexoes.append(1) or (novo, object()))
+    resultado, chamadas = _rodar_com_falha_em(monkeypatch, "r1", OperadorQuebra())
+
+    assert chamadas == ["r1"]                  # r2 e r3 nem foram tentados
+    assert len(reconexoes) == 1
+    assert [f["obra"] for f in resultado["r2"]["falhou"]] == ["100"]
+    assert [f["obra"] for f in resultado["r3"]["falhou"]] == ["100"]

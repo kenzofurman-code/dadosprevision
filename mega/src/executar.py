@@ -439,6 +439,51 @@ def executar_relatorio(op, v, s, rel, obras, data_iso, pasta, falhas_dir, log):
     return resultado
 
 
+def _trocar_com_retentativa(op, obra, log, tentativas=3):
+    """Troca de empresa com nova tentativa.
+
+    A troca falha de forma intermitente (a arvore de empresas abre, mas o robo
+    desiste cedo e deixa o modal aberto), e uma falha aqui derrubava a obra
+    inteira: 2026-10-10 obra 340, 2026-10-04 obra 410. Entre as tentativas
+    limpa o estado, o que fecha uma arvore que ficou aberta. Sessao fechada nao
+    se resolve aqui: relanca na hora para o chamador reconectar.
+    """
+    for tentativa in range(1, tentativas + 1):
+        try:
+            op.trocar_empresa(obra["codigo"], obra["nome"])
+            return
+        except Exception as e:
+            if "closed" in str(e).lower() or op.pagina.is_closed() or tentativa == tentativas:
+                raise
+            log("   troca de empresa falhou (tentativa %d/%d): %s"
+                % (tentativa, tentativas, str(e).splitlines()[0][:80]))
+            try:
+                op.fechar_modais_ou_janelas_ativas()
+            except Exception:
+                pass
+
+
+def _recuperar_estado(op, v, s, obra, log, sessao_caida):
+    """Devolve (op, v, ok): a obra volta a um estado conhecido apos uma falha.
+
+    Primeiro o mais barato (fechar modais e trocar de empresa de novo); se nao
+    bastar, reinicia a sessao. Sessao ja caida pula direto para o reinicio.
+    """
+    etapas = ("reconectar",) if sessao_caida else ("limpar", "reconectar")
+    for etapa in etapas:
+        try:
+            if etapa == "reconectar":
+                op, v = reconectar_sessao(s, log)
+            else:
+                op.fechar_modais_ou_janelas_ativas()
+            _trocar_com_retentativa(op, obra, log)
+            log("   estado recuperado (%s)" % etapa)
+            return op, v, True
+        except Exception as e:
+            log("   recuperacao (%s) falhou: %s" % (etapa, str(e).splitlines()[0][:80]))
+    return op, v, False
+
+
 def executar_por_obra(op, v, s, relatorios, obras, data_iso, pasta, falhas_dir, log,
                       tempo_limite=None):
     """Para cada obra, troca de empresa UMA vez e roda todos os relatorios em
@@ -471,7 +516,7 @@ def executar_por_obra(op, v, s, relatorios, obras, data_iso, pasta, falhas_dir, 
                 log("   sessao caida; reconectando")
                 op, v = reconectar_sessao(s, log)
                 log("   reconectado")
-            op.trocar_empresa(obra["codigo"], obra["nome"])
+            _trocar_com_retentativa(op, obra, log)
         except Exception as e:
             log("   FALHOU ao trocar de empresa: %s" % str(e).splitlines()[0][:110])
             if "closed" in str(e).lower() or (op is not None and op.pagina.is_closed()):
@@ -479,7 +524,7 @@ def executar_por_obra(op, v, s, relatorios, obras, data_iso, pasta, falhas_dir, 
                     op, v = reconectar_sessao(s, log)
                     log("   reconectado apos queda na troca de empresa")
                     try:
-                        op.trocar_empresa(obra["codigo"], obra["nome"])
+                        _trocar_com_retentativa(op, obra, log)
                         e = None
                     except Exception as e_retry:
                         e = e_retry
@@ -497,7 +542,7 @@ def executar_por_obra(op, v, s, relatorios, obras, data_iso, pasta, falhas_dir, 
                         pass
                 continue
 
-        for rel in relatorios:
+        for j, rel in enumerate(relatorios):
             try:
                 estado, caminhos = _rodar_relatorio_na_obra_ativa(
                     op, v, rel, obra, data_iso, pasta)
@@ -513,22 +558,28 @@ def executar_por_obra(op, v, s, relatorios, obras, data_iso, pasta, falhas_dir, 
                 log("   [%s] FALHOU: %s" % (rel["id"], str(e).splitlines()[0][:110]))
                 resultados[rel["id"]]["falhou"].append(
                     {"obra": obra["codigo"], "motivo": str(e)})
-                if "closed" in str(e).lower() or (op is not None and op.pagina.is_closed()):
-                    try:
-                        op, v = reconectar_sessao(s, log)
-                        log("   reconectado apos queda")
-                        try:
-                            op.trocar_empresa(obra["codigo"], obra["nome"])
-                        except Exception:
-                            pass
-                    except Exception as e2:
-                        log("   reconexao falhou: %s" % str(e2).splitlines()[0][:80])
-                if op is not None:
+                sessao_caida = ("closed" in str(e).lower()
+                                or (op is not None and op.pagina.is_closed()))
+                if op is not None and not sessao_caida:
                     try:
                         op.pagina.screenshot(path=str(falhas_dir / (
                             "%s_%s_%s.png" % (data_iso, obra["codigo"], rel["id"]))))
                     except Exception:
                         pass
+                restantes = relatorios[j + 1:]
+                if not restantes:
+                    continue
+                # Uma falha costuma deixar a tela suja (modal aberto, tela anterior,
+                # arvore de empresas) e os relatorios seguintes da obra caiam em
+                # cadeia (2026-10-09 e 10-10). Reinicia o estado antes de seguir.
+                op, v, ok = _recuperar_estado(op, v, s, obra, log, sessao_caida)
+                if not ok:
+                    for r in restantes:
+                        resultados[r["id"]]["falhou"].append(
+                            {"obra": obra["codigo"],
+                             "motivo": "recuperacao apos falha em %s: %s"
+                                       % (rel["id"], str(e))})
+                    break
     return resultados
 
 
