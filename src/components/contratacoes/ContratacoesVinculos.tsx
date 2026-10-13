@@ -16,6 +16,7 @@ export function ContratacoesVinculos({ projectId, config, onChanged }: {
   const [filtros, setFiltros] = useState<Record<Tipo, boolean>>({ MATERIAL: true, MAO_DE_OBRA: true })
   const [busca, setBusca] = useState('')
   const [buscaEtapas, setBuscaEtapas] = useState('')
+  const [ocultarVinculadas, setOcultarVinculadas] = useState(false)
   const [ocupado, setOcupado] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
@@ -28,16 +29,30 @@ export function ContratacoesVinculos({ projectId, config, onChanged }: {
     }
     return mapa
   }, [config.grupos])
+  // Valor da etapa (nível 5) que ainda não tem grupo daquele tipo. Sem custo
+  // importado, qualquer tipo sem grupo conta como pendente.
+  const custoPorEtapa = useMemo(() => new Map(config.etapas.map((e) => [e.codigo_etapa, e.custos])), [config.etapas])
+  const pendente = (codigo: string, tipo: Tipo) => !vinculos.has(`${codigo}|${tipo}`)
+    && (!config.importacao || (custoPorEtapa.get(codigo)?.[tipo] || 0) !== 0)
+  // Nível 4: vinculado quando todas as filhas com valor daquele tipo já têm grupo.
+  const vinculado = (etapa: Config['etapas'][number], tipo: Tipo) => {
+    const codigos = etapa.nivel === 4 ? etapa.filhos : [etapa.codigo_etapa]
+    return codigos.some((c) => vinculos.has(`${c}|${tipo}`)) && !codigos.some((c) => pendente(c, tipo))
+  }
   const etapas = useMemo(() => {
     const q = normalizar(buscaEtapas)
-    const correspondentes = new Set(config.etapas.filter((e) => normalizar(`${e.codigo_etapa} ${e.nome}`).includes(q)).map((e) => e.codigo_etapa))
+    const comPendencia = (e: Config['etapas'][number]) => (e.nivel === 4 ? e.filhos : [e.codigo_etapa])
+      .some((c) => tipos.some((t) => pendente(c, t)))
+    const correspondentes = new Set(config.etapas
+      .filter((e) => normalizar(`${e.codigo_etapa} ${e.nome}`).includes(q) && (!ocultarVinculadas || comPendencia(e)))
+      .map((e) => e.codigo_etapa))
     const visiveis = new Set(correspondentes)
     for (const etapa of config.etapas.filter((e) => e.nivel === 4)) {
-      if (correspondentes.has(etapa.codigo_etapa)) etapa.filhos.forEach((c) => visiveis.add(c))
+      if (correspondentes.has(etapa.codigo_etapa)) etapa.filhos.filter((c) => correspondentes.has(c) || !ocultarVinculadas).forEach((c) => visiveis.add(c))
       if (etapa.filhos.some((c) => correspondentes.has(c))) visiveis.add(etapa.codigo_etapa)
     }
     return config.etapas.filter((e) => visiveis.has(e.codigo_etapa))
-  }, [config.etapas, buscaEtapas])
+  }, [config.etapas, buscaEtapas, ocultarVinculadas, vinculos, custoPorEtapa, config.importacao])
   const termos = normalizar(busca).split(/\s+/).filter(Boolean)
   const grupos = config.grupos.filter((g) => filtros[g.tipo] && termos.every((termo) =>
     normalizar(`${g.item} ${g.insumos || ''} ${g.pacote_servicos || ''}`).includes(termo)))
@@ -95,7 +110,13 @@ export function ContratacoesVinculos({ projectId, config, onChanged }: {
       <div className="cc-vinculo-paineis">
         <section className="cc-vinculo-painel" aria-label="Etapas da EAP">
           <div className="cc-vinculo-cabecalho">
-            <h4>Etapas da EAP <span className="cc-muted">({etapas.length})</span></h4>
+            <div className="cc-vinculo-titulo">
+              <h4>Etapas da EAP <span className="cc-muted">({etapas.length})</span></h4>
+              <label className="cc-ocultar-vinculadas">
+                <input type="checkbox" checked={ocultarVinculadas} onChange={(e) => setOcultarVinculadas(e.target.checked)} />
+                Ocultar etapas já vinculadas
+              </label>
+            </div>
             <div className="cc-vinculo-filtros">
               <span className="cc-custo-resumo">Custo projetado<strong>{mil(totalProjetado)} R$ mil</strong></span>
               <input type="search" aria-label="Buscar etapas da EAP" placeholder="Buscar código ou etapa" value={buscaEtapas} onChange={(e) => setBuscaEtapas(e.target.value)} />
@@ -117,7 +138,8 @@ export function ContratacoesVinculos({ projectId, config, onChanged }: {
                         <input type="checkbox" disabled={ocupado} checked={checked} ref={(input) => { if (input) input.indeterminate = parcial }}
                           aria-label={`${labels[tipo]} da etapa ${etapa.codigo_etapa} ${etapa.nome}`}
                           onChange={(e) => marcar(tipo, codigos, e.target.checked)} />
-                        <span>{mil(etapa.custos[tipo])}</span>
+                        <span className={vinculado(etapa, tipo) ? 'cc-valor-vinculado' : undefined}
+                          title={vinculado(etapa, tipo) ? 'Valor já vinculado a um grupo' : undefined}>{mil(etapa.custos[tipo])}</span>
                       </label>
                       <small className="cc-vinculo-atual" title={grupo}>{etapa.nivel === 4 ? `${codigos.filter((c) => vinculos.has(`${c}|${tipo}`)).length}/${codigos.length} vinculadas` : grupo || 'Sem vínculo'}</small>
                     </td>

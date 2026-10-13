@@ -42,6 +42,9 @@
 .cc-vinculo-painel { min-width: 0; border: 1px solid var(--border, #dde3e6); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
 .cc-vinculo-cabecalho { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-bottom: 1px solid var(--border, #dde3e6); }
 .cc-vinculo-cabecalho h4 { margin: 0; min-height: 24px; }
+.cc-vinculo-titulo { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.cc-ocultar-vinculadas { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; cursor: pointer; }
+.cc-valor-vinculado { text-decoration: line-through; text-decoration-thickness: 1px; opacity: .55; }
 .cc-vinculo-cabecalho input[type="search"] { min-width: 0; font: inherit; padding: 8px 10px; border: 1px solid var(--border, #dde3e6); border-radius: 6px; background: transparent; color: inherit; }
 .cc-vinculo-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-height: 40px; }
 .cc-vinculo-filtros label { display: flex; align-items: center; gap: 5px; font-size: 13px; }
