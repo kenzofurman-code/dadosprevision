@@ -45,6 +45,7 @@ import { MegaView } from './MegaView'
 import { DiarioView } from './DiarioView'
 import { DiarioIndicadores } from './components/diario/DiarioIndicadores'
 import { DiarioEfetivo } from './components/diario/DiarioEfetivo'
+import { PainelTeorico } from './components/painel-teorico/PainelTeorico'
 import { ContratacoesConfig } from './components/contratacoes/ContratacoesConfig'
 import { ContratacoesMacro } from './components/contratacoes/ContratacoesMacro'
 
@@ -65,7 +66,7 @@ type DataView =
   | 'dados_diario'
   | 'gestao_a_vista'
 
-type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix' | 'panel5' | 'milestones' | 'contratacoes' | 'diario' | 'efetivo'
+type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix' | 'panel5' | 'milestones' | 'contratacoes' | 'diario' | 'efetivo' | 'teorico'
 type GestaoTablePanel = 'panel1' | 'panel2' | 'panel3'
 type ReorderableGestaoPanel = GestaoTablePanel | 'panel4'
 
@@ -4030,6 +4031,14 @@ function App() {
                   <Users size={14} />
                   <span>Painel 8: Efetivo</span>
                 </button>
+                <button
+                  type="button"
+                  className={`gestao-panel-tab-btn ${gestaoPanelTab === 'teorico' ? 'active' : ''}`}
+                  onClick={() => setGestaoPanelTab('teorico')}
+                >
+                  <Percent size={14} />
+                  <span>Painel 9: Teórico x Físico</span>
+                </button>
 
                 <div className="gestao-top-actions">
                   <button
@@ -4775,6 +4784,11 @@ function App() {
 
               {gestaoPanelTab === 'diario' && <DiarioIndicadores />}
               {gestaoPanelTab === 'efetivo' && <DiarioEfetivo />}
+              {gestaoPanelTab === 'teorico' && (
+                selectedProject
+                  ? <PainelTeorico projectId={selectedProject} />
+                  : <div className="gestao-card"><p>Selecione um projeto para ver o teórico x físico.</p></div>
+              )}
 
               {gestaoPanelTab === 'panel5' && (
                 <div className={a4LayoutMode ? 'a4-landscape-container' : ''}>
