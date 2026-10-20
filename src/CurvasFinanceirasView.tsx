@@ -13,6 +13,8 @@ import {
   Trash2,
   Calendar,
   Layers,
+  Save,
+  History,
 } from 'lucide-react'
 import './CurvasFinanceirasView.css'
 
@@ -26,6 +28,33 @@ interface CurvaKpis {
   totalMeses: number
   inicioProjecao: string | null
   fimProjecao: string | null
+  dataFimObraEtapas?: string | null
+  dataLiberacaoRetencao?: string | null
+}
+
+interface RegraOrigem {
+  codigo_origem: string
+  nivel: number
+}
+
+interface EtapaHierarquia {
+  codigo: string
+  nome: string
+  nivel: number
+}
+
+interface VersaoResumo {
+  id: number
+  nome: string
+  criado_em: string
+  total_orcado: number | null
+}
+
+interface VersaoAberta {
+  id: number
+  nome: string
+  criado_em: string
+  payload: Partial<CurvasApiResponse>
 }
 
 interface CurvaMensalPonto {
@@ -52,6 +81,8 @@ interface CurvaEtapaCalculada {
   custo_material: number
   custo_mao_obra: number
   custo_total: number
+  regraMaterial?: RegraOrigem | null
+  regraMo?: RegraOrigem | null
 }
 
 interface CurvaParametrosObra {
@@ -60,6 +91,9 @@ interface CurvaParametrosObra {
   prazo_pagamento_padrao_dias: number
   dia_corte_medicao_mo: number
   dia_pagamento_mo: number
+  retencao_mo_ativa?: boolean
+  retencao_mo_percentual?: number
+  data_fim_obra?: string | null
   atualizado_em?: string | null
 }
 
@@ -73,6 +107,8 @@ interface CurvaParametroEtapa {
   tipo_pagamento: 'DIAS' | 'PARCELADO'
   prazo_dias: number | null
   parcelas_dias: number[] | null
+  retencao_ativa?: boolean | null
+  retencao_percentual?: number | null
   observacao?: string | null
 }
 
@@ -88,6 +124,7 @@ interface CurvasApiResponse {
   } | null
   parametrosObra: CurvaParametrosObra
   parametrosEtapas: CurvaParametroEtapa[]
+  etapasHierarquia?: EtapaHierarquia[]
   kpis: CurvaKpis
   meses: string[]
   seriesMensal: CurvaMensalPonto[]
@@ -119,10 +156,30 @@ const formatMonthLabel = (mesIso: string) => {
   return `${nomes[idx] || mes}/${ano.slice(2)}`
 }
 
+const formatDataBr = (iso?: string | null) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '-')
+
+// Gera os prazos das parcelas: n parcelas, a 1ª em `primeiro` dias e as demais a cada `intervalo` dias
+const gerarParcelas = (n: number, primeiro: number, intervalo: number) =>
+  Array.from({ length: Math.min(60, Math.max(1, n)) }, (_, i) => primeiro + i * intervalo)
+
+const resumoParcelas = (dias: number[]) =>
+  dias.length > 1 ? `${dias.length}× · ${dias[0]} a ${dias[dias.length - 1]} dias` : `${dias[0] ?? 0} dias`
+
+const nivelDoCodigo = (codigo: string) => codigo.split('.').length
+
 export function CurvasFinanceirasView({ projectId, projectName, projects, onSelectProject }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [data, setData] = useState<CurvasApiResponse | null>(null)
+  const [dadosAtuais, setDadosAtuais] = useState<CurvasApiResponse | null>(null)
+
+  // Versões salvas: quando uma está aberta, a tela mostra o payload congelado (somente leitura)
+  const [versoes, setVersoes] = useState<VersaoResumo[]>([])
+  const [versaoAberta, setVersaoAberta] = useState<VersaoAberta | null>(null)
+  const [salvandoVersao, setSalvandoVersao] = useState(false)
+  const data = useMemo<CurvasApiResponse | null>(
+    () => (versaoAberta && dadosAtuais ? { ...dadosAtuais, ...versaoAberta.payload } : dadosAtuais),
+    [dadosAtuais, versaoAberta]
+  )
 
   const [activeTab, setActiveTab] = useState<TabMode>('grafico')
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('todos')
@@ -145,28 +202,52 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
     prazo_pagamento_padrao_dias: 28,
     dia_corte_medicao_mo: 20,
     dia_pagamento_mo: 5,
+    retencao_mo_ativa: false,
+    retencao_mo_percentual: 5,
+    data_fim_obra: '',
   })
 
   // Draft Parâmetros de Etapa
   const [draftEtapa, setDraftEtapa] = useState<{
     codigo_etapa: string
+    nivel: 3 | 4 | 5
     tipo: 'MATERIAL' | 'MAO_DE_OBRA'
     dias_antecedencia: number | ''
     num_entregas: number | ''
     tipo_pagamento: 'DIAS' | 'PARCELADO'
     prazo_dias: number | ''
     parcelas_str: string
+    ger_parcelas: number
+    ger_primeiro: number
+    ger_intervalo: number
+    retencao_modo: 'HERDAR' | 'SIM' | 'NAO'
+    retencao_percentual: number | ''
     observacao: string
   }>({
     codigo_etapa: '',
+    nivel: 5,
     tipo: 'MATERIAL',
     dias_antecedencia: 10,
     num_entregas: '',
     tipo_pagamento: 'DIAS',
     prazo_dias: 28,
-    parcelas_str: '30, 60, 90',
+    parcelas_str: '30, 60',
+    ger_parcelas: 2,
+    ger_primeiro: 30,
+    ger_intervalo: 30,
+    retencao_modo: 'HERDAR',
+    retencao_percentual: '',
     observacao: '',
   })
+
+  const parcelasDoDraft = useMemo(
+    () =>
+      draftEtapa.parcelas_str
+        .split(/[,/;\s]+/)
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => !isNaN(n) && n > 0),
+    [draftEtapa.parcelas_str]
+  )
 
   // Carregar dados da API
   const carregarDados = useCallback(async (pId: string) => {
@@ -179,13 +260,16 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
       if (!res.ok || !json.ok) {
         throw new Error(json.error || 'Erro ao carregar curvas financeiras')
       }
-      setData(json)
+      setDadosAtuais(json)
       if (json.parametrosObra) {
         setDraftObra({
           dias_antecedencia_padrao: json.parametrosObra.dias_antecedencia_padrao ?? 10,
           prazo_pagamento_padrao_dias: json.parametrosObra.prazo_pagamento_padrao_dias ?? 28,
           dia_corte_medicao_mo: json.parametrosObra.dia_corte_medicao_mo ?? 20,
           dia_pagamento_mo: json.parametrosObra.dia_pagamento_mo ?? 5,
+          retencao_mo_ativa: Boolean(json.parametrosObra.retencao_mo_ativa),
+          retencao_mo_percentual: json.parametrosObra.retencao_mo_percentual ?? 5,
+          data_fim_obra: json.parametrosObra.data_fim_obra || '',
         })
       }
     } catch (err: any) {
@@ -196,11 +280,77 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
     }
   }, [])
 
+  const carregarVersoes = useCallback(async (pId: string) => {
+    if (!pId) return
+    try {
+      const res = await fetch(`/api/curvas-financeiras/versoes?projectId=${encodeURIComponent(pId)}`)
+      const json = await res.json()
+      if (res.ok && json.ok) setVersoes(json.versoes || [])
+    } catch (err) {
+      console.error('Erro ao listar versões das curvas:', err)
+    }
+  }, [])
+
   useEffect(() => {
+    setVersaoAberta(null)
+    setVersoes([])
     if (projectId) {
       carregarDados(projectId)
+      carregarVersoes(projectId)
     }
-  }, [projectId, carregarDados])
+  }, [projectId, carregarDados, carregarVersoes])
+
+  async function handleSalvarVersao() {
+    if (!projectId) return
+    const sugestao = `Versão ${new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`
+    const nome = prompt('Nome da versão:', sugestao)
+    if (nome === null) return
+    setSalvandoVersao(true)
+    try {
+      const res = await fetch('/api/curvas-financeiras/versoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, nome: nome.trim() || sugestao }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Erro ao salvar versão')
+      await carregarVersoes(projectId)
+    } catch (err: any) {
+      alert(`Erro: ${err.message}`)
+    } finally {
+      setSalvandoVersao(false)
+    }
+  }
+
+  async function handleAbrirVersao(id: string) {
+    if (!id) {
+      setVersaoAberta(null)
+      return
+    }
+    try {
+      const res = await fetch(`/api/curvas-financeiras/versoes/${id}?projectId=${encodeURIComponent(projectId)}`)
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Erro ao abrir versão')
+      setVersaoAberta(json.versao)
+    } catch (err: any) {
+      alert(`Erro: ${err.message}`)
+    }
+  }
+
+  async function handleExcluirVersao() {
+    if (!versaoAberta || !confirm(`Excluir a versão "${versaoAberta.nome}"? Essa ação não pode ser desfeita.`)) return
+    try {
+      const res = await fetch(`/api/curvas-financeiras/versoes/${versaoAberta.id}?projectId=${encodeURIComponent(projectId)}`, {
+        method: 'DELETE',
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Erro ao excluir versão')
+      setVersaoAberta(null)
+      await carregarVersoes(projectId)
+    } catch (err: any) {
+      alert(`Erro: ${err.message}`)
+    }
+  }
 
   // Mapa rápido de parâmetros configurados por etapa
   const mapaParametrosEtapas = useMemo(() => {
@@ -247,25 +397,42 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
     setSavingConfig(true)
     setConfigFeedback(null)
     try {
+      const ehMaterial = draftEtapa.tipo === 'MATERIAL'
       let parcelas: number[] | null = null
-      if (draftEtapa.tipo_pagamento === 'PARCELADO') {
-        parcelas = draftEtapa.parcelas_str
-          .split(/[,/ ]+/)
-          .map((s) => parseInt(s.trim(), 10))
-          .filter((n) => !isNaN(n) && n > 0)
-        if (!parcelas.length) parcelas = [30, 60, 90]
+      if (ehMaterial && draftEtapa.tipo_pagamento === 'PARCELADO') {
+        if (!parcelasDoDraft.length) throw new Error('Informe ao menos uma parcela.')
+        parcelas = parcelasDoDraft
       }
 
-      const paramPayload = {
-        codigo_etapa: draftEtapa.codigo_etapa,
-        tipo: draftEtapa.tipo,
-        dias_antecedencia: draftEtapa.dias_antecedencia !== '' ? Number(draftEtapa.dias_antecedencia) : null,
-        num_entregas: draftEtapa.num_entregas !== '' ? Number(draftEtapa.num_entregas) : null,
-        tipo_pagamento: draftEtapa.tipo_pagamento,
-        prazo_dias: draftEtapa.prazo_dias !== '' ? Number(draftEtapa.prazo_dias) : 28,
-        parcelas_dias: parcelas,
-        observacao: draftEtapa.observacao.trim() || null,
-      }
+      // Regra de Material: entrega e pagamento. Regra de MO: só retenção técnica (corte e pagamento são da obra).
+      const paramPayload = ehMaterial
+        ? {
+            codigo_etapa: draftEtapa.codigo_etapa,
+            tipo: draftEtapa.tipo,
+            dias_antecedencia: draftEtapa.dias_antecedencia !== '' ? Number(draftEtapa.dias_antecedencia) : null,
+            num_entregas: draftEtapa.num_entregas !== '' ? Number(draftEtapa.num_entregas) : null,
+            tipo_pagamento: draftEtapa.tipo_pagamento,
+            prazo_dias: draftEtapa.prazo_dias !== '' ? Number(draftEtapa.prazo_dias) : 28,
+            parcelas_dias: parcelas,
+            retencao_ativa: null,
+            retencao_percentual: null,
+            observacao: draftEtapa.observacao.trim() || null,
+          }
+        : {
+            codigo_etapa: draftEtapa.codigo_etapa,
+            tipo: draftEtapa.tipo,
+            dias_antecedencia: null,
+            num_entregas: null,
+            tipo_pagamento: 'DIAS',
+            prazo_dias: null,
+            parcelas_dias: null,
+            retencao_ativa: draftEtapa.retencao_modo === 'HERDAR' ? null : draftEtapa.retencao_modo === 'SIM',
+            retencao_percentual:
+              draftEtapa.retencao_modo === 'SIM' && draftEtapa.retencao_percentual !== ''
+                ? Number(draftEtapa.retencao_percentual)
+                : null,
+            observacao: draftEtapa.observacao.trim() || null,
+          }
 
       const res = await fetch('/api/curvas-financeiras/parametros', {
         method: 'POST',
@@ -316,20 +483,72 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
   }
 
   // Abrir edição de uma etapa específica
-  function abrirEdicaoEtapa(etapa: CurvaEtapaCalculada) {
-    const override = mapaParametrosEtapas.get(`${etapa.codigo_etapa}_MATERIAL`)
+  // Preenche o formulário com a regra já salva para (código, tipo) ou com os padrões da obra
+  function carregarRegraNoDraft(codigo: string, nivel: 3 | 4 | 5, tipo: 'MATERIAL' | 'MAO_DE_OBRA') {
+    const override = codigo ? mapaParametrosEtapas.get(`${codigo}_${tipo}`) : undefined
+    const parcelas = override?.parcelas_dias?.length ? override.parcelas_dias : [30, 60]
     setDraftEtapa({
-      codigo_etapa: etapa.codigo_etapa,
-      tipo: 'MATERIAL',
+      codigo_etapa: codigo,
+      nivel,
+      tipo,
       dias_antecedencia: override?.dias_antecedencia ?? draftObra.dias_antecedencia_padrao,
       num_entregas: override?.num_entregas ?? '',
       tipo_pagamento: override?.tipo_pagamento ?? 'DIAS',
       prazo_dias: override?.prazo_dias ?? draftObra.prazo_pagamento_padrao_dias,
-      parcelas_str: override?.parcelas_dias ? override.parcelas_dias.join(', ') : '30, 60, 90',
+      parcelas_str: parcelas.join(', '),
+      ger_parcelas: parcelas.length,
+      ger_primeiro: parcelas[0],
+      ger_intervalo: parcelas.length > 1 ? parcelas[1] - parcelas[0] : 30,
+      retencao_modo:
+        override?.retencao_ativa === true ? 'SIM' : override?.retencao_ativa === false ? 'NAO' : 'HERDAR',
+      retencao_percentual: override?.retencao_percentual ?? '',
       observacao: override?.observacao || '',
     })
+  }
+
+  function abrirEdicaoEtapa(etapa: CurvaEtapaCalculada) {
+    carregarRegraNoDraft(etapa.codigo_etapa, 5, 'MATERIAL')
     setConfigTab('etapa')
     setIsConfigOpen(true)
+  }
+
+  // Opções do seletor de etapa conforme o nível escolhido
+  const opcoesEtapaPorNivel = useMemo(() => {
+    if (draftEtapa.nivel === 5) {
+      return (data?.etapas || []).map((et) => ({ codigo: et.codigo_etapa, nome: et.nome, custo: et.custo_total }))
+    }
+    return (data?.etapasHierarquia || [])
+      .filter((e) => Number(e.nivel) === draftEtapa.nivel)
+      .map((e) => ({ codigo: e.codigo, nome: e.nome, custo: null as number | null }))
+  }, [data?.etapas, data?.etapasHierarquia, draftEtapa.nivel])
+
+  // Quantas etapas nível 5 usam efetivamente cada regra salva
+  const etapasAtingidasPorRegra = useMemo(() => {
+    const cont = new Map<string, number>()
+    for (const et of data?.etapas || []) {
+      if (et.regraMaterial) {
+        const k = `${et.regraMaterial.codigo_origem}_MATERIAL`
+        cont.set(k, (cont.get(k) || 0) + 1)
+      }
+      if (et.regraMo) {
+        const k = `${et.regraMo.codigo_origem}_MAO_DE_OBRA`
+        cont.set(k, (cont.get(k) || 0) + 1)
+      }
+    }
+    return cont
+  }, [data?.etapas])
+
+  const descreverRegra = (p: CurvaParametroEtapa) => {
+    if (p.tipo === 'MAO_DE_OBRA') {
+      if (p.retencao_ativa === true) return `Retenção técnica: ${p.retencao_percentual ?? draftObra.retencao_mo_percentual}%`
+      if (p.retencao_ativa === false) return 'Sem retenção técnica'
+      return 'Retenção: herda da obra'
+    }
+    const entrega = p.num_entregas ? `${p.num_entregas} entrega(s)` : 'conforme execução'
+    const pagto = p.tipo_pagamento === 'PARCELADO' && p.parcelas_dias?.length
+      ? resumoParcelas(p.parcelas_dias)
+      : `${p.prazo_dias ?? draftObra.prazo_pagamento_padrao_dias} dias`
+    return `Antecedência: ${p.dias_antecedencia ?? draftObra.dias_antecedencia_padrao}d • ${entrega} • Pagto: ${pagto}`
   }
 
   // Exportar dados para CSV
@@ -583,7 +802,8 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
             type="button"
             className="curvas-fin-btn curvas-fin-btn-secondary"
             onClick={() => setIsConfigOpen(true)}
-            title="Configurar regras de antecedência, lotes e prazos"
+            disabled={!!versaoAberta}
+            title={versaoAberta ? 'Volte ao cálculo atual para editar parâmetros' : 'Configurar regras de antecedência, lotes e prazos'}
           >
             <Settings2 size={16} />
             Parâmetros
@@ -592,15 +812,66 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
           <button
             type="button"
             className="curvas-fin-btn curvas-fin-btn-secondary"
-            onClick={() => carregarDados(projectId)}
-            disabled={loading}
-            title="Atualizar dados"
+            onClick={() => {
+              setVersaoAberta(null)
+              carregarDados(projectId)
+            }}
+            disabled={loading || !projectId}
+            title="Refaz o cálculo com o cronograma e o custo projetado atuais"
           >
             <RefreshCw size={16} className={loading ? 'spin' : ''} />
-            Recarregar
+            Recalcular
           </button>
+
+          <button
+            type="button"
+            className="curvas-fin-btn curvas-fin-btn-secondary"
+            onClick={handleSalvarVersao}
+            disabled={salvandoVersao || !projectId}
+            title="Congela o cálculo atual para consultar depois"
+          >
+            <Save size={16} />
+            {salvandoVersao ? 'Salvando...' : 'Salvar versão'}
+          </button>
+
+          <select
+            className="curvas-fin-project-select"
+            value={versaoAberta ? String(versaoAberta.id) : ''}
+            onChange={(e) => handleAbrirVersao(e.target.value)}
+            disabled={!projectId}
+            title="Visualizar o cálculo atual ou uma versão salva"
+          >
+            <option value="">Visualizando: cálculo atual</option>
+            {versoes.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.nome} — {new Date(v.criado_em).toLocaleDateString('pt-BR')}
+              </option>
+            ))}
+          </select>
         </div>
       </header>
+
+      {versaoAberta && (
+        <div className="feedback" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <History size={18} />
+          <span>
+            Versão <strong>{versaoAberta.nome}</strong>, salva em{' '}
+            {new Date(versaoAberta.criado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })} — somente leitura.
+          </span>
+          <button type="button" className="curvas-fin-btn curvas-fin-btn-secondary" onClick={() => setVersaoAberta(null)}>
+            Voltar ao atual
+          </button>
+          <button
+            type="button"
+            className="curvas-fin-btn curvas-fin-btn-secondary"
+            style={{ color: '#ef4444', borderColor: '#fca5a5' }}
+            onClick={handleExcluirVersao}
+          >
+            <Trash2 size={14} />
+            Excluir versão
+          </button>
+        </div>
+      )}
 
       {/* Alerta de Erro */}
       {error && (
@@ -627,8 +898,11 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
           </div>
 
           <div className="curvas-fin-kpi-card accent-amber">
-            <div className="curvas-fin-kpi-label">
-              <span>Realizado Histórico</span>
+            <div
+              className="curvas-fin-kpi-label"
+              title="Custo orçado × % físico executado (Prevision). Não é gasto real."
+            >
+              <span>Avanço Físico Valorizado</span>
               <TrendingUp size={14} />
             </div>
             <div className="curvas-fin-kpi-val">{formatCurrency(data.kpis.realizadoHistorico)}</div>
@@ -1142,7 +1416,11 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
               </thead>
               <tbody>
                 {etapasFiltradas.map((et) => {
-                  const overrideMat = mapaParametrosEtapas.get(`${et.codigo_etapa}_MATERIAL`)
+                  const origemMat = et.regraMaterial
+                  const overrideMat = origemMat ? mapaParametrosEtapas.get(`${origemMat.codigo_origem}_MATERIAL`) : undefined
+                  const overrideMo = et.regraMo ? mapaParametrosEtapas.get(`${et.regraMo.codigo_origem}_MAO_DE_OBRA`) : undefined
+                  const herdada = (o?: RegraOrigem | null) =>
+                    o && o.nivel < 5 ? ` · herdada de ${o.codigo_origem} (N${o.nivel})` : ''
                   return (
                     <tr key={et.codigo_etapa}>
                       <td className="col-left" style={{ fontFamily: 'monospace' }}>
@@ -1162,12 +1440,19 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                       <td style={{ fontWeight: 700 }}>{formatCurrency(et.custo_total)}</td>
                       <td className="col-left">
                         {overrideMat ? (
-                          <span className="curvas-fin-badge-override" title={`Antecedência: ${overrideMat.dias_antecedencia}d, Lotes: ${overrideMat.num_entregas || 'Proporcional'}, Pagto: ${overrideMat.prazo_dias}d`}>
-                            Customizado ({overrideMat.num_entregas ? `${overrideMat.num_entregas} lotes` : 'proporcional'} / {overrideMat.prazo_dias}d)
+                          <span className="curvas-fin-badge-override" title={`Material: ${descreverRegra(overrideMat)}${herdada(origemMat)}`}>
+                            Material: {overrideMat.num_entregas ? `${overrideMat.num_entregas} lotes` : 'conforme execução'}
+                            {herdada(origemMat)}
                           </span>
                         ) : (
                           <span className="curvas-fin-badge-default">
-                            Padrão ({draftObra.dias_antecedencia_padrao}d ant. / {draftObra.prazo_pagamento_padrao_dias}d prazo)
+                            Material: padrão ({draftObra.dias_antecedencia_padrao}d ant. / {draftObra.prazo_pagamento_padrao_dias}d prazo)
+                          </span>
+                        )}
+                        {overrideMo && (
+                          <span className="curvas-fin-badge-override" style={{ marginLeft: 4 }} title={descreverRegra(overrideMo)}>
+                            MO: {descreverRegra(overrideMo)}
+                            {herdada(et.regraMo)}
                           </span>
                         )}
                       </td>
@@ -1177,6 +1462,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                           className="curvas-fin-btn curvas-fin-btn-secondary"
                           style={{ padding: '4px 8px', fontSize: '11.5px' }}
                           onClick={() => abrirEdicaoEtapa(et)}
+                          disabled={!!versaoAberta}
                         >
                           <Settings2 size={12} />
                           Configurar
@@ -1235,9 +1521,10 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                   <div className="curvas-fin-card-info">
                     <strong>Regras de Padrão Corporativo Piemonte:</strong>
                     <br />
-                    Mão de Obra tem medições cortadas no <strong>dia 20</strong> (gerando competência no mês) e desembolso
-                    no <strong>dia 5 do mês seguinte</strong>. Materiais são entregues com dias de antecedência para montagem
-                    e pagos segundo o prazo médio negociado.
+                    Mão de Obra executada de 21/M-1 a 20/M é competência de M e é paga no dia configurado de M+1. Com
+                    retenção técnica, o percentual retido sai só do financeiro e é pago 1 ano após o fim da obra.
+                    Material vira competência quando chega na obra (dias de antecedência antes da execução) e é pago
+                    segundo a condição de pagamento.
                   </div>
 
                   <div className="curvas-fin-form-grid">
@@ -1300,6 +1587,49 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                       />
                       <span className="curvas-fin-hint">Dia de desembolso no mês M+1 (padrão 5).</span>
                     </div>
+
+                    <div className="curvas-fin-form-field">
+                      <label>Retenção Técnica de MO</label>
+                      <select
+                        value={draftObra.retencao_mo_ativa ? 'SIM' : 'NAO'}
+                        onChange={(e) => setDraftObra({ ...draftObra, retencao_mo_ativa: e.target.value === 'SIM' })}
+                      >
+                        <option value="NAO">Não</option>
+                        <option value="SIM">Sim</option>
+                      </select>
+                      <span className="curvas-fin-hint">Padrão da obra. Cada etapa pode mudar na regra de Mão de Obra.</span>
+                    </div>
+
+                    <div className="curvas-fin-form-field">
+                      <label>% de Retenção</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.5"
+                        value={draftObra.retencao_mo_percentual}
+                        disabled={!draftObra.retencao_mo_ativa}
+                        onChange={(e) =>
+                          setDraftObra({ ...draftObra, retencao_mo_percentual: parseFloat(e.target.value) || 0 })
+                        }
+                      />
+                      <span className="curvas-fin-hint">Retido de cada medição, só no financeiro (ex: 5).</span>
+                    </div>
+
+                    <div className="curvas-fin-form-field">
+                      <label>Data de Fim da Obra</label>
+                      <input
+                        type="date"
+                        value={draftObra.data_fim_obra}
+                        onChange={(e) => setDraftObra({ ...draftObra, data_fim_obra: e.target.value })}
+                      />
+                      <span className="curvas-fin-hint">
+                        A retenção é paga 1 ano depois desta data.
+                        {!draftObra.data_fim_obra && data?.kpis?.dataFimObraEtapas
+                          ? ` Vazio: usa o fim do cronograma (${formatDataBr(data.kpis.dataFimObraEtapas)}).`
+                          : ''}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="curvas-fin-modal-footer" style={{ padding: 0, background: 'transparent' }}>
@@ -1316,22 +1646,102 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                   <form onSubmit={handleSalvarEtapa} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                     <h4 style={{ margin: 0, fontSize: '14px' }}>Adicionar / Editar Regra de Etapa</h4>
 
+                    <div className="curvas-fin-form-grid">
+                      <div className="curvas-fin-form-field">
+                        <label>Tipo de Custo</label>
+                        <select
+                          value={draftEtapa.tipo}
+                          onChange={(e) =>
+                            carregarRegraNoDraft(
+                              draftEtapa.codigo_etapa,
+                              draftEtapa.nivel,
+                              e.target.value as 'MATERIAL' | 'MAO_DE_OBRA'
+                            )
+                          }
+                        >
+                          <option value="MATERIAL">Material</option>
+                          <option value="MAO_DE_OBRA">Mão de Obra</option>
+                        </select>
+                      </div>
+
+                      <div className="curvas-fin-form-field">
+                        <label>Nível da Etapa</label>
+                        <select
+                          value={draftEtapa.nivel}
+                          onChange={(e) => carregarRegraNoDraft('', Number(e.target.value) as 3 | 4 | 5, draftEtapa.tipo)}
+                        >
+                          <option value={3}>Nível 3 (vale para todas as etapas abaixo)</option>
+                          <option value={4}>Nível 4 (vale para todas as etapas abaixo)</option>
+                          <option value={5}>Nível 5 (etapa específica)</option>
+                        </select>
+                      </div>
+                    </div>
+
                     <div className="curvas-fin-form-field">
-                      <label>Etapa de Nível 5 (Orçamento / Cronograma)</label>
+                      <label>Etapa de Nível {draftEtapa.nivel} (Orçamento / Cronograma)</label>
                       <select
                         value={draftEtapa.codigo_etapa}
-                        onChange={(e) => setDraftEtapa({ ...draftEtapa, codigo_etapa: e.target.value })}
+                        onChange={(e) => carregarRegraNoDraft(e.target.value, draftEtapa.nivel, draftEtapa.tipo)}
                         required
                       >
                         <option value="">Selecione a etapa...</option>
-                        {data?.etapas?.map((et) => (
-                          <option key={et.codigo_etapa} value={et.codigo_etapa}>
-                            {et.codigo_etapa} — {et.nome} ({formatCurrency(et.custo_total)})
+                        {opcoesEtapaPorNivel.map((et) => (
+                          <option key={et.codigo} value={et.codigo}>
+                            {et.codigo} — {et.nome}
+                            {et.custo !== null ? ` (${formatCurrency(et.custo)})` : ''}
                           </option>
                         ))}
                       </select>
+                      {draftEtapa.nivel < 5 && (
+                        <span className="curvas-fin-hint">
+                          Uma regra de nível {draftEtapa.nivel} vale para todas as etapas de nível 5 abaixo dela, exceto
+                          as que tiverem regra própria em nível mais baixo.
+                        </span>
+                      )}
                     </div>
 
+                    {draftEtapa.tipo === 'MAO_DE_OBRA' ? (
+                      <div className="curvas-fin-form-grid">
+                        <div className="curvas-fin-form-field">
+                          <label>Tem Retenção Técnica?</label>
+                          <select
+                            value={draftEtapa.retencao_modo}
+                            onChange={(e) =>
+                              setDraftEtapa({ ...draftEtapa, retencao_modo: e.target.value as 'HERDAR' | 'SIM' | 'NAO' })
+                            }
+                          >
+                            <option value="HERDAR">
+                              Usar padrão da obra ({draftObra.retencao_mo_ativa ? `sim, ${draftObra.retencao_mo_percentual}%` : 'não'})
+                            </option>
+                            <option value="SIM">Sim</option>
+                            <option value="NAO">Não</option>
+                          </select>
+                        </div>
+                        {draftEtapa.retencao_modo === 'SIM' && (
+                          <div className="curvas-fin-form-field">
+                            <label>% de Retenção</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              placeholder={`Padrão: ${draftObra.retencao_mo_percentual}%`}
+                              value={draftEtapa.retencao_percentual}
+                              onChange={(e) =>
+                                setDraftEtapa({
+                                  ...draftEtapa,
+                                  retencao_percentual: e.target.value === '' ? '' : parseFloat(e.target.value),
+                                })
+                              }
+                            />
+                            <span className="curvas-fin-hint">
+                              Retido só do financeiro; pago em{' '}
+                              {formatDataBr(data?.kpis?.dataLiberacaoRetencao)} (1 ano após o fim da obra).
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
                     <div className="curvas-fin-form-grid">
                       <div className="curvas-fin-form-field">
                         <label>Dias de Antecedência</label>
@@ -1354,7 +1764,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                           type="number"
                           min="1"
                           max="24"
-                          placeholder="Ex: 5 (vazio = proporcional ao cronograma)"
+                          placeholder="Vazio = chega conforme a execução"
                           value={draftEtapa.num_entregas}
                           onChange={(e) =>
                             setDraftEtapa({
@@ -1363,7 +1773,10 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                             })
                           }
                         />
-                        <span className="curvas-fin-hint">Ex: 5 entregas dividirá 100% em 5 lotes de 20% espaçados uniformemente.</span>
+                        <span className="curvas-fin-hint">
+                          Vazio: o material chega conforme a execução (proporcional ao cronograma). 1: chega 100% antes do
+                          início do serviço. N: N lotes iguais espaçados ao longo da etapa.
+                        </span>
                       </div>
 
                       <div className="curvas-fin-form-field">
@@ -1378,7 +1791,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                           }
                         >
                           <option value="DIAS">Prazo Médio Único (ex: 28 dias)</option>
-                          <option value="PARCELADO">Parcelado em até 6x (ex: 30, 60, 90)</option>
+                          <option value="PARCELADO">Parcelado (ex: 30/60 ou 12× a cada 28 dias)</option>
                         </select>
                       </div>
 
@@ -1399,18 +1812,74 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                           />
                         </div>
                       ) : (
-                        <div className="curvas-fin-form-field">
-                          <label>Dias das Parcelas (separados por vírgula)</label>
-                          <input
-                            type="text"
-                            placeholder="30, 60, 90"
-                            value={draftEtapa.parcelas_str}
-                            onChange={(e) => setDraftEtapa({ ...draftEtapa, parcelas_str: e.target.value })}
-                          />
-                          <span className="curvas-fin-hint">Ex: 30, 60, 90 divide cada entrega em 3 parcelas iguais nesses prazos.</span>
-                        </div>
+                        <>
+                          <div className="curvas-fin-form-field">
+                            <label>Gerar Parcelas</label>
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                              <input
+                                type="number"
+                                min="1"
+                                max="60"
+                                style={{ width: '64px' }}
+                                title="Número de parcelas"
+                                value={draftEtapa.ger_parcelas}
+                                onChange={(e) => setDraftEtapa({ ...draftEtapa, ger_parcelas: parseInt(e.target.value, 10) || 1 })}
+                              />
+                              <span>× · 1ª em</span>
+                              <input
+                                type="number"
+                                min="0"
+                                style={{ width: '64px' }}
+                                title="Dias até a 1ª parcela"
+                                value={draftEtapa.ger_primeiro}
+                                onChange={(e) => setDraftEtapa({ ...draftEtapa, ger_primeiro: parseInt(e.target.value, 10) || 0 })}
+                              />
+                              <span>d · a cada</span>
+                              <input
+                                type="number"
+                                min="1"
+                                style={{ width: '64px' }}
+                                title="Intervalo entre parcelas (dias)"
+                                value={draftEtapa.ger_intervalo}
+                                onChange={(e) => setDraftEtapa({ ...draftEtapa, ger_intervalo: parseInt(e.target.value, 10) || 1 })}
+                              />
+                              <span>d</span>
+                              <button
+                                type="button"
+                                className="curvas-fin-btn curvas-fin-btn-secondary"
+                                onClick={() =>
+                                  setDraftEtapa({
+                                    ...draftEtapa,
+                                    parcelas_str: gerarParcelas(
+                                      draftEtapa.ger_parcelas,
+                                      draftEtapa.ger_primeiro,
+                                      draftEtapa.ger_intervalo
+                                    ).join(', '),
+                                  })
+                                }
+                              >
+                                Gerar
+                              </button>
+                            </div>
+                          </div>
+                          <div className="curvas-fin-form-field">
+                            <label>Dias das Parcelas (a partir da entrega)</label>
+                            <input
+                              type="text"
+                              placeholder="30, 60"
+                              value={draftEtapa.parcelas_str}
+                              onChange={(e) => setDraftEtapa({ ...draftEtapa, parcelas_str: e.target.value })}
+                            />
+                            <span className="curvas-fin-hint">
+                              {parcelasDoDraft.length
+                                ? `${resumoParcelas(parcelasDoDraft)} — cada entrega dividida em ${parcelasDoDraft.length} parcela(s) iguais.`
+                                : 'Informe os prazos separados por vírgula ou use o gerador.'}
+                            </span>
+                          </div>
+                        </>
                       )}
                     </div>
+                    )}
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                       <button type="submit" className="curvas-fin-btn curvas-fin-btn-primary" disabled={savingConfig}>
@@ -1431,14 +1900,24 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                     ) : (
                       data?.parametrosEtapas?.map((p) => (
                         <div key={`${p.codigo_etapa}_${p.tipo}`} className="curvas-fin-override-item">
-                          <div>
-                            <strong>{p.codigo_etapa} ({p.tipo})</strong>
+                          <div
+                            style={{ cursor: 'pointer' }}
+                            title="Clique para editar"
+                            onClick={() =>
+                              carregarRegraNoDraft(
+                                p.codigo_etapa,
+                                Math.min(5, Math.max(3, nivelDoCodigo(p.codigo_etapa))) as 3 | 4 | 5,
+                                p.tipo
+                              )
+                            }
+                          >
+                            <strong>
+                              {p.codigo_etapa} · N{nivelDoCodigo(p.codigo_etapa)} ·{' '}
+                              {p.tipo === 'MATERIAL' ? 'Material' : 'Mão de Obra'}
+                            </strong>
                             <p>
-                              Antecedência: {p.dias_antecedencia ?? draftObra.dias_antecedencia_padrao}d • Lotes:{' '}
-                              {p.num_entregas ? `${p.num_entregas} fixos` : 'proporcional cronograma'} • Pagto:{' '}
-                              {p.tipo_pagamento === 'PARCELADO' && p.parcelas_dias
-                                ? `${p.parcelas_dias.join('/')} dias`
-                                : `${p.prazo_dias} dias`}
+                              {descreverRegra(p)} • atinge {etapasAtingidasPorRegra.get(`${p.codigo_etapa}_${p.tipo}`) || 0}{' '}
+                              etapa(s)
                             </p>
                           </div>
                           <button
