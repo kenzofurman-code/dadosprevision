@@ -9,7 +9,9 @@ import { etapaParaMega } from './contratacoes.js'
 export async function obterParametrosObra(projetoId) {
   const { rows } = await query(
     `SELECT projeto_id, dias_antecedencia_padrao, prazo_pagamento_padrao_dias,
-            dia_corte_medicao_mo, dia_pagamento_mo, atualizado_em
+            dia_corte_medicao_mo, dia_pagamento_mo, retencao_mo_ativa,
+            retencao_mo_percentual::float AS retencao_mo_percentual, data_fim_obra::text AS data_fim_obra,
+            atualizado_em
      FROM curva_parametros_obra WHERE projeto_id = $1`,
     [projetoId]
   )
@@ -21,6 +23,9 @@ export async function obterParametrosObra(projetoId) {
     prazo_pagamento_padrao_dias: 28,
     dia_corte_medicao_mo: 20,
     dia_pagamento_mo: 5,
+    retencao_mo_ativa: false,
+    retencao_mo_percentual: 5,
+    data_fim_obra: null,
     atualizado_em: null,
   }
 }
@@ -31,13 +36,16 @@ export async function obterParametrosObra(projetoId) {
 export async function obterParametrosEtapas(projetoId) {
   const { rows } = await query(
     `SELECT id, projeto_id, codigo_etapa, tipo, dias_antecedencia, num_entregas,
-            tipo_pagamento, prazo_dias, parcelas_dias, observacao, atualizado_em
-     FROM curva_parametros_etapa WHERE projeto_id = $1`,
+            tipo_pagamento, prazo_dias, parcelas_dias, retencao_ativa,
+            retencao_percentual::float AS retencao_percentual, observacao, atualizado_em
+     FROM curva_parametros_etapa WHERE projeto_id = $1
+     ORDER BY codigo_etapa, tipo`,
     [projetoId]
   )
+  // Chave codigo|tipo: a regra de MO e a de Material da mesma etapa não se sobrescrevem
   const mapa = new Map()
   for (const r of rows) {
-    mapa.set(r.codigo_etapa, r)
+    mapa.set(`${r.codigo_etapa}|${r.tipo}`, r)
   }
   return { lista: rows, mapa }
 }
@@ -49,13 +57,17 @@ export async function salvarParametrosCurvas(projetoId, { parametrosObra, parame
   // 1. Salvar parâmetros gerais da obra
   if (parametrosObra) {
     await query(
-      `INSERT INTO curva_parametros_obra (projeto_id, dias_antecedencia_padrao, prazo_pagamento_padrao_dias, dia_corte_medicao_mo, dia_pagamento_mo, atualizado_em)
-       VALUES ($1, $2, $3, $4, $5, NOW())
+      `INSERT INTO curva_parametros_obra (projeto_id, dias_antecedencia_padrao, prazo_pagamento_padrao_dias, dia_corte_medicao_mo, dia_pagamento_mo,
+                                          retencao_mo_ativa, retencao_mo_percentual, data_fim_obra, atualizado_em)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
        ON CONFLICT (projeto_id) DO UPDATE SET
          dias_antecedencia_padrao = EXCLUDED.dias_antecedencia_padrao,
          prazo_pagamento_padrao_dias = EXCLUDED.prazo_pagamento_padrao_dias,
          dia_corte_medicao_mo = EXCLUDED.dia_corte_medicao_mo,
          dia_pagamento_mo = EXCLUDED.dia_pagamento_mo,
+         retencao_mo_ativa = EXCLUDED.retencao_mo_ativa,
+         retencao_mo_percentual = EXCLUDED.retencao_mo_percentual,
+         data_fim_obra = EXCLUDED.data_fim_obra,
          atualizado_em = NOW()`,
       [
         projetoId,
@@ -63,6 +75,9 @@ export async function salvarParametrosCurvas(projetoId, { parametrosObra, parame
         Number(parametrosObra.prazo_pagamento_padrao_dias || 28),
         Number(parametrosObra.dia_corte_medicao_mo || 20),
         Number(parametrosObra.dia_pagamento_mo || 5),
+        Boolean(parametrosObra.retencao_mo_ativa),
+        Number(parametrosObra.retencao_mo_percentual ?? 5),
+        /^\d{4}-\d{2}-\d{2}$/.test(String(parametrosObra.data_fim_obra || '')) ? parametrosObra.data_fim_obra : null,
       ]
     )
   }
@@ -88,14 +103,16 @@ export async function salvarParametrosCurvas(projetoId, { parametrosObra, parame
     await query(
       `INSERT INTO curva_parametros_etapa (
          projeto_id, codigo_etapa, tipo, dias_antecedencia, num_entregas,
-         tipo_pagamento, prazo_dias, parcelas_dias, observacao, atualizado_em
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+         tipo_pagamento, prazo_dias, parcelas_dias, retencao_ativa, retencao_percentual, observacao, atualizado_em
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
        ON CONFLICT (projeto_id, codigo_etapa, tipo) DO UPDATE SET
          dias_antecedencia = EXCLUDED.dias_antecedencia,
          num_entregas = EXCLUDED.num_entregas,
          tipo_pagamento = EXCLUDED.tipo_pagamento,
          prazo_dias = EXCLUDED.prazo_dias,
          parcelas_dias = EXCLUDED.parcelas_dias,
+         retencao_ativa = EXCLUDED.retencao_ativa,
+         retencao_percentual = EXCLUDED.retencao_percentual,
          observacao = EXCLUDED.observacao,
          atualizado_em = NOW()`,
       [
@@ -106,7 +123,11 @@ export async function salvarParametrosCurvas(projetoId, { parametrosObra, parame
         item.num_entregas !== undefined ? item.num_entregas : null,
         item.tipo_pagamento || 'DIAS',
         item.prazo_dias !== undefined ? item.prazo_dias : 28,
-        Array.isArray(item.parcelas_dias) ? item.parcelas_dias : null,
+        Array.isArray(item.parcelas_dias) ? item.parcelas_dias.slice(0, 60) : null,
+        typeof item.retencao_ativa === 'boolean' ? item.retencao_ativa : null,
+        item.retencao_percentual !== undefined && item.retencao_percentual !== null && item.retencao_percentual !== ''
+          ? Number(item.retencao_percentual)
+          : null,
         item.observacao || null,
       ]
     )
@@ -238,12 +259,69 @@ export async function obterDadosCurvasFinanceiras(projetoId) {
     realizadoHistorico: Math.round(realizadoTotalPrevision * 100) / 100,
   })
 
+  // 7. Etapas-mãe (níveis 3 e 4) para as regras aplicadas por hierarquia
+  const hierRes = await query(
+    `SELECT DISTINCT codigo, descricao AS nome, nivel
+     FROM cff_itens
+     WHERE projeto_id = $1 AND nivel IN (3, 4) AND codigo IS NOT NULL
+     ORDER BY codigo ASC`,
+    [pId]
+  )
+
   return {
     ok: true,
     projetoId: pId,
     importacaoCustoProjetado: importacao,
     parametrosObra: paramsObra,
     parametrosEtapas: paramsEtapasObj.lista,
+    etapasHierarquia: hierRes.rows,
     ...resultadoMotor,
   }
+}
+
+// ---- Versões salvas -------------------------------------------------------
+
+/** Congela o resultado atual (recalculado agora no servidor) com um nome. */
+export async function salvarVersaoCurvas(projetoId, nome) {
+  const dados = await obterDadosCurvasFinanceiras(projetoId)
+  const etapas = dados.etapas.map(({ eventos, eventosEconomico, ...resto }) => resto)
+  const payload = {
+    kpis: dados.kpis,
+    meses: dados.meses,
+    seriesMensal: dados.seriesMensal,
+    etapas,
+    parametrosObra: dados.parametrosObra,
+    parametrosEtapas: dados.parametrosEtapas,
+    importacaoCustoProjetado: dados.importacaoCustoProjetado,
+  }
+  const nomeFinal = String(nome || '').trim().slice(0, 120) || `Versão ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`
+  const { rows } = await query(
+    `INSERT INTO curva_versoes (projeto_id, nome, payload) VALUES ($1, $2, $3)
+     RETURNING id, nome, criado_em`,
+    [projetoId, nomeFinal, payload]
+  )
+  return { versao: rows[0] }
+}
+
+export async function listarVersoesCurvas(projetoId) {
+  const { rows } = await query(
+    `SELECT id, nome, criado_em, (payload->'kpis'->>'totalOrcado')::float AS total_orcado
+     FROM curva_versoes WHERE projeto_id = $1 ORDER BY criado_em DESC`,
+    [projetoId]
+  )
+  return { versoes: rows }
+}
+
+export async function obterVersaoCurvas(projetoId, id) {
+  const { rows } = await query(
+    `SELECT id, nome, criado_em, payload FROM curva_versoes WHERE projeto_id = $1 AND id = $2`,
+    [projetoId, id]
+  )
+  if (!rows.length) throw Object.assign(new Error('Versão não encontrada.'), { status: 404 })
+  return { versao: rows[0] }
+}
+
+export async function excluirVersaoCurvas(projetoId, id) {
+  await query(`DELETE FROM curva_versoes WHERE projeto_id = $1 AND id = $2`, [projetoId, id])
+  return {}
 }

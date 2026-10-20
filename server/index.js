@@ -36,6 +36,7 @@ import {
 } from './diario-db.js'
 import {
   obterDadosCurvasFinanceiras, salvarParametrosCurvas,
+  salvarVersaoCurvas, listarVersoesCurvas, obterVersaoCurvas, excluirVersaoCurvas,
 } from './curvas-financeiras-db.js'
 import { criarCliente } from './diario-client.js'
 import { executarSincronizacaoDiario } from './diario-sync.js'
@@ -360,6 +361,20 @@ app.post('/api/curvas-financeiras/parametros', rota((req) =>
     parametrosEtapa: req.body?.parametrosEtapa,
     parametrosEtapas: req.body?.parametrosEtapas,
   })))
+
+const exigirVersaoId = (valor) => {
+  const id = Number(valor)
+  if (!Number.isInteger(id)) throw Object.assign(new Error('id da versão inválido.'), { status: 400 })
+  return id
+}
+app.get('/api/curvas-financeiras/versoes', rota((req) =>
+  listarVersoesCurvas(exigirProjeto(req.query.projectId))))
+app.post('/api/curvas-financeiras/versoes', rota((req) =>
+  salvarVersaoCurvas(exigirProjeto(req.body?.projectId), req.body?.nome)))
+app.get('/api/curvas-financeiras/versoes/:id', rota((req) =>
+  obterVersaoCurvas(exigirProjeto(req.query.projectId), exigirVersaoId(req.params.id))))
+app.delete('/api/curvas-financeiras/versoes/:id', rota((req) =>
+  excluirVersaoCurvas(exigirProjeto(req.query.projectId), exigirVersaoId(req.params.id))))
 
 // ---- Diário de Obra ------------------------------------------------------
 const texto = (v) => String(v ?? '').trim()
