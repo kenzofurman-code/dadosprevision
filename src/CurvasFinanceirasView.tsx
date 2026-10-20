@@ -17,6 +17,7 @@ import {
   History,
 } from 'lucide-react'
 import './CurvasFinanceirasView.css'
+import { PlanilhaAnalitica } from './components/curvas-financeiras/PlanilhaAnalitica'
 
 interface CurvaKpis {
   totalOrcado: number
@@ -83,6 +84,7 @@ interface CurvaEtapaCalculada {
   custo_total: number
   regraMaterial?: RegraOrigem | null
   regraMo?: RegraOrigem | null
+  mensal?: Record<string, number[]>
 }
 
 interface CurvaParametrosObra {
@@ -138,7 +140,7 @@ interface Props {
   onSelectProject: (id: string) => void
 }
 
-type TabMode = 'grafico' | 'mensal' | 'etapas'
+type TabMode = 'grafico' | 'mensal' | 'analitica' | 'etapas'
 type ScopeFilter = 'todos' | 'material' | 'mao_de_obra'
 type ChartMode = 'acumulado_pct' | 'acumulado_reais' | 'mensal_reais'
 
@@ -970,6 +972,14 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
             onClick={() => setActiveTab('mensal')}
           >
             <Table2 size={16} />
+            Planilha Mensal Sintética
+          </button>
+          <button
+            type="button"
+            className={`curvas-fin-tab-btn ${activeTab === 'analitica' ? 'active' : ''}`}
+            onClick={() => setActiveTab('analitica')}
+          >
+            <Table2 size={16} />
             Planilha Mensal Analítica
           </button>
           <button
@@ -1378,6 +1388,15 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
             </table>
           </div>
         </section>
+      )}
+
+      {activeTab === 'analitica' && data?.etapas && (
+        <PlanilhaAnalitica
+          etapas={data.etapas}
+          hierarquia={data.etapasHierarquia || []}
+          meses={data.meses || []}
+          nomeArquivo={`planilha_analitica_${projectId}_${new Date().toISOString().slice(0, 10)}`}
+        />
       )}
 
       {/* Conteúdo da Aba: Etapas (Nível 5) */}

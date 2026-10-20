@@ -287,3 +287,32 @@ test('motor: sem data de fim da obra, libera retenção 1 ano após a maior data
   const r = calcularCurvasFinanceiras({ etapas, parametrosObra: { retencao_mo_ativa: true, retencao_mo_percentual: 5 } })
   assert.equal(r.kpis.dataLiberacaoRetencao, '2027-09-15')
 })
+
+test('motor: cada etapa traz a matriz mensal [comp. material, comp. MO, fin. material, fin. MO]', () => {
+  const r = calcularCurvasFinanceiras({
+    etapas: [{
+      codigo_etapa: 'A', custo_material: 1000, custo_mao_obra: 600,
+      data_inicio: '2026-03-01', data_fim: '2026-03-10', pontos_mensais: [],
+    }],
+    parametrosObra: { dias_antecedencia_padrao: 0, prazo_pagamento_padrao_dias: 31, dia_pagamento_mo: 5 },
+  })
+  const m = r.etapas[0].mensal
+  assert.deepEqual(m['2026-03'], [1000, 600, 0, 0])
+  assert.deepEqual(m['2026-04'], [0, 0, 1000, 600])
+  // a soma das matrizes de todas as etapas fecha com as séries consolidadas
+  for (const s of r.seriesMensal) {
+    const v = m[s.mes] || [0, 0, 0, 0]
+    assert.equal(v[0], s.competenciaMaterial)
+    assert.equal(v[3], s.financeiroMaoDeObra)
+  }
+})
+
+test('motor: antecedência 0 e prazo 0 (à vista) da obra são respeitados', () => {
+  const r = calcularCurvasFinanceiras({
+    etapas: [{ codigo_etapa: 'A', custo_material: 100, data_inicio: '2026-03-01', data_fim: '2026-03-01' }],
+    parametrosObra: { dias_antecedencia_padrao: 0, prazo_pagamento_padrao_dias: 0 },
+  })
+  const ev = r.etapas[0].eventos[0]
+  assert.equal(ev.dataEntrega, '2026-03-01')
+  assert.equal(ev.dataVencimento, '2026-03-01')
+})
