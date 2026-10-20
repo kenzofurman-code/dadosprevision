@@ -2,7 +2,10 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+# O npm ignora em silêncio falhas ao baixar dependências opcionais, como o binário nativo do
+# rolldown (Vite). Sem esta checagem no mesmo RUN, um node_modules incompleto fica no cache e
+# todo build seguinte quebra no `vite build` com "Cannot find native binding".
+RUN npm ci && node -e 'const p="@rolldown/binding-"+process.platform+"-"+process.arch+"-musl";try{require.resolve(p)}catch{console.error("ERRO: "+p+" nao foi instalado pelo npm ci (dependencia opcional). O build foi interrompido para nao guardar este node_modules em cache; rode o deploy de novo.");process.exit(1)}'
 COPY . .
 RUN npm run build
 
