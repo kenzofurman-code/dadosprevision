@@ -44,16 +44,66 @@ export function mesCompetenciaMo(dataIso, diaCorte = 20) {
   return prox.toISOString().slice(0, 7)
 }
 
+const arredondar = (v) => Math.round(v * 100) / 100
+
+function ultimoDiaDoMes(mesIso) {
+  const [y, m] = mesIso.split('-').map(Number)
+  return new Date(Date.UTC(y, m, 0)).getUTCDate()
+}
+
+/** Data de pagamento da MO: dia `dia` do mês seguinte à competência, limitado ao último dia do mês. */
+export function dataPagamentoMo(mesCompetencia, dia = 5) {
+  const mesPag = proximoMesIso(mesCompetencia)
+  const d = Math.min(Math.max(1, Number(dia) || 5), ultimoDiaDoMes(mesPag))
+  return `${mesPag}-${String(d).padStart(2, '0')}`
+}
+
+/** Mesma data um ano depois (29/02 vira 28/02). */
+export function somarUmAnoIso(dataIso) {
+  if (!dataIso) return null
+  const [y, m, d] = String(dataIso).slice(0, 10).split('-').map(Number)
+  const mes = `${y + 1}-${String(m).padStart(2, '0')}`
+  return `${mes}-${String(Math.min(d, ultimoDiaDoMes(mes))).padStart(2, '0')}`
+}
+
+/**
+ * Regra efetiva de uma etapa nível 5: regra própria (código Mega) > mãe nível 4 > avó nível 3.
+ * O mapa é indexado por `${codigo}|${tipo}`.
+ */
+export function resolverRegra(mapa, { codigoMega, codigoPrevision }, tipo) {
+  if (!mapa) return null
+  const segs = String(codigoPrevision || codigoMega || '').split('.')
+  const candidatos = [
+    codigoMega,
+    segs.length > 4 ? segs.slice(0, 4).join('.') : null,
+    segs.length > 3 ? segs.slice(0, 3).join('.') : null,
+  ]
+  for (const c of candidatos) {
+    if (c && mapa.has(`${c}|${tipo}`)) return mapa.get(`${c}|${tipo}`)
+  }
+  return null
+}
+
+function origemRegra(regra) {
+  if (!regra?.codigo_etapa) return null
+  return { codigo_origem: regra.codigo_etapa, nivel: String(regra.codigo_etapa).split('.').length }
+}
+
 /**
  * Distribui Mão de Obra no tempo:
  * - Competência: corte dia 21 a 20 -> cai no mês M
- * - Financeiro: desembolso no dia 5 de M+1 -> cai no mês M+1
+ * - Financeiro: desembolso no dia `diaPagamentoMo` de M+1
+ * - Retenção técnica: `retencaoPercentual`% de cada medição só é paga em `dataLiberacaoRetencao`
+ *   (a competência não muda)
  */
 export function distribuirMaoDeObraEtapa({
   custo,
   dataInicio,
   dataFim,
   diaCorteMo = 20,
+  diaPagamentoMo = 5,
+  retencaoPercentual = 0,
+  dataLiberacaoRetencao = null,
 }) {
   const eventos = []
   const valor = Number(custo || 0)
@@ -72,17 +122,77 @@ export function distribuirMaoDeObraEtapa({
     dAtual = somarDiasIso(dAtual, 1)
   }
 
+  const fracaoRetida = dataLiberacaoRetencao && Number(retencaoPercentual) > 0
+    ? Math.min(1, Number(retencaoPercentual) / 100)
+    : 0
+
   for (const [mesComp, valComp] of Object.entries(porCompetencia)) {
-    const mesFin = proximoMesIso(mesComp)
+    const total = arredondar(valComp)
+    const retido = arredondar(total * fracaoRetida)
+    const dataPag = dataPagamentoMo(mesComp, diaPagamentoMo)
     eventos.push({
       tipo: 'MAO_DE_OBRA',
       mesCompetencia: mesComp,
-      mesFinanceiro: mesFin,
-      valor: Math.round(valComp * 100) / 100,
+      mesFinanceiro: mesAnoIso(dataPag),
+      dataPagamento: dataPag,
+      valor: arredondar(total - retido),
     })
+    if (retido > 0) {
+      eventos.push({
+        tipo: 'MAO_DE_OBRA',
+        mesCompetencia: mesComp,
+        mesFinanceiro: mesAnoIso(dataLiberacaoRetencao),
+        dataPagamento: dataLiberacaoRetencao,
+        valor: retido,
+        retencao: true,
+      })
+    }
   }
 
   return eventos
+}
+
+/**
+ * Material proporcional à execução: o peso de cada mês é espalhado pelos dias daquele mês dentro da
+ * etapa (ou pelo mês inteiro, se o ponto cair fora dela); sem pontos, uniforme entre início e fim.
+ * Cada dia chega `diasAntecedencia` antes e é agrupado pelo mês de chegada.
+ * Retorna [{ dataEntrega (dia médio ponderado), fracao }].
+ */
+function chegadasProporcionais({ dataInicio, fim, pontosMensais, diasAntecedencia }) {
+  const dias = []
+  const pontos = (Array.isArray(pontosMensais) ? pontosMensais : [])
+    .map((p) => ({ mes: String(p.data || '').slice(0, 7), peso: Number(p.previsto ?? p.base) || 0 }))
+    .filter((p) => p.peso > 0 && /^\d{4}-\d{2}$/.test(p.mes))
+
+  if (pontos.length > 0) {
+    for (const p of pontos) {
+      const primeiro = `${p.mes}-01`
+      const ultimo = `${p.mes}-${String(ultimoDiaDoMes(p.mes)).padStart(2, '0')}`
+      let ini = dataInicio > primeiro ? dataInicio : primeiro
+      let f = fim < ultimo ? fim : ultimo
+      if (ini > f) { ini = primeiro; f = ultimo }
+      const n = diferencaDias(ini, f) + 1
+      for (let i = 0; i < n; i++) dias.push({ data: somarDiasIso(ini, i), peso: p.peso / n })
+    }
+  } else {
+    const n = diferencaDias(dataInicio, fim) + 1
+    for (let i = 0; i < n; i++) dias.push({ data: somarDiasIso(dataInicio, i), peso: 1 / n })
+  }
+
+  const somaPesos = dias.reduce((s, d) => s + d.peso, 0)
+  const porMes = new Map()
+  for (const d of dias) {
+    const chegada = somarDiasIso(d.data, -Number(diasAntecedencia || 0))
+    const mes = mesAnoIso(chegada)
+    const b = porMes.get(mes) || { peso: 0, offset: 0 }
+    b.peso += d.peso
+    b.offset += d.peso * diferencaDias(dataInicio, chegada)
+    porMes.set(mes, b)
+  }
+  return [...porMes.values()].map((b) => ({
+    dataEntrega: somarDiasIso(dataInicio, Math.round(b.offset / b.peso)),
+    fracao: b.peso / somaPesos,
+  }))
 }
 
 /**
@@ -155,26 +265,11 @@ export function distribuirMaterialEtapa({
     return eventos
   }
 
-  // Modalidade 2: Proporcional ao Cronograma Mensal da Prevision
-  if (Array.isArray(pontosMensais) && pontosMensais.length > 0) {
-    // Normalizar pesos previstos do cronograma
-    const pontosValidos = pontosMensais.filter((p) => p.data && (Number(p.previsto) > 0 || Number(p.base) > 0))
-    const somaPesos = pontosValidos.reduce((acc, p) => acc + (Number(p.previsto ?? p.base) || 0), 0)
-
-    if (somaPesos > 0) {
-      for (const p of pontosValidos) {
-        const peso = Number(p.previsto ?? p.base) || 0
-        const valorMes = (peso / somaPesos) * valor
-        // A entrega ocorre com a antecedência antes do meio do mês ou início do mês
-        const diaEntregaAprox = somarDiasIso(`${p.data.slice(0, 7)}-01`, -Number(diasAntecedencia || 0))
-        adicionarEntrega(diaEntregaAprox, valorMes)
-      }
-      return eventos
-    }
+  // Modalidade 2 (padrão): chega conforme a execução — proporcional ao cronograma mensal da Prevision,
+  // ou uniforme entre início e fim se a etapa não tiver pontos mensais
+  for (const { dataEntrega, fracao } of chegadasProporcionais({ dataInicio, fim, pontosMensais, diasAntecedencia })) {
+    adicionarEntrega(dataEntrega, valor * fracao)
   }
-
-  // Fallback padrão se não tiver cronograma detalhado: 100% entregue no início com antecedência
-  adicionarEntrega(data1aEntrega, valor)
   return eventos
 }
 
@@ -190,6 +285,12 @@ export function calcularCurvasFinanceiras({
   const diaCorteMo = Number(parametrosObra.dia_corte_medicao_mo || 20)
   const antecedenciaPadrao = Number(parametrosObra.dias_antecedencia_padrao || 10)
   const prazoPadrao = Number(parametrosObra.prazo_pagamento_padrao_dias || 28)
+  const diaPagamentoMo = Number(parametrosObra.dia_pagamento_mo || 5)
+
+  // Retenção técnica: liberada 1 ano após o fim da obra (informado, ou a maior data de fim das etapas)
+  const dataFimEtapas = etapas.reduce((max, e) => (e.data_fim && e.data_fim > (max || '') ? e.data_fim : max), null)
+  const dataFimObra = parametrosObra.data_fim_obra ? String(parametrosObra.data_fim_obra).slice(0, 10) : dataFimEtapas
+  const dataLiberacaoRetencao = somarUmAnoIso(dataFimObra)
 
   const todosEventos = []
   const etapasCalculadas = []
@@ -199,7 +300,12 @@ export function calcularCurvasFinanceiras({
 
   for (const etapa of etapas) {
     const cod = etapa.codigo_etapa
-    const param = parametrosEtapas.get(cod) || {}
+    const codigos = { codigoMega: cod, codigoPrevision: etapa.codigo_prevision }
+    const regraMat = resolverRegra(parametrosEtapas, codigos, 'MATERIAL')
+    const regraMo = resolverRegra(parametrosEtapas, codigos, 'MAO_DE_OBRA')
+    const param = regraMat || {}
+    const retencaoAtiva = regraMo?.retencao_ativa ?? parametrosObra.retencao_mo_ativa ?? false
+    const retencaoPct = Number(regraMo?.retencao_percentual ?? parametrosObra.retencao_mo_percentual ?? 5)
 
     const cMat = Number(etapa.custo_material || 0)
     const cMo = Number(etapa.custo_mao_obra || 0)
@@ -241,6 +347,9 @@ export function calcularCurvasFinanceiras({
           dataInicio: etapa.data_inicio,
           dataFim: etapa.data_fim,
           diaCorteMo,
+          diaPagamentoMo,
+          retencaoPercentual: retencaoAtiva ? retencaoPct : 0,
+          dataLiberacaoRetencao,
         })
       : []
 
@@ -275,6 +384,7 @@ export function calcularCurvasFinanceiras({
 
     etapasCalculadas.push({
       codigo_etapa: cod,
+      codigo_prevision: etapa.codigo_prevision,
       nome: etapa.nome || etapa.descricao,
       nivel: etapa.nivel,
       data_inicio: etapa.data_inicio,
@@ -282,6 +392,8 @@ export function calcularCurvasFinanceiras({
       custo_material: cMat,
       custo_mao_obra: cMo,
       custo_total: cTot,
+      regraMaterial: origemRegra(regraMat),
+      regraMo: origemRegra(regraMo),
       eventos: eventosEtapa,
       eventosEconomico: eventosEcon,
     })
@@ -372,6 +484,8 @@ export function calcularCurvasFinanceiras({
       totalMeses: meses.length,
       inicioProjecao: meses[0] || null,
       fimProjecao: meses[meses.length - 1] || null,
+      dataFimObraEtapas: dataFimEtapas,
+      dataLiberacaoRetencao,
     },
     meses,
     seriesMensal,
