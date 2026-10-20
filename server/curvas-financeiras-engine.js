@@ -84,6 +84,22 @@ export function resolverRegra(mapa, { codigoMega, codigoPrevision }, tipo) {
   return null
 }
 
+/** Por mês: [competência material, competência MO, financeiro material, financeiro MO] (planilha analítica). */
+function matrizMensal(eventos) {
+  const m = {}
+  const somar = (mes, i, v) => {
+    if (!mes) return
+    if (!m[mes]) m[mes] = [0, 0, 0, 0]
+    m[mes][i] = arredondar(m[mes][i] + v)
+  }
+  for (const ev of eventos) {
+    const mat = ev.tipo === 'MATERIAL'
+    somar(ev.mesCompetencia, mat ? 0 : 1, ev.valor)
+    somar(ev.mesFinanceiro, mat ? 2 : 3, ev.valor)
+  }
+  return m
+}
+
 function origemRegra(regra) {
   if (!regra?.codigo_etapa) return null
   return { codigo_origem: regra.codigo_etapa, nivel: String(regra.codigo_etapa).split('.').length }
@@ -226,7 +242,7 @@ export function distribuirMaterialEtapa({
     const frac = 1 / parcelasDias.length
     condicoes = parcelasDias.map((d) => ({ dias: Number(d), fracao: frac }))
   } else {
-    condicoes = [{ dias: Number(prazoDias || 28), fracao: 1 }]
+    condicoes = [{ dias: Number(prazoDias ?? 28), fracao: 1 }]
   }
 
   // Helper para gerar eventos a partir de uma entrega física
@@ -283,8 +299,8 @@ export function calcularCurvasFinanceiras({
   realizadoHistorico = 0,
 }) {
   const diaCorteMo = Number(parametrosObra.dia_corte_medicao_mo || 20)
-  const antecedenciaPadrao = Number(parametrosObra.dias_antecedencia_padrao || 10)
-  const prazoPadrao = Number(parametrosObra.prazo_pagamento_padrao_dias || 28)
+  const antecedenciaPadrao = Number(parametrosObra.dias_antecedencia_padrao ?? 10)
+  const prazoPadrao = Number(parametrosObra.prazo_pagamento_padrao_dias ?? 28)
   const diaPagamentoMo = Number(parametrosObra.dia_pagamento_mo || 5)
 
   // Retenção técnica: liberada 1 ano após o fim da obra (informado, ou a maior data de fim das etapas)
@@ -394,6 +410,7 @@ export function calcularCurvasFinanceiras({
       custo_total: cTot,
       regraMaterial: origemRegra(regraMat),
       regraMo: origemRegra(regraMo),
+      mensal: matrizMensal(eventosEtapa),
       eventos: eventosEtapa,
       eventosEconomico: eventosEcon,
     })

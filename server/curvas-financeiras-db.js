@@ -71,8 +71,8 @@ export async function salvarParametrosCurvas(projetoId, { parametrosObra, parame
          atualizado_em = NOW()`,
       [
         projetoId,
-        Number(parametrosObra.dias_antecedencia_padrao || 10),
-        Number(parametrosObra.prazo_pagamento_padrao_dias || 28),
+        Number(parametrosObra.dias_antecedencia_padrao ?? 10),
+        Number(parametrosObra.prazo_pagamento_padrao_dias ?? 28),
         Number(parametrosObra.dia_corte_medicao_mo || 20),
         Number(parametrosObra.dia_pagamento_mo || 5),
         Boolean(parametrosObra.retencao_mo_ativa),
@@ -259,11 +259,11 @@ export async function obterDadosCurvasFinanceiras(projetoId) {
     realizadoHistorico: Math.round(realizadoTotalPrevision * 100) / 100,
   })
 
-  // 7. Etapas-mãe (níveis 3 e 4) para as regras aplicadas por hierarquia
+  // 7. Etapas-mãe (níveis 1 a 4): regras por hierarquia (3 e 4) e planilha analítica (todos)
   const hierRes = await query(
     `SELECT DISTINCT codigo, descricao AS nome, nivel
      FROM cff_itens
-     WHERE projeto_id = $1 AND nivel IN (3, 4) AND codigo IS NOT NULL
+     WHERE projeto_id = $1 AND nivel IN (1, 2, 3, 4) AND codigo IS NOT NULL
      ORDER BY codigo ASC`,
     [pId]
   )
