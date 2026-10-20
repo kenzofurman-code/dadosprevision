@@ -63,21 +63,21 @@ export async function orcamentoDaObra(projetoId) {
   return mapa
 }
 
-async function ultimaImportacao(projetoId) {
+export async function ultimaImportacao(projetoId) {
   const { rows } = await query(
     `SELECT id, referencia, total, importado_em, arquivo FROM custo_projetado_importacoes
      WHERE projeto_id = $1 ORDER BY importado_em DESC LIMIT 1`, [projetoId])
   return rows[0] || null
 }
 
-async function custosDaImportacao(importacaoId) {
+export async function custosDaImportacao(importacaoId) {
   if (!importacaoId) return new Map()
   const { rows } = await query('SELECT codigo_etapa, custo_projetado FROM custo_projetado_itens WHERE importacao_id = $1', [importacaoId])
   return new Map(rows.map((r) => [r.codigo_etapa, Number(r.custo_projetado)]))
 }
 
 // Classificação de insumos da empresa + ajustes da obra.
-async function classificadorDaObra(projetoId) {
+export async function classificadorDaObra(projetoId) {
   const { rows } = await query(
     'SELECT projeto_id, cod_insumo, descricao, tipo FROM insumo_classificacao WHERE projeto_id IS NULL OR projeto_id = $1', [projetoId])
   const empresa = rows.filter((r) => r.projeto_id === null)
@@ -342,7 +342,7 @@ export async function importarCusto(projetoId, { referencia, arquivo, matriz }) 
   })
 }
 
-async function obraDoProjeto(projetoId) {
+export async function obraDoProjeto(projetoId) {
   const { rows } = await query('SELECT obra FROM mega.obra_projeto WHERE id_prevision = $1 LIMIT 1', [projetoId])
   return rows[0]?.obra || null
 }
@@ -372,7 +372,7 @@ const saldoSql = (tabela, arquivo, campo, colunas) => `
 
 // Valores por 'etapa|TIPO' (tipo do insumo pela classificação). Realizado é
 // dividido em vindo de pedido / de contrato pela origem da apropriação.
-async function valoresPorEtapa(obra, tipoDe) {
+export async function valoresPorEtapa(obra, tipoDe) {
   const [itens, pedidos, contratos, realizado] = await Promise.all([
     query(
       `WITH etapa_distinta AS (

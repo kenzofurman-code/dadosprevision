@@ -740,3 +740,16 @@ CREATE TABLE IF NOT EXISTS curva_versoes (
   payload JSONB NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_curva_versoes_projeto ON curva_versoes (projeto_id, criado_em DESC);
+
+-- Painel 9 (Teórico x Físico): INCC-DI do Banco Central (SGS 192) e mês-base do orçamento por obra
+CREATE TABLE IF NOT EXISTS indices_incc (
+  mes DATE PRIMARY KEY,
+  variacao NUMERIC NOT NULL,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS orcamento_reajuste_obra (
+  projeto_id TEXT PRIMARY KEY REFERENCES projetos(id_prevision) ON DELETE CASCADE,
+  mes_base DATE NOT NULL,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

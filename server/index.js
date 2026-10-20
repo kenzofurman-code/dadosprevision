@@ -38,6 +38,8 @@ import {
   obterDadosCurvasFinanceiras, salvarParametrosCurvas,
   salvarVersaoCurvas, listarVersoesCurvas, obterVersaoCurvas, excluirVersaoCurvas,
 } from './curvas-financeiras-db.js'
+import { obterPainelTeorico, salvarMesBase } from './painel-teorico-db.js'
+import { sincronizarIncc, sincronizarInccSeVazio } from './incc.js'
 import { criarCliente } from './diario-client.js'
 import { executarSincronizacaoDiario } from './diario-sync.js'
 import { validarData } from './diario-consulta.js'
@@ -376,6 +378,12 @@ app.get('/api/curvas-financeiras/versoes/:id', rota((req) =>
 app.delete('/api/curvas-financeiras/versoes/:id', rota((req) =>
   excluirVersaoCurvas(exigirProjeto(req.query.projectId), exigirVersaoId(req.params.id))))
 
+// ---- Painel 9: Teórico x Físico (INCC-DI) ----------------------------------
+app.get('/api/painel-teorico', rota((req) => obterPainelTeorico(exigirProjeto(req.query.projectId))))
+app.put('/api/painel-teorico/mes-base', rota((req) =>
+  salvarMesBase(exigirProjeto(req.body?.projectId), req.body?.mes_base)))
+app.post('/api/incc/sincronizar', rota(() => sincronizarIncc()))
+
 // ---- Diário de Obra ------------------------------------------------------
 const texto = (v) => String(v ?? '').trim()
 
@@ -468,6 +476,19 @@ async function start() {
       console.log('TOKEN_DIARIO não definido: sincronização do Diário de Obra desativada.')
     } else {
       console.warn(`CRON_SCHEDULE_DIARIO inválido ("${scheduleDiario}"): sincronização do Diário de Obra não agendada.`)
+    }
+
+    // INCC-DI (Painel 9): busca na subida se a tabela estiver vazia e todo dia (padrão 07:00).
+    const logIncc = (r) => r && console.log(`[INCC] ${r.meses_gravados} meses gravados, último ${r.ultimo_mes}`)
+    sincronizarInccSeVazio().then(logIncc).catch((err) => console.error('[INCC] Erro na carga inicial:', err.message))
+    const scheduleIncc = process.env.CRON_SCHEDULE_INCC || '0 7 * * *'
+    if (cron.validate(scheduleIncc)) {
+      cron.schedule(scheduleIncc, () => {
+        sincronizarIncc().then(logIncc).catch((err) => console.error('[CRON] Erro ao atualizar INCC-DI:', err.message))
+      })
+      console.log(`Agendador do INCC-DI ativo com regra: ${scheduleIncc}`)
+    } else {
+      console.warn(`CRON_SCHEDULE_INCC inválido ("${scheduleIncc}"): INCC-DI não agendado.`)
     }
 
     app.listen(PORT, '0.0.0.0', () => {
