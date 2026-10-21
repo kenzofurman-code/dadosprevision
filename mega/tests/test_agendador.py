@@ -135,3 +135,23 @@ def test_log_em_arquivo_copia_pai_e_filhos_e_mantem_o_stdout(tmp_path):
     conteudo = arquivos[0].read_text()
     assert "do pai" in conteudo and "do filho" in conteudo
     assert not antigo.exists()                                   # limpeza de logs antigos
+
+
+def test_main_chega_ao_primeiro_sleep_sem_erro(monkeypatch, capsys):
+    """Regressao: o deploy de 2026-10-20 derrubou o agendador em loop
+    (NameError em main(): cron_retry_almoco nao definido) e nenhum teste
+    chamava main(). Ele precisa chegar ao primeiro sleep e anunciar os dois retries."""
+    class _Parar(Exception):
+        pass
+
+    def parar(segundos):
+        raise _Parar()
+
+    monkeypatch.setattr(agendador, "iniciar_log_em_arquivo", lambda pasta: None)
+    monkeypatch.setattr(agendador.time, "sleep", parar)
+    import pytest
+    with pytest.raises(_Parar):
+        agendador.main()
+    saida = capsys.readouterr().out
+    assert "cron_retry='30 6 * * *'" in saida
+    assert "cron_retry_almoco='0 12 * * *'" in saida
