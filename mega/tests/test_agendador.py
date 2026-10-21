@@ -80,3 +80,58 @@ def test_rodar_isolado_mata_o_processo_no_timeout(monkeypatch):
     inicio = _t.time()
     rc = agendador.rodar_isolado(["-c", "import time; time.sleep(60)"], timeout_s=1)
     assert rc is None and _t.time() - inicio < 10
+
+
+def test_proximo_evento_escolhe_retry_do_almoco():
+    agora = dt.datetime(2026, 10, 20, 10, 0, 0)
+    proxima, tipo = agendador.proximo_evento(
+        agora, "0 22 * * *", "0 0 * * *", "30 6 * * *", "0 12 * * *")
+    assert proxima == dt.datetime(2026, 10, 20, 12, 0, 0)
+    assert tipo == "retry_almoco"
+
+
+def test_proximo_evento_retry_cedo_as_0630_e_depois_o_do_almoco():
+    args = ("0 22 * * *", "0 0 * * *", "30 6 * * *", "0 12 * * *")
+    assert agendador.proximo_evento(dt.datetime(2026, 10, 20, 4, 0), *args) == (
+        dt.datetime(2026, 10, 20, 6, 30), "retry")
+    assert agendador.proximo_evento(dt.datetime(2026, 10, 20, 7, 0), *args) == (
+        dt.datetime(2026, 10, 20, 12, 0), "retry_almoco")
+
+
+def test_retry_do_almoco_desabilitavel():
+    agora = dt.datetime(2026, 10, 20, 10, 0, 0)
+    proxima, tipo = agendador.proximo_evento(
+        agora, "none", "0 0 * * *", "30 6 * * *", "none")
+    assert tipo == "noite"
+
+
+def test_janela_do_retry_termina_antes_do_fim_da_janela_de_90_min():
+    assert agendador.RETRY_TEMPO_MIN + 10 == agendador.RETRY_TIMEOUT_MIN
+    assert agendador.RETRY_TIMEOUT_MIN <= 90
+
+
+def test_log_em_arquivo_copia_pai_e_filhos_e_mantem_o_stdout(tmp_path):
+    import os
+    import subprocess
+    import sys as _sys
+    src = Path(agendador.__file__).resolve().parent
+    pasta = tmp_path / "logs"
+    antigo = pasta / "mega-2020-01-01.log"
+    pasta.mkdir()
+    antigo.write_text("velho")
+    os.utime(antigo, (1, 1))
+    codigo = (
+        "import sys, subprocess, time\n"
+        "sys.path.insert(0, %r)\n"
+        "import agendador\n"
+        "agendador.iniciar_log_em_arquivo(%r)\n"
+        "print('do pai', flush=True)\n"
+        "subprocess.run([sys.executable, '-c', 'print(\"do filho\", flush=True)'])\n"
+        "time.sleep(1)\n" % (str(src), str(pasta)))
+    r = subprocess.run([_sys.executable, "-c", codigo], capture_output=True, text=True, timeout=60)
+    assert "do pai" in r.stdout and "do filho" in r.stdout      # stdout segue funcionando
+    arquivos = list(pasta.glob("mega-*.log"))
+    assert [a.name for a in arquivos] == ["mega-%s.log" % dt.date.today().isoformat()]
+    conteudo = arquivos[0].read_text()
+    assert "do pai" in conteudo and "do filho" in conteudo
+    assert not antigo.exists()                                   # limpeza de logs antigos

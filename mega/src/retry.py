@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """Checagem automatica e re-execucao (retry) direcionada para falhas da madrugada.
 
-Roda as 06:00 (antes do inicio do expediente):
-1. Audita no PostgreSQL e na pasta local o que falhou na rotina das 02:00.
+Roda as 06:30 e ao meio-dia (janelas de 90 min, ver agendador.py):
+1. Audita no PostgreSQL e na pasta local o que falhou na rotina da madrugada.
 2. Se houver arquivos brutos ja baixados mas pendentes de carga, carrega localmente.
 3. Se NENHUMA obra/relatorio estiver pendente: conclui imediatamente sem abrir o ERP.
 4. Se houver pendencias reais: abre o ERP, navega APENAS nas obras faltantes e executa
@@ -20,7 +20,8 @@ import banco
 import config as cfgmod
 from biblioteca import Operador
 from carregar import carregar_relatorio, purgar_arquivos
-from executar import TESSERACT, _rodar_relatorio_na_obra_ativa, reconectar_sessao
+from executar import (TESSERACT, _recuperar_estado, _rodar_relatorio_na_obra_ativa,
+                      _trocar_com_retentativa)
 from sessao import Sessao
 from visao import Visao
 
@@ -186,6 +187,35 @@ def identificar_pendencias(cfg, conn, data_iso, pasta=None, marcador_parametro="
     return pendencias_por_obra
 
 
+def _abrir_sessao_erp(abrir_sessao_fn, tentativas=3):
+    """Abre o navegador, faz login e espera o ERP ficar pronto; devolve (s, op, v).
+
+    Ate `tentativas` vezes, reiniciando a sessao entre elas. O ERP as vezes sobe
+    com o desktop azul vazio (2026-10-10 e 2026-10-20) e o retry das 07:30
+    desistia na primeira espera, sem extrair nada.
+    """
+    ultimo = None
+    for tentativa in range(1, tentativas + 1):
+        s = abrir_sessao_fn()
+        try:
+            s.abrir()
+            _log("login: %s" % s.entrar())
+            erp = s.abrir_erp()
+            v = Visao(erp, binario_tesseract=TESSERACT)
+            op = Operador(erp, visao=v, log=_log)
+            op.esperar_erp_pronto(timeout=300)
+            return s, op, v
+        except Exception as e:
+            ultimo = e
+            _log("   sessao do ERP falhou (tentativa %d/%d): %s"
+                 % (tentativa, tentativas, str(e).splitlines()[0][:80]))
+            try:
+                s.fechar()
+            except Exception:
+                pass
+    raise ultimo
+
+
 def rodar_retry(cfg, conectar_fn=banco.conectar, abrir_sessao_fn=Sessao, data_iso=None,
                 tempo_max_minutos=None, marcador_parametro="%s", aplicar_esquema=True):
     """Orquestra a checagem e execucao de retry para a data especificada."""
@@ -215,18 +245,13 @@ def rodar_retry(cfg, conectar_fn=banco.conectar, abrir_sessao_fn=Sessao, data_is
     _log("Pendencias detectadas para retry: %s" % pendencias)
     tempo_limite = time.time() + tempo_max_minutos * 60
 
-    s = abrir_sessao_fn()
+    s = None
     op = None
     resultados = {}
 
     try:
         _log("Abrindo navegador e conectando ao Mega ERP...")
-        s.abrir()
-        _log("login: %s" % s.entrar())
-        erp = s.abrir_erp()
-        v = Visao(erp, binario_tesseract=TESSERACT)
-        op = Operador(erp, visao=v, log=_log)
-        op.esperar_erp_pronto(timeout=300)
+        s, op, v = _abrir_sessao_erp(abrir_sessao_fn)
 
         for i_obra, (cod_obra, rels_ids) in enumerate(pendencias.items()):
             if time.time() > tempo_limite:
@@ -241,44 +266,44 @@ def rodar_retry(cfg, conectar_fn=banco.conectar, abrir_sessao_fn=Sessao, data_is
             # que nao respondem, grade que nao carrega).
             if i_obra > 0:
                 _log("Re-login entre obras: encerrando sessao anterior...")
-                try:
-                    op.encerrar_sessao()
-                except Exception as e:
-                    _log("   aviso: erro ao encerrar sessao anterior: %s" % str(e)[:80])
+                if op is not None:
+                    try:
+                        op.encerrar_sessao()
+                    except Exception as e:
+                        _log("   aviso: erro ao encerrar sessao anterior: %s" % str(e)[:80])
                 try:
                     s.fechar()
                 except Exception:
                     pass
                 _log("   abrindo nova sessao para obra %s..." % cod_obra)
-                s = abrir_sessao_fn()
-                s.abrir()
-                _log("   login: %s" % s.entrar())
-                erp = s.abrir_erp()
-                v = Visao(erp, binario_tesseract=TESSERACT)
-                op = Operador(erp, visao=v, log=_log)
-                op.esperar_erp_pronto(timeout=300)
+                try:
+                    s, op, v = _abrir_sessao_erp(abrir_sessao_fn)
+                except Exception as e_sessao:
+                    # Sem sessao para esta obra, mas as demais ainda podem rodar.
+                    _log("   nao consegui abrir sessao para a obra %s: %s"
+                         % (cod_obra, str(e_sessao)[:80]))
+                    op = None
+                    for rel_id in rels_ids:
+                        resultados.setdefault(cod_obra, {})[rel_id] = "FALHOU_SESSAO"
+                    continue
 
             # Trocar de empresa
             e_troca_final = None
             try:
-                op.trocar_empresa(obra["codigo"], obra["nome"])
+                _trocar_com_retentativa(op, obra, _log)
             except Exception as e_troca:
                 _log("   falha ao trocar para empresa %s: %s" % (cod_obra, str(e_troca)[:80]))
                 e_troca_final = e_troca
                 if "closed" in str(e_troca).lower() or (op is not None and op.pagina.is_closed()):
-                    try:
-                        op, v = reconectar_sessao(s, _log)
-                        op.trocar_empresa(obra["codigo"], obra["nome"])
+                    op, v, recuperou = _recuperar_estado(op, v, s, obra, _log, True)
+                    if recuperou:
                         e_troca_final = None
-                    except Exception as e_rec:
-                        _log("   reconexao falhou: %s" % str(e_rec)[:80])
-                        e_troca_final = e_rec
                 if e_troca_final is not None:
                     for rel_id in rels_ids:
                         resultados.setdefault(cod_obra, {})[rel_id] = "FALHOU_TROCA"
                     continue
 
-            for rel_id in rels_ids:
+            for j, rel_id in enumerate(rels_ids):
                 if time.time() > tempo_limite:
                     break
 
@@ -313,15 +338,17 @@ def rodar_retry(cfg, conectar_fn=banco.conectar, abrir_sessao_fn=Sessao, data_is
                                 "%s_%s_%s_retry.png" % (data_iso, cod_obra, rel_id))))
                         except Exception:
                             pass
-                    if "closed" in str(e_rel).lower() or (op is not None and op.pagina.is_closed()):
-                        try:
-                            op, v = reconectar_sessao(s, _log)
-                            try:
-                                op.trocar_empresa(obra["codigo"], obra["nome"])
-                            except Exception:
-                                pass
-                        except Exception:
-                            pass
+                    restantes = rels_ids[j + 1:]
+                    if restantes:
+                        # A falha costuma deixar a tela suja e derrubar os demais
+                        # relatorios da obra em cadeia: reinicia o estado antes.
+                        sessao_caida = ("closed" in str(e_rel).lower()
+                                        or (op is not None and op.pagina.is_closed()))
+                        op, v, recuperou = _recuperar_estado(op, v, s, obra, _log, sessao_caida)
+                        if not recuperou:
+                            for rel_restante in restantes:
+                                resultados.setdefault(cod_obra, {})[rel_restante] = "FALHOU_RECUPERACAO"
+                            break
 
     finally:
         if op is not None:
@@ -331,7 +358,8 @@ def rodar_retry(cfg, conectar_fn=banco.conectar, abrir_sessao_fn=Sessao, data_is
             except Exception as e:
                 _log("Falha ao encerrar sessao no ERP: %s" % str(e)[:80])
         try:
-            s.fechar()
+            if s is not None:
+                s.fechar()
         except Exception as e:
             _log("Falha ao fechar navegador: %s" % str(e)[:80])
 
