@@ -166,7 +166,6 @@ class Operador:
         segundos_sem_palavras = 0
         segundos_com_launcher = 0
         ultimo_clique_taskbar = 0
-        tentativas_restaurar = 0
         while time.time() < limite:
             img = self.tela()
             if self.responder_sessao_duplicada(img=img):
@@ -184,26 +183,21 @@ class Operador:
                 self.log("   ERP pronto (%d palavras na tela)" % len(palavras))
                 return "conteudo"
 
-            # Se a janela estiver minimizada (tela com menos de 15 palavras e sem ancoras)
-            # e o item "Mega ERP" estiver na barra de tarefas (Y >= 840):
-            # Clicar no botao da barra de tarefas para restaurar a tela (com debounce de 8s).
-            # CORRIGIDO 2026-09-29: antes clicava de novo 2s depois (+ Alt+Tab) se a
-            # tela ainda nao tinha desenhado; o 2o clique no item da barra MINIMIZA de
-            # novo e a janela ficava abrindo e fechando ate o timeout (obras 340 e 410).
-            # Agora: um gesto por tentativa, espera a tela desenhar, e alterna entre
-            # clicar no item e Alt+Tab nas tentativas seguintes.
-            if len(palavras) < 15 and (time.time() - ultimo_clique_taskbar > 15):
+            # Tela vazia (menos de 15 palavras) com o item "Mega ERP" na barra de
+            # tarefas (Y >= 840): clicar nele. O clique ALTERNA minimizar/restaurar,
+            # e de fora nao da para saber em que estado a janela esta (ela pode estar
+            # ativa mas sem repintar, como em 2026-10-10 e 2026-10-20). Por isso:
+            # um clique, espera longa para a tela desenhar e, se continuar vazia,
+            # outro clique - que desfaz o primeiro se ele minimizou.
+            # CORRIGIDO 2026-10-20: o Alt+Tab que alternava com o clique atrapalhava
+            # (tirava o foco do ERP entre dois cliques) e o retry das 07:30 desistia.
+            if len(palavras) < 15 and (time.time() - ultimo_clique_taskbar > 20):
                 caixa_erp_tb = self.v.achar_texto("Mega ERP", img=img)
                 if caixa_erp_tb and caixa_erp_tb.y >= 840:
-                    tentativas_restaurar += 1
                     try:
-                        if tentativas_restaurar % 2 == 1:
-                            self.log("   'Mega ERP' minimizado na barra de tarefas; clicando uma vez para restaurar")
-                            cx, cy = centro(caixa_erp_tb)
-                            self.pagina.mouse.click(cx, cy)
-                        else:
-                            self.log("   janela ainda minimizada; tentando Alt+Tab")
-                            self.tecla("Alt+Tab", pausa=1.0)
+                        self.log("   tela vazia; clicando em 'Mega ERP' na barra de tarefas")
+                        cx, cy = centro(caixa_erp_tb)
+                        self.pagina.mouse.click(cx, cy)
                         ultimo_clique_taskbar = time.time()
                         time.sleep(6)
                     except Exception:
