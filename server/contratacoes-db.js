@@ -91,7 +91,7 @@ export async function classificadorDaObra(projetoId) {
 
 // Projetado por 'etapa|TIPO'. Importação antiga (sem linhas por insumo) entra
 // toda como material, com aviso para reimportar.
-async function projetadoPorTipo(importacaoId, tipoDe) {
+export async function projetadoPorTipo(importacaoId, tipoDe) {
   const mapa = new Map()
   const detalhes = new Map()
   const somar = (c, t, v) => mapa.set(`${c}|${t}`, (mapa.get(`${c}|${t}`) || 0) + v)

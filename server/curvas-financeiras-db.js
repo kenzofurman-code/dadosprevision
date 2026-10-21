@@ -1,7 +1,8 @@
 // Consultas e persistência de dados para as Curvas de Competência e Financeira
 import { query } from './db.js'
-import { calcularCurvasFinanceiras } from './curvas-financeiras-engine.js'
+import { calcularCurvasFinanceiras, separarForaDoCronograma } from './curvas-financeiras-engine.js'
 import { etapaParaMega } from './contratacoes.js'
+import { classificadorDaObra, projetadoPorTipo } from './contratacoes-db.js'
 
 /**
  * Busca os parâmetros da obra ou retorna defaults
@@ -158,43 +159,22 @@ export async function obterDadosCurvasFinanceiras(projetoId) {
   )
   const importacao = impRes.rows[0] || null
 
-  // 3. Buscar custos projetados por etapa e insumos (Material x MO)
+  // 3. Custo projetado por etapa, separado em Material x MO com a MESMA classificação da
+  //    Gestão de Contratações (insumos da empresa + ajustes da obra).
   const custosPorEtapaMega = new Map()
   if (importacao) {
-    // Buscar classificação de insumos da obra / empresa
-    const classifRes = await query(
-      `SELECT LOWER(TRIM(descricao)) as descr, tipo
-       FROM insumo_classificacao
-       WHERE projeto_id = $1 OR projeto_id IS NULL
-       ORDER BY (projeto_id IS NOT NULL) DESC`,
-      [pId]
-    )
-    const classifMapa = new Map()
-    for (const c of classifRes.rows) {
-      if (!classifMapa.has(c.descr)) classifMapa.set(c.descr, c.tipo)
-    }
-
-    // Buscar insumos detalhados da importação
-    const insumosRes = await query(
-      `SELECT codigo_etapa, descricao, custo_projetado
-       FROM custo_projetado_insumos
-       WHERE importacao_id = $1`,
-      [importacao.id]
-    )
-
-    for (const row of insumosRes.rows) {
-      const cod = row.codigo_etapa
-      const v = Number(row.custo_projetado) || 0
-      const descr = String(row.descricao || '').toLowerCase().trim()
-      const tipo = classifMapa.get(descr) || (descr.startsWith('mo ') || descr.includes('mao de obra') ? 'MAO_DE_OBRA' : 'MATERIAL')
-
-      if (!custosPorEtapaMega.has(cod)) {
-        custosPorEtapaMega.set(cod, { material: 0, mao_de_obra: 0, total: 0 })
-      }
+    const classif = await classificadorDaObra(pId)
+    const proj = await projetadoPorTipo(importacao.id, classif.tipoDe)
+    for (const [chave, v] of proj.mapa) {
+      const [cod, tipo] = chave.split('|')
+      if (!custosPorEtapaMega.has(cod)) custosPorEtapaMega.set(cod, { material: 0, mao_de_obra: 0, total: 0, descricao: '' })
       const item = custosPorEtapaMega.get(cod)
       if (tipo === 'MAO_DE_OBRA') item.mao_de_obra += v
       else item.material += v
       item.total += v
+      // descrição do maior insumo da etapa, para identificar o que está fora do cronograma
+      const maior = (proj.detalhes.get(chave) || []).reduce((a, b) => (b.custo_projetado > (a?.custo_projetado ?? -Infinity) ? b : a), null)
+      if (maior && !item.descricao) item.descricao = maior.descricao
     }
   }
 
@@ -211,11 +191,19 @@ export async function obterDadosCurvasFinanceiras(projetoId) {
 
   // 5. Montar lista de etapas unificada
   const etapasParaCalculo = []
+  const etapasSemProjetado = []
   let realizadoTotalPrevision = 0
+  const { dentro: projetadoNoCronograma, fora: projetadoFora, totalFora } = separarForaDoCronograma(
+    custosPorEtapaMega,
+    new Set(cffRes.rows.map((r) => etapaParaMega(r.codigo) || r.codigo))
+  )
 
   for (const row of cffRes.rows) {
     const codMega = etapaParaMega(row.codigo) || row.codigo
-    const cp = custosPorEtapaMega.get(codMega)
+    const cp = projetadoNoCronograma.get(codMega)
+    if (importacao && !(cp && cp.total > 0) && Number(row.custo_total) > 0) {
+      etapasSemProjetado.push({ codigo: codMega, nome: row.descricao, orcamento: Number(row.custo_total) })
+    }
 
     // Se temos Custo Projetado detalhado da Piemonte, usamos ele com prioridade máxima.
     // Senão, fallback para os custos do CFF da Prevision.
@@ -275,6 +263,11 @@ export async function obterDadosCurvasFinanceiras(projetoId) {
     parametrosObra: paramsObra,
     parametrosEtapas: paramsEtapasObj.lista,
     etapasHierarquia: hierRes.rows,
+    // Custo projetado que não entra nas curvas (sem etapa nível 5 no cronograma) e etapas do
+    // cronograma sem custo projetado (essas seguem com o orçamento da Prevision).
+    conciliacaoProjetado: importacao
+      ? { totalFora, fora: projetadoFora, etapasSemProjetado }
+      : null,
     ...resultadoMotor,
   }
 }
