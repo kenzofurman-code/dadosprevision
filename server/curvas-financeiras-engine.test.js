@@ -73,7 +73,8 @@ test('material: antecedência de entrega e lotes fixos uniformes', () => {
   assert.equal(eventos[0].dataEntrega, '2026-04-21') // 10 dias antes de 01/05
   assert.equal(eventos[0].mesCompetencia, '2026-04')
   assert.equal(eventos[0].mesFinanceiro, '2026-05') // 21/04 + 28d = 19/05 (maio)
-  assert.equal(eventos[0].valor, 10000)
+  // regra de lotes (2026-10-21): períodos de dias inteiros — 101 dias / 5 = a 1ª entrega abastece 20 dias
+  assert.equal(eventos[0].valor, Math.round((50000 * 20 / 101) * 100) / 100)
 
   // Total deve bater exatamente R$ 50.000
   const soma = eventos.reduce((s, e) => s + e.valor, 0)
@@ -330,4 +331,81 @@ test('custo projetado: separa o que não tem etapa nível 5 no cronograma, do ma
   assert.deepEqual(r.fora.map((f) => f.codigo), ['24.01.01.01.001', '21.03.01.01.001'])
   assert.equal(r.fora[0].descricao, 'TAXA DE ADMINISTRAÇÃO')
   assert.equal(r.fora[1].mao_de_obra, 100)
+})
+
+// ---- Rastreio: físico diário como base única, regra de lotes e fluxos ------------------------
+
+const somaPorChave = (itens, chave, campo = 'valor') => {
+  const m = new Map()
+  for (const i of itens) m.set(chave(i), (m.get(chave(i)) || 0) + i[campo])
+  return m
+}
+const mesesIguais = (a, b, tol = 0.05) => {
+  for (const k of new Set([...a.keys(), ...b.keys()])) {
+    assert.ok(Math.abs((a.get(k) || 0) - (b.get(k) || 0)) <= tol, `${k}: ${a.get(k)} != ${b.get(k)}`)
+  }
+}
+
+test('lotes: prazo dividido em N períodos; cada entrega chega X dias antes do seu período', () => {
+  const eventos = distribuirMaterialEtapa({
+    custo: 100000, dataInicio: '2026-01-01', dataFim: '2026-06-30', diasAntecedencia: 10, numEntregas: 2, prazoDias: 28,
+  })
+  assert.deepEqual(eventos.map((e) => e.dataEntrega), ['2025-12-22', '2026-03-22'])
+  // 181 dias: 1ª entrega abastece jan-mar (90 dias), 2ª abr-jun (91 dias) — ~50/50
+  perto(eventos[0].valor, 100000 * 90 / 181, 0.05)
+  perto(eventos[1].valor, 100000 * 91 / 181, 0.05)
+})
+
+test('lotes: cada entrega leva o material do físico do seu período', () => {
+  const pontos = [0.25, 0.25, 0.2, 0.1, 0.1, 0.1].map((p, i) => ({ data: `2026-0${i + 1}-28`, previsto: p }))
+  const eventos = distribuirMaterialEtapa({
+    custo: 100000, dataInicio: '2026-01-01', dataFim: '2026-06-30', diasAntecedencia: 0, numEntregas: 2, prazoDias: 28,
+    pontosMensais: pontos,
+  })
+  perto(eventos[0].valor, 70000, 0.05)
+  perto(eventos[1].valor, 30000, 0.05)
+})
+
+test('mão de obra segue o físico mês a mês, com o corte do dia 20 sobre cada dia', () => {
+  const eventos = distribuirMaoDeObraEtapa({
+    custo: 1000, dataInicio: '2026-03-01', dataFim: '2026-04-30', diaCorteMo: 20,
+    pontosMensais: [{ data: '2026-03-31', previsto: 0.7 }, { data: '2026-04-30', previsto: 0.3 }],
+  })
+  perto(somaPor(eventos, 'mesCompetencia', '2026-03'), 0.7 * 20 / 31 * 1000, 0.02)
+  perto(somaPor(eventos, 'mesCompetencia', '2026-04'), (0.7 * 11 / 31 + 0.3 * 20 / 30) * 1000, 0.02)
+  perto(somaPor(eventos, 'mesCompetencia', '2026-05'), 0.3 * 10 / 30 * 1000, 0.02)
+})
+
+test('físico sem pesos mensais: espalhado entre início e fim', () => {
+  const r = calcularCurvasFinanceiras({
+    etapas: [{ codigo_etapa: 'A', custo_material: 61000, data_inicio: '2026-04-01', data_fim: '2026-05-31' }],
+  })
+  const econ = new Map(r.etapas[0].eventosEconomico.map((e) => [e.mes, e.valor]))
+  perto(econ.get('2026-04'), 30000, 0.05)
+  perto(econ.get('2026-05'), 31000, 0.05)
+})
+
+test('fluxos fecham com físico, competência e financeiro (proporcional, lotes parcelados, MO com retenção)', () => {
+  const pontos = [{ data: '2026-03-31', previsto: 0.5 }, { data: '2026-04-30', previsto: 0.3 }, { data: '2026-05-31', previsto: 0.2 }]
+  const base = { data_inicio: '2026-03-01', data_fim: '2026-05-31', pontos_mensais: pontos }
+  const etapas = [
+    { ...base, codigo_etapa: 'P', custo_material: 90000, custo_mao_obra: 45000 },
+    { ...base, codigo_etapa: 'L', custo_material: 60000, custo_mao_obra: 30000 },
+  ]
+  const r = calcularCurvasFinanceiras({
+    etapas,
+    parametrosObra: { dias_antecedencia_padrao: 10, retencao_mo_ativa: true, retencao_mo_percentual: 5, data_fim_obra: '2026-12-31' },
+    parametrosEtapas: new Map([['L|MATERIAL', { codigo_etapa: 'L', num_entregas: 3, tipo_pagamento: 'PARCELADO', parcelas_dias: [28, 56] }]]),
+  })
+  for (const et of r.etapas) {
+    assert.ok(et.fluxos.length > 0, `etapa ${et.codigo_etapa} sem fluxos`)
+    mesesIguais(somaPorChave(et.fluxos, (f) => `${f.tipo}|${f.comp}`), somaPorChave(et.eventos, (e) => `${e.tipo}|${e.mesCompetencia}`))
+    mesesIguais(somaPorChave(et.fluxos, (f) => `${f.tipo}|${f.fin}`), somaPorChave(et.eventos, (e) => `${e.tipo}|${e.mesFinanceiro}`))
+    mesesIguais(somaPorChave(et.fluxos, (f) => f.fis), new Map(et.eventosEconomico.map((e) => [e.mes, e.valor])))
+  }
+  const mo = r.etapas[0].fluxos.filter((f) => f.tipo === 'MAO_DE_OBRA')
+  assert.ok(mo.some((f) => f.fis !== f.comp && /corte/.test(f.mComp)), 'MO de fim de mês vai para a competência seguinte')
+  assert.ok(mo.some((f) => /reten/.test(f.mFin) && f.fin === '2027-12'), 'retenção liberada 1 ano após o fim da obra')
+  const lotes = r.etapas[1].fluxos.filter((f) => f.tipo === 'MATERIAL')
+  assert.ok(lotes.every((f) => /entrega \d de 3/.test(f.mComp) && /parcela [12]\/2/.test(f.mFin)))
 })

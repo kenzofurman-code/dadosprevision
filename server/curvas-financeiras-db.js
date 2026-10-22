@@ -277,7 +277,7 @@ export async function obterDadosCurvasFinanceiras(projetoId) {
 /** Congela o resultado atual (recalculado agora no servidor) com um nome. */
 export async function salvarVersaoCurvas(projetoId, nome) {
   const dados = await obterDadosCurvasFinanceiras(projetoId)
-  const etapas = dados.etapas.map(({ eventos: _eventos, eventosEconomico: _eventosEconomico, ...resto }) => resto)
+  const etapas = dados.etapas.map(({ eventos: _eventos, eventosEconomico: _eventosEconomico, fluxos: _fluxos, ...resto }) => resto)
   const payload = {
     kpis: dados.kpis,
     meses: dados.meses,
