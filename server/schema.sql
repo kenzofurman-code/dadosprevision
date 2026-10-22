@@ -753,3 +753,21 @@ CREATE TABLE IF NOT EXISTS orcamento_reajuste_obra (
   mes_base DATE NOT NULL,
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Curvas, Realizado + projeção: relatório "Conciliação Financeira" do Mega (vencimento por AP), por obra.
+-- Cada upload substitui o anterior do projeto.
+CREATE TABLE IF NOT EXISTS pagamentos_ap (
+  id SERIAL PRIMARY KEY,
+  projeto_id TEXT NOT NULL REFERENCES projetos(id_prevision) ON DELETE CASCADE,
+  ap INTEGER NOT NULL,
+  parcela TEXT,
+  tipo_documento TEXT,
+  vencimento DATE,
+  valor_rateado NUMERIC NOT NULL DEFAULT 0,
+  pago NUMERIC NOT NULL DEFAULT 0,
+  saldo NUMERIC NOT NULL DEFAULT 0,
+  cod_estruturado TEXT,
+  arquivo TEXT,
+  importado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_pagamentos_ap_projeto ON pagamentos_ap (projeto_id, ap);

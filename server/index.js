@@ -37,6 +37,7 @@ import {
 import {
   obterDadosCurvasFinanceiras, salvarParametrosCurvas,
   salvarVersaoCurvas, listarVersoesCurvas, obterVersaoCurvas, excluirVersaoCurvas,
+  importarPagamentos, obterRealizadoProjecao,
 } from './curvas-financeiras-db.js'
 import { obterPainelTeorico, salvarMesBase } from './painel-teorico-db.js'
 import { sincronizarIncc, sincronizarInccSeVazio } from './incc.js'
@@ -362,6 +363,14 @@ app.post('/api/curvas-financeiras/parametros', rota((req) =>
     parametrosObra: req.body?.parametrosObra,
     parametrosEtapa: req.body?.parametrosEtapa,
     parametrosEtapas: req.body?.parametrosEtapas,
+  })))
+
+app.get('/api/curvas-financeiras/realizado', rota((req) =>
+  obterRealizadoProjecao(exigirProjeto(req.query.projectId), req.query.corte ? String(req.query.corte) : null)))
+app.post('/api/curvas-financeiras/pagamentos', rota((req) =>
+  importarPagamentos(exigirProjeto(req.body?.projectId), {
+    arquivo: req.body?.arquivo,
+    matriz: Array.isArray(req.body?.matriz) ? req.body.matriz : [],
   })))
 
 const exigirVersaoId = (valor) => {
