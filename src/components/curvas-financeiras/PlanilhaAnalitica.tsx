@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Download } from 'lucide-react'
 import './PlanilhaAnalitica.css'
+import { RastreioPlanilha } from './RastreioPlanilha'
+import type { Fluxo } from './rastreio'
 
 // Matriz mensal de cada etapa nível 5: [comp. material, comp. MO, fin. material, fin. MO]
 interface EtapaAnalitica {
@@ -8,6 +10,8 @@ interface EtapaAnalitica {
   codigo_prevision?: string | null
   nome: string
   mensal?: Record<string, number[]>
+  fluxos?: Fluxo[]
+  eventosEconomico?: Array<{ mes: string; valor: number }>
 }
 
 interface Props {
@@ -44,8 +48,11 @@ const rotuloMes = (m: string) => `${NOMES_MES[Number(m.slice(5, 7)) - 1] || m.sl
 export function PlanilhaAnalitica({ etapas, hierarquia, meses, nomeArquivo }: Props) {
   const [medida, setMedida] = useState<Medida>('comp_total')
   const [nivelMax, setNivelMax] = useState(5)
+  const [modo, setModo] = useState<'medida' | 'rastreio'>('medida')
+  const [mostrarVazias, setMostrarVazias] = useState(false)
 
   const semDetalhe = etapas.length > 0 && etapas.every((e) => !e.mensal)
+  const semFluxos = etapas.length > 0 && etapas.every((e) => !e.fluxos)
 
   // Cada etapa nível 5 soma seus valores nela mesma e em todas as etapas-mãe existentes (prefixo do código)
   const { linhas, totalGeral } = useMemo(() => {
@@ -82,7 +89,11 @@ export function PlanilhaAnalitica({ etapas, hierarquia, meses, nomeArquivo }: Pr
     return { linhas, totalGeral }
   }, [etapas, hierarquia, meses, medida])
 
-  const visiveis = useMemo(() => linhas.filter((l) => l.nivel <= nivelMax), [linhas, nivelMax])
+  // Só etapas com valor no período, a menos que o usuário peça para ver todas
+  const visiveis = useMemo(
+    () => linhas.filter((l) => l.nivel <= nivelMax && (mostrarVazias || l.valores.some((v) => Math.abs(v) >= 0.005))),
+    [linhas, nivelMax, mostrarVazias]
+  )
 
   function exportarCsv() {
     const cab = ['Código', 'Descrição', 'Nível', ...meses, 'Total']
@@ -107,6 +118,14 @@ export function PlanilhaAnalitica({ etapas, hierarquia, meses, nomeArquivo }: Pr
   return (
     <section className="curvas-fin-table-panel">
       <div className="curvas-fin-table-actions pa-controles">
+        <div className="pa-modos" role="tablist">
+          <button type="button" role="tab" aria-selected={modo === 'medida'} onClick={() => setModo('medida')}>Por medida</button>
+          <button type="button" role="tab" aria-selected={modo === 'rastreio'} onClick={() => setModo('rastreio')}>Rastreio</button>
+        </div>
+        <label>
+          <input type="checkbox" checked={mostrarVazias} onChange={(e) => setMostrarVazias(e.target.checked)} /> Mostrar etapas sem valor
+        </label>
+        {modo === 'medida' && (<>
         <label>
           Medida{' '}
           <select value={medida} onChange={(e) => setMedida(e.target.value as Medida)}>
@@ -126,7 +145,18 @@ export function PlanilhaAnalitica({ etapas, hierarquia, meses, nomeArquivo }: Pr
         <button type="button" className="curvas-fin-btn curvas-fin-btn-secondary" onClick={exportarCsv}>
           <Download size={14} /> Baixar CSV
         </button>
+        </>)}
       </div>
+
+      {modo === 'rastreio' && (semFluxos ? (
+        <p className="pa-aviso">
+          O rastreio não fica guardado nas versões salvas. Volte ao cálculo atual (Recalcular) para rastrear os valores.
+        </p>
+      ) : (
+        <RastreioPlanilha etapas={etapas} hierarquia={hierarquia} meses={meses} mostrarVazias={mostrarVazias} />
+      ))}
+
+      {modo === 'medida' && (<>
 
       {semDetalhe && (
         <p className="pa-aviso">
@@ -163,6 +193,7 @@ export function PlanilhaAnalitica({ etapas, hierarquia, meses, nomeArquivo }: Pr
           </tfoot>
         </table>
       </div>
+      </>)}
     </section>
   )
 }
