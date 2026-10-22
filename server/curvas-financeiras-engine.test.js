@@ -409,3 +409,14 @@ test('fluxos fecham com físico, competência e financeiro (proporcional, lotes 
   const lotes = r.etapas[1].fluxos.filter((f) => f.tipo === 'MATERIAL')
   assert.ok(lotes.every((f) => /entrega \d de 3/.test(f.mComp) && /parcela [12]\/2/.test(f.mFin)))
 })
+
+test('lotes: períodos sobre o intervalo onde existe físico, mesmo se as datas da etapa divergirem', () => {
+  // datas da etapa em jan-fev, mas o cronograma mensal tem físico só em mai-jun
+  const eventos = distribuirMaterialEtapa({
+    custo: 1000, dataInicio: '2026-01-01', dataFim: '2026-02-28', diasAntecedencia: 10, numEntregas: 2, prazoDias: 28,
+    pontosMensais: [{ data: '2026-05-31', previsto: 0.5 }, { data: '2026-06-30', previsto: 0.5 }],
+  })
+  // nenhuma entrega pode chegar depois do físico que abastece: 1ª antes de mai, 2ª antes de jun
+  assert.deepEqual(eventos.map((e) => e.dataEntrega), ['2026-04-21', '2026-05-21'])
+  perto(eventos[0].valor + eventos[1].valor, 1000, 0.02)
+})
