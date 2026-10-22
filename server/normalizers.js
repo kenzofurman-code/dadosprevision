@@ -291,9 +291,23 @@ export function normalizeRestriction(task) {
   })
 }
 
-function pointSeries(points, length = 0) {
+// Série de pontos alinhada à lista de datas do relatório CFF. A Prevision manda os pontos de cada
+// linha a partir do mês da própria etapa, com a data em `x` — por isso o ponto vai para o mês do seu
+// `x` (e não para a posição dele na lista). Sem `x`, cai pela posição; fora do período, na ponta mais próxima.
+export function pointSeries(points, dates = []) {
   const values = Array.isArray(points) ? points : []
-  return Array.from({ length: Math.max(length, values.length) }, (_, index) => ({ x: values[index]?.x || null, y: Number(values[index]?.y) || 0 }))
+  const serie = dates.map((date) => ({ x: date, y: 0 }))
+  if (!serie.length) return values.map((p) => ({ x: p?.x || null, y: Number(p?.y) || 0 }))
+  const indicePorMes = new Map(dates.map((date, index) => [String(date).slice(0, 7), index]))
+  const primeiroMes = String(dates[0]).slice(0, 7)
+  values.forEach((p, posicao) => {
+    const mes = p?.x ? String(p.x).slice(0, 7) : null
+    let indice = mes ? indicePorMes.get(mes) : posicao
+    if (indice === undefined) indice = mes < primeiroMes ? 0 : serie.length - 1
+    if (indice >= serie.length) indice = serie.length - 1
+    serie[indice].y += Number(p?.y) || 0
+  })
+  return serie
 }
 
 function sumPoints(points) {
@@ -311,7 +325,7 @@ function cffSummary(report, reference) {
   for (const row of report.data?.rows || []) {
     const level = String((row.budgetItem || row.budget_item || {}).level ?? '0')
     if (!levels.has(level)) levels.set(level, dates.map((data) => ({ data, base: 0, previsto: 0, realizado: 0 })))
-    const series = [pointSeries(row.basePoints || row.base_points, dates.length), pointSeries(row.expectedPoints || row.expected_points, dates.length), pointSeries(row.realizedPoints || row.realized_points, dates.length)]
+    const series = [pointSeries(row.basePoints || row.base_points, dates), pointSeries(row.expectedPoints || row.expected_points, dates), pointSeries(row.realizedPoints || row.realized_points, dates)]
     for (const target of [levels.get('all'), levels.get(level)]) {
       dates.forEach((_date, index) => { target[index].base += series[0][index].y; target[index].previsto += series[1][index].y; target[index].realizado += series[2][index].y })
     }
@@ -391,9 +405,9 @@ export function normalizeAnalytics(project, data) {
       const item = row.budgetItem || row.budget_item || {}
       const itemId = String(item.id || `${report.budgetId}_${row.code || item.code || rowIndex}`)
       const weights = item.budgetWeights || row.activity_weights || []
-      const base = pointSeries(row.basePoints || row.base_points, dates.length)
-      const expected = pointSeries(row.expectedPoints || row.expected_points, dates.length)
-      const realized = pointSeries(row.realizedPoints || row.realized_points, dates.length)
+      const base = pointSeries(row.basePoints || row.base_points, dates)
+      const expected = pointSeries(row.expectedPoints || row.expected_points, dates)
+      const realized = pointSeries(row.realizedPoints || row.realized_points, dates)
       const lastRealizedPoint = realized.filter((point) => point.y > 0).at(-1) || realized.at(-1) || null
       let accBase = 0; let accExpected = 0; let accRealized = 0
       const pontos_mensais = dates.map((date, index) => { accBase += base[index].y; accExpected += expected[index].y; accRealized += realized[index].y; return { data: date, base: base[index].y, previsto: expected[index].y, realizado: realized[index].y, base_acumulada: accBase, previsto_acumulado: accExpected, realizado_acumulado: accRealized } })

@@ -252,7 +252,7 @@ export function distribuirMaoDeObraEtapa(params) {
  * - Competência = data de chegada na obra.
  *   - Proporcional (padrão): cada dia físico chega `diasAntecedencia` antes; uma "nota" por mês de
  *     chegada, no dia médio ponderado.
- *   - Lotes (`numEntregas` = N): o prazo da atividade é dividido em N períodos iguais; a entrega k chega
+ *   - Lotes (`numEntregas` = N): o período com físico é dividido em N períodos iguais; a entrega k chega
  *     `diasAntecedencia` antes do início do seu período e leva o material do físico desse período.
  * - Financeiro: data de chegada + prazo (único ou parcelado).
  * Retorna { eventos, fluxos }.
@@ -311,12 +311,16 @@ function materialComFluxos({
   if (numEntregas && Number(numEntregas) >= 1) {
     // Lotes: o prazo (T dias) é dividido em N períodos de dias inteiros; o período k começa no dia
     // floor(k·T/N). Cada dia físico abastece o lote do seu período (dias fora da etapa: o mais próximo).
+    // O intervalo é o do físico (primeiro ao último dia com execução), não as datas da etapa: se o
+    // cronograma mensal divergir delas, a entrega ainda chega antes do físico que abastece.
     const N = Number(numEntregas)
-    const T = diferencaDias(dataInicio, fim) + 1
+    const comFisico = dias.filter((d) => d.peso > 0).map((d) => d.data).sort()
+    const inicioFisico = comFisico[0] || dataInicio
+    const T = diferencaDias(inicioFisico, comFisico[comFisico.length - 1] || fim) + 1
     const inicioPeriodo = (k) => Math.floor((k * T) / N)
     const lotes = Array.from({ length: N }, () => new Map())
     for (const d of dias) {
-      const i = Math.min(T - 1, Math.max(0, diferencaDias(dataInicio, d.data)))
+      const i = Math.min(T - 1, Math.max(0, diferencaDias(inicioFisico, d.data)))
       let k = N - 1
       while (k > 0 && inicioPeriodo(k) > i) k--
       const fis = mesAnoIso(d.data)
@@ -324,7 +328,7 @@ function materialComFluxos({
     }
     lotes.forEach((porFis, k) => {
       if (![...porFis.values()].some((p) => p > 0)) return
-      const chegada = somarDiasIso(dataInicio, inicioPeriodo(k) - antecedencia)
+      const chegada = somarDiasIso(inicioFisico, inicioPeriodo(k) - antecedencia)
       adicionarEntrega(chegada, porFis, `entrega ${k + 1} de ${N} (chega ${antecedencia} dias antes)`)
     })
     return { eventos, fluxos: agregarFluxos(brutos) }
