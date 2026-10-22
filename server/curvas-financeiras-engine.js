@@ -84,6 +84,22 @@ export function resolverRegra(mapa, { codigoMega, codigoPrevision }, tipo) {
   return null
 }
 
+/**
+ * Custo projetado por etapa (código Mega) dividido entre o que tem etapa nível 5 no cronograma
+ * (`dentro`, entra nas curvas) e o que não tem (`fora`: taxas, itens fora de orçamento, etapas
+ * que não existem na Prevision), do maior para o menor valor.
+ */
+export function separarForaDoCronograma(custos, codigosEap) {
+  const dentro = new Map()
+  const fora = []
+  for (const [codigo, v] of custos) {
+    if (codigosEap.has(codigo)) dentro.set(codigo, v)
+    else fora.push({ codigo, ...v })
+  }
+  fora.sort((a, b) => b.total - a.total)
+  return { dentro, fora, totalFora: arredondar(fora.reduce((s, f) => s + f.total, 0)) }
+}
+
 /** Por mês: [competência material, competência MO, financeiro material, financeiro MO] (planilha analítica). */
 function matrizMensal(eventos) {
   const m = {}

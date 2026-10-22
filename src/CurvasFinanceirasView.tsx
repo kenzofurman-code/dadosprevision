@@ -114,9 +114,16 @@ interface CurvaParametroEtapa {
   observacao?: string | null
 }
 
+interface ConciliacaoProjetado {
+  totalFora: number
+  fora: Array<{ codigo: string; total: number; material: number; mao_de_obra: number; descricao: string }>
+  etapasSemProjetado: Array<{ codigo: string; nome: string; orcamento: number }>
+}
+
 interface CurvasApiResponse {
   ok: boolean
   projetoId: string
+  conciliacaoProjetado?: ConciliacaoProjetado | null
   importacaoCustoProjetado: {
     id: number
     referencia: string
@@ -142,7 +149,7 @@ interface Props {
 
 type TabMode = 'grafico' | 'mensal' | 'analitica' | 'etapas'
 type ScopeFilter = 'todos' | 'material' | 'mao_de_obra'
-type ChartMode = 'acumulado_pct' | 'acumulado_reais' | 'mensal_reais'
+type ChartMode = 'acumulado_pct' | 'acumulado_reais' | 'mensal_reais' | 'mensal_pct'
 
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(val || 0)
@@ -561,10 +568,12 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
       'Econômico Mensal (R$)',
       'Econômico Acumulado (R$)',
       'Competência Mensal Total (R$)',
+      '% do Orçamento (Competência)',
       'Competência Material (R$)',
       'Competência Mão de Obra (R$)',
       'Competência Acumulada (R$)',
       'Financeiro Mensal Total (R$)',
+      '% do Orçamento (Financeiro)',
       'Financeiro Material (R$)',
       'Financeiro Mão de Obra (R$)',
       'Financeiro Acumulado (R$)',
@@ -575,10 +584,12 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
       s.economicoMensal.toFixed(2),
       s.economicoAcumulado.toFixed(2),
       s.competenciaMensal.toFixed(2),
+      ((s.competenciaMensal / (data.kpis.totalOrcado || 1)) * 100).toFixed(2),
       s.competenciaMaterial.toFixed(2),
       s.competenciaMaoDeObra.toFixed(2),
       s.competenciaAcumulado.toFixed(2),
       s.financeiroMensal.toFixed(2),
+      ((s.financeiroMensal / (data.kpis.totalOrcado || 1)) * 100).toFixed(2),
       s.financeiroMaterial.toFixed(2),
       s.financeiroMaoDeObra.toFixed(2),
       s.financeiroAcumulado.toFixed(2),
@@ -617,75 +628,44 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
     const totalOrcado = data.kpis.totalOrcado || 1
     const series = data.seriesMensal
 
-    // Mapear pontos de acordo com o modo
-    let maxY = 0
-    let pointsEcon: number[] = []
-    let pointsComp: number[] = []
-    let pointsFin: number[] = []
-
-    if (chartMode === 'acumulado_pct') {
-      maxY = 100
-      pointsEcon = series.map((s) => Math.min(100, (s.economicoAcumulado / totalOrcado) * 100))
-      pointsComp = series.map((s) => {
-        const val =
-          scopeFilter === 'material'
-            ? s.competenciaMaterial
-            : scopeFilter === 'mao_de_obra'
-            ? s.competenciaMaoDeObra
-            : s.competenciaAcumulado
-        return Math.min(100, (val / totalOrcado) * 100)
-      })
-      pointsFin = series.map((s) => {
-        const val =
-          scopeFilter === 'material'
-            ? s.financeiroMaterial
-            : scopeFilter === 'mao_de_obra'
-            ? s.financeiroMaoDeObra
-            : s.financeiroAcumulado
-        return Math.min(100, (val / totalOrcado) * 100)
-      })
-    } else if (chartMode === 'acumulado_reais') {
-      maxY = Math.max(
-        ...series.map((s) => Math.max(s.economicoAcumulado, s.competenciaAcumulado, s.financeiroAcumulado)),
-        totalOrcado
-      )
-      pointsEcon = series.map((s) => s.economicoAcumulado)
-      pointsComp = series.map((s) =>
-        scopeFilter === 'material'
-          ? s.competenciaMaterial
-          : scopeFilter === 'mao_de_obra'
-          ? s.competenciaMaoDeObra
-          : s.competenciaAcumulado
-      )
-      pointsFin = series.map((s) =>
-        scopeFilter === 'material'
-          ? s.financeiroMaterial
-          : scopeFilter === 'mao_de_obra'
-          ? s.financeiroMaoDeObra
-          : s.financeiroAcumulado
-      )
-    } else {
-      // mensal_reais
-      maxY = Math.max(
-        ...series.map((s) => Math.max(s.economicoMensal, s.competenciaMensal, s.financeiroMensal)),
-        1
-      )
-      pointsEcon = series.map((s) => s.economicoMensal)
-      pointsComp = series.map((s) =>
+    // Pontos: valor do mês (conforme o filtro Material/MO) -> acumula se o modo for acumulado
+    // -> converte em % do orçamento se o modo for percentual.
+    const acumulado = chartMode.startsWith('acumulado')
+    const emPct = chartMode.endsWith('_pct')
+    const acumular = (v: number[]) => {
+      let a = 0
+      return v.map((x) => (a += x))
+    }
+    const escalar = (v: number[]) => {
+      const base = acumulado ? acumular(v) : v
+      if (!emPct) return base
+      return base.map((x) => (acumulado ? Math.min(100, (x / totalOrcado) * 100) : (x / totalOrcado) * 100))
+    }
+    const pointsEcon = escalar(series.map((s) => s.economicoMensal))
+    const pointsComp = escalar(
+      series.map((s) =>
         scopeFilter === 'material'
           ? s.competenciaMaterial
           : scopeFilter === 'mao_de_obra'
           ? s.competenciaMaoDeObra
           : s.competenciaMensal
       )
-      pointsFin = series.map((s) =>
+    )
+    const pointsFin = escalar(
+      series.map((s) =>
         scopeFilter === 'material'
           ? s.financeiroMaterial
           : scopeFilter === 'mao_de_obra'
           ? s.financeiroMaoDeObra
           : s.financeiroMensal
       )
-    }
+    )
+    const maiorPonto = Math.max(...pointsEcon, ...pointsComp, ...pointsFin, 0)
+    const maxY = acumulado
+      ? emPct
+        ? 100
+        : Math.max(maiorPonto, totalOrcado)
+      : Math.max(maiorPonto, emPct ? 0.01 : 1)
 
     // Configurações do ViewBox
     const W = 1000
@@ -757,6 +737,18 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
   }
 
   const activeHoverPoint = hoverIndex !== null && chartData?.series[hoverIndex] ? chartData.series[hoverIndex] : null
+
+  const pctOrcamento = (valor: number) =>
+    `${((valor / (data?.kpis.totalOrcado || 1)) * 100).toFixed(2).replace('.', ',')}%`
+
+  // Valor do tooltip conforme o modo do gráfico (% sempre sobre o orçamento total)
+  const valorTooltip = (mensal: number, acumuladoMes: number) => {
+    const total = data?.kpis.totalOrcado || 1
+    if (chartMode === 'acumulado_pct') return `${((acumuladoMes / total) * 100).toFixed(1)}%`
+    if (chartMode === 'mensal_pct') return `${((mensal / total) * 100).toFixed(2)}%`
+    if (chartMode === 'mensal_reais') return formatCurrency(mensal)
+    return formatCurrency(acumuladoMes)
+  }
 
   return (
     <div className="curvas-fin-wrapper">
@@ -874,6 +866,71 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
           </button>
         </div>
       )}
+
+      {/* Conciliação: custo projetado que não entra nas curvas e etapas sem projetado */}
+      {data?.conciliacaoProjetado &&
+        (data.conciliacaoProjetado.fora.length > 0 || data.conciliacaoProjetado.etapasSemProjetado.length > 0) && (
+          <details className="feedback" style={{ margin: 0, display: 'block' }}>
+            <summary style={{ cursor: 'pointer' }}>
+              <AlertCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />
+              {data.conciliacaoProjetado.fora.length > 0 && (
+                <>
+                  <strong>{formatCurrency(data.conciliacaoProjetado.totalFora)}</strong> do custo projetado não entram nas
+                  curvas (sem etapa nível 5 no cronograma).{' '}
+                </>
+              )}
+              {data.conciliacaoProjetado.etapasSemProjetado.length > 0 && (
+                <>
+                  {data.conciliacaoProjetado.etapasSemProjetado.length} etapa(s) do cronograma sem custo projetado usam o
+                  orçamento da Prevision.{' '}
+                </>
+              )}
+              Ver detalhes
+            </summary>
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: 10, fontSize: 12.5 }}>
+              {data.conciliacaoProjetado.fora.length > 0 && (
+                <table className="curvas-fin-data-table" style={{ width: 'auto' }}>
+                  <thead>
+                    <tr>
+                      <th className="col-left">Código (fora do cronograma)</th>
+                      <th className="col-left">Maior insumo</th>
+                      <th>Projetado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.conciliacaoProjetado.fora.map((f) => (
+                      <tr key={f.codigo}>
+                        <td className="col-left" style={{ fontFamily: 'monospace' }}>{f.codigo}</td>
+                        <td className="col-left">{f.descricao || '-'}</td>
+                        <td>{formatCurrency(f.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {data.conciliacaoProjetado.etapasSemProjetado.length > 0 && (
+                <table className="curvas-fin-data-table" style={{ width: 'auto' }}>
+                  <thead>
+                    <tr>
+                      <th className="col-left">Etapa sem custo projetado</th>
+                      <th>Orçamento Prevision usado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.conciliacaoProjetado.etapasSemProjetado.map((e) => (
+                      <tr key={e.codigo}>
+                        <td className="col-left">
+                          <span style={{ fontFamily: 'monospace' }}>{e.codigo}</span> {e.nome}
+                        </td>
+                        <td>{formatCurrency(e.orcamento)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </details>
+        )}
 
       {/* Alerta de Erro */}
       {error && (
@@ -1042,6 +1099,14 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
               >
                 Mensal (R$)
               </button>
+              <button
+                type="button"
+                className={`curvas-fin-pill-btn ${chartMode === 'mensal_pct' ? 'active' : ''}`}
+                onClick={() => setChartMode('mensal_pct')}
+                title="Quantos % do orçamento são gastos em cada mês"
+              >
+                Mensal (%)
+              </button>
             </div>
           )}
 
@@ -1117,7 +1182,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                       opacity="0.55"
                       fontFamily="system-ui"
                     >
-                      {chartMode === 'acumulado_pct' ? `${Math.round(val)}%` : formatCurrency(val)}
+                      {chartMode === 'acumulado_pct' ? `${Math.round(val)}%` : chartMode === 'mensal_pct' ? `${val.toFixed(1).replace('.', ',')}%` : formatCurrency(val)}
                     </text>
                   </g>
                 )
@@ -1146,7 +1211,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
               })}
 
               {/* Área Sombreada Financeiro */}
-              {chartMode !== 'mensal_reais' && (
+              {!chartMode.startsWith('mensal') && (
                 <path d={chartData.areaFin} fill="url(#finGrad)" />
               )}
 
@@ -1156,7 +1221,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                 fill="none"
                 stroke="#2563eb"
                 strokeWidth="2.5"
-                strokeDasharray={chartMode === 'mensal_reais' ? '4 3' : 'none'}
+                strokeDasharray={chartMode.startsWith('mensal') ? '4 3' : 'none'}
               />
 
               {/* Linha Competência (Âmbar/Laranja) */}
@@ -1238,11 +1303,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                     Econômico:
                   </span>
                   <span>
-                    {chartMode === 'acumulado_pct'
-                      ? `${((activeHoverPoint.economicoAcumulado / (data?.kpis.totalOrcado || 1)) * 100).toFixed(1)}%`
-                      : chartMode === 'mensal_reais'
-                      ? formatCurrency(activeHoverPoint.economicoMensal)
-                      : formatCurrency(activeHoverPoint.economicoAcumulado)}
+                    {valorTooltip(activeHoverPoint.economicoMensal, activeHoverPoint.economicoAcumulado)}
                   </span>
                 </div>
 
@@ -1252,11 +1313,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                     Competência:
                   </span>
                   <span>
-                    {chartMode === 'acumulado_pct'
-                      ? `${((activeHoverPoint.competenciaAcumulado / (data?.kpis.totalOrcado || 1)) * 100).toFixed(1)}%`
-                      : chartMode === 'mensal_reais'
-                      ? formatCurrency(activeHoverPoint.competenciaMensal)
-                      : formatCurrency(activeHoverPoint.competenciaAcumulado)}
+                    {valorTooltip(activeHoverPoint.competenciaMensal, activeHoverPoint.competenciaAcumulado)}
                   </span>
                 </div>
                 <div className="curvas-fin-tooltip-row sub">
@@ -1274,11 +1331,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                     Financeiro:
                   </span>
                   <span>
-                    {chartMode === 'acumulado_pct'
-                      ? `${((activeHoverPoint.financeiroAcumulado / (data?.kpis.totalOrcado || 1)) * 100).toFixed(1)}%`
-                      : chartMode === 'mensal_reais'
-                      ? formatCurrency(activeHoverPoint.financeiroMensal)
-                      : formatCurrency(activeHoverPoint.financeiroAcumulado)}
+                    {valorTooltip(activeHoverPoint.financeiroMensal, activeHoverPoint.financeiroAcumulado)}
                   </span>
                 </div>
                 <div className="curvas-fin-tooltip-row sub">
@@ -1317,10 +1370,12 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                   <th className="col-comp">Comp. Material</th>
                   <th className="col-comp">Comp. Mão de Obra</th>
                   <th className="col-comp">Competência Mensal</th>
+                  <th className="col-comp" title="Competência do mês ÷ total orçado">% do Orç.</th>
                   <th className="col-comp">Competência Acum.</th>
                   <th className="col-fin">Fin. Material</th>
                   <th className="col-fin">Fin. Mão de Obra</th>
                   <th className="col-fin">Financeiro Mensal</th>
+                  <th className="col-fin" title="Financeiro do mês ÷ total orçado">% do Orç.</th>
                   <th className="col-fin">Financeiro Acum.</th>
                   <th>Saldo Caixa (Comp - Fin)</th>
                 </tr>
@@ -1341,12 +1396,14 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                       <td className="col-comp" style={{ fontWeight: 700 }}>
                         {formatCurrencyDecimals(s.competenciaMensal)}
                       </td>
+                      <td className="col-comp">{pctOrcamento(s.competenciaMensal)}</td>
                       <td className="col-comp">{formatCurrencyDecimals(s.competenciaAcumulado)}</td>
                       <td className="col-fin">{formatCurrencyDecimals(s.financeiroMaterial)}</td>
                       <td className="col-fin">{formatCurrencyDecimals(s.financeiroMaoDeObra)}</td>
                       <td className="col-fin" style={{ fontWeight: 700 }}>
                         {formatCurrencyDecimals(s.financeiroMensal)}
                       </td>
+                      <td className="col-fin">{pctOrcamento(s.financeiroMensal)}</td>
                       <td className="col-fin">{formatCurrencyDecimals(s.financeiroAcumulado)}</td>
                       <td style={{ color: saldoCaixa >= 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>
                         {formatCurrencyDecimals(saldoCaixa)}
@@ -1371,6 +1428,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                   <td className="col-comp">
                     {formatCurrencyDecimals(data.seriesMensal.reduce((a, b) => a + b.competenciaMensal, 0))}
                   </td>
+                  <td className="col-comp">{pctOrcamento(data.seriesMensal.reduce((a, b) => a + b.competenciaMensal, 0))}</td>
                   <td className="col-comp">-</td>
                   <td className="col-fin">
                     {formatCurrencyDecimals(data.seriesMensal.reduce((a, b) => a + b.financeiroMaterial, 0))}
@@ -1381,6 +1439,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                   <td className="col-fin">
                     {formatCurrencyDecimals(data.seriesMensal.reduce((a, b) => a + b.financeiroMensal, 0))}
                   </td>
+                  <td className="col-fin">{pctOrcamento(data.seriesMensal.reduce((a, b) => a + b.financeiroMensal, 0))}</td>
                   <td className="col-fin">-</td>
                   <td>-</td>
                 </tr>

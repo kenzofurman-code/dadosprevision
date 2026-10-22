@@ -8,6 +8,7 @@ import {
   distribuirMaterialEtapa,
   mesCompetenciaMo,
   resolverRegra,
+  separarForaDoCronograma,
   somarDiasIso,
 } from './curvas-financeiras-engine.js'
 
@@ -315,4 +316,18 @@ test('motor: antecedência 0 e prazo 0 (à vista) da obra são respeitados', () 
   const ev = r.etapas[0].eventos[0]
   assert.equal(ev.dataEntrega, '2026-03-01')
   assert.equal(ev.dataVencimento, '2026-03-01')
+})
+
+test('custo projetado: separa o que não tem etapa nível 5 no cronograma, do maior para o menor', () => {
+  const custos = new Map([
+    ['01.01.01.01.001', { material: 100, mao_de_obra: 50, total: 150, descricao: 'CIMENTO' }],
+    ['24.01.01.01.001', { material: 6000, mao_de_obra: 0, total: 6000, descricao: 'TAXA DE ADMINISTRAÇÃO' }],
+    ['21.03.01.01.001', { material: 900, mao_de_obra: 100, total: 1000, descricao: 'ITENS FORA DE ORÇAMENTO' }],
+  ])
+  const r = separarForaDoCronograma(custos, new Set(['01.01.01.01.001']))
+  assert.deepEqual([...r.dentro.keys()], ['01.01.01.01.001'])
+  assert.equal(r.totalFora, 7000)
+  assert.deepEqual(r.fora.map((f) => f.codigo), ['24.01.01.01.001', '21.03.01.01.001'])
+  assert.equal(r.fora[0].descricao, 'TAXA DE ADMINISTRAÇÃO')
+  assert.equal(r.fora[1].mao_de_obra, 100)
 })
