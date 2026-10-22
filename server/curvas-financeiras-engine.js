@@ -121,76 +121,14 @@ function origemRegra(regra) {
   return { codigo_origem: regra.codigo_etapa, nivel: String(regra.codigo_etapa).split('.').length }
 }
 
-/**
- * Distribui Mão de Obra no tempo:
- * - Competência: corte dia 21 a 20 -> cai no mês M
- * - Financeiro: desembolso no dia `diaPagamentoMo` de M+1
- * - Retenção técnica: `retencaoPercentual`% de cada medição só é paga em `dataLiberacaoRetencao`
- *   (a competência não muda)
- */
-export function distribuirMaoDeObraEtapa({
-  custo,
-  dataInicio,
-  dataFim,
-  diaCorteMo = 20,
-  diaPagamentoMo = 5,
-  retencaoPercentual = 0,
-  dataLiberacaoRetencao = null,
-}) {
-  const eventos = []
-  const valor = Number(custo || 0)
-  if (valor <= 0 || !dataInicio) return eventos
-
-  const fim = dataFim && dataFim >= dataInicio ? dataFim : dataInicio
-  const totalDias = Math.max(1, diferencaDias(dataInicio, fim) + 1)
-  const valorDiario = valor / totalDias
-
-  // Agrupar valores por mês de competência
-  const porCompetencia = {}
-  let dAtual = dataInicio
-  for (let i = 0; i < totalDias; i++) {
-    const comp = mesCompetenciaMo(dAtual, diaCorteMo)
-    porCompetencia[comp] = (porCompetencia[comp] || 0) + valorDiario
-    dAtual = somarDiasIso(dAtual, 1)
-  }
-
-  const fracaoRetida = dataLiberacaoRetencao && Number(retencaoPercentual) > 0
-    ? Math.min(1, Number(retencaoPercentual) / 100)
-    : 0
-
-  for (const [mesComp, valComp] of Object.entries(porCompetencia)) {
-    const total = arredondar(valComp)
-    const retido = arredondar(total * fracaoRetida)
-    const dataPag = dataPagamentoMo(mesComp, diaPagamentoMo)
-    eventos.push({
-      tipo: 'MAO_DE_OBRA',
-      mesCompetencia: mesComp,
-      mesFinanceiro: mesAnoIso(dataPag),
-      dataPagamento: dataPag,
-      valor: arredondar(total - retido),
-    })
-    if (retido > 0) {
-      eventos.push({
-        tipo: 'MAO_DE_OBRA',
-        mesCompetencia: mesComp,
-        mesFinanceiro: mesAnoIso(dataLiberacaoRetencao),
-        dataPagamento: dataLiberacaoRetencao,
-        valor: retido,
-        retencao: true,
-      })
-    }
-  }
-
-  return eventos
-}
 
 /**
- * Material proporcional à execução: o peso de cada mês é espalhado pelos dias daquele mês dentro da
- * etapa (ou pelo mês inteiro, se o ponto cair fora dela); sem pontos, uniforme entre início e fim.
- * Cada dia chega `diasAntecedencia` antes e é agrupado pelo mês de chegada.
- * Retorna [{ dataEntrega (dia médio ponderado), fracao }].
+ * Físico diário da etapa — base única das três curvas. O peso de cada mês do cronograma
+ * (`pontos_mensais[].previsto`, ou `base`) é espalhado igualmente pelos dias daquele mês dentro da
+ * etapa (o mês inteiro, se o ponto cair fora dela); sem pontos, uniforme entre início e fim.
+ * Retorna [{ data, peso }] com Σ peso = 1.
  */
-function chegadasProporcionais({ dataInicio, fim, pontosMensais, diasAntecedencia }) {
+export function fisicoDiario({ dataInicio, fim, pontosMensais }) {
   const dias = []
   const pontos = (Array.isArray(pontosMensais) ? pontosMensais : [])
     .map((p) => ({ mes: String(p.data || '').slice(0, 7), peso: Number(p.previsto ?? p.base) || 0 }))
@@ -210,30 +148,116 @@ function chegadasProporcionais({ dataInicio, fim, pontosMensais, diasAntecedenci
     const n = diferencaDias(dataInicio, fim) + 1
     for (let i = 0; i < n; i++) dias.push({ data: somarDiasIso(dataInicio, i), peso: 1 / n })
   }
+  const soma = dias.reduce((s, d) => s + d.peso, 0) || 1
+  return dias.map((d) => ({ data: d.data, peso: d.peso / soma }))
+}
 
-  const somaPesos = dias.reduce((s, d) => s + d.peso, 0)
-  const porMes = new Map()
-  for (const d of dias) {
-    const chegada = somarDiasIso(d.data, -Number(diasAntecedencia || 0))
-    const mes = mesAnoIso(chegada)
-    const b = porMes.get(mes) || { peso: 0, offset: 0 }
-    b.peso += d.peso
-    b.offset += d.peso * diferencaDias(dataInicio, chegada)
-    porMes.set(mes, b)
+const fmtData = (iso) => String(iso).slice(0, 10).split('-').reverse().join('/')
+
+/** Fluxos { tipo, fis, comp, fin, valor, mComp, mFin } somados por chave e arredondados a centavos. */
+function agregarFluxos(brutos) {
+  const m = new Map()
+  for (const f of brutos) {
+    if (!(f.valor > 0)) continue
+    const k = `${f.tipo}|${f.fis}|${f.comp}|${f.fin}|${f.mComp}|${f.mFin}`
+    const atual = m.get(k)
+    if (atual) atual.valor += f.valor
+    else m.set(k, { ...f })
   }
-  return [...porMes.values()].map((b) => ({
-    dataEntrega: somarDiasIso(dataInicio, Math.round(b.offset / b.peso)),
-    fracao: b.peso / somaPesos,
-  }))
+  return [...m.values()].map((f) => ({ ...f, valor: arredondar(f.valor) })).filter((f) => f.valor > 0)
 }
 
 /**
- * Distribui Material no tempo:
- * - Competência: Data de entrega (Início - Antecedência em dias)
- *   - Lotes fixos uniformes OU proporcional ao cronograma
- * - Financeiro: Data de entrega + Prazo de pagamento (28d, 35d ou parcelado)
+ * Mão de Obra: segue o físico diário da etapa.
+ * - Competência: cada dia executado de 21/M-1 a 20/M cai no mês M (corte `diaCorteMo`)
+ * - Financeiro: desembolso no dia `diaPagamentoMo` de M+1
+ * - Retenção técnica: `retencaoPercentual`% de cada medição só é paga em `dataLiberacaoRetencao`
+ *   (a competência não muda)
+ * Retorna { eventos, fluxos }.
  */
-export function distribuirMaterialEtapa({
+function maoDeObraComFluxos({
+  custo,
+  dataInicio,
+  dataFim,
+  diaCorteMo = 20,
+  diaPagamentoMo = 5,
+  retencaoPercentual = 0,
+  dataLiberacaoRetencao = null,
+  pontosMensais = null,
+}) {
+  const eventos = []
+  const brutos = []
+  const valor = Number(custo || 0)
+  if (valor <= 0 || !dataInicio) return { eventos, fluxos: [] }
+
+  const fim = dataFim && dataFim >= dataInicio ? dataFim : dataInicio
+  // por mês de competência: valor total e quanto veio de cada mês físico
+  const porCompetencia = new Map()
+  for (const d of fisicoDiario({ dataInicio, fim, pontosMensais })) {
+    const comp = mesCompetenciaMo(d.data, diaCorteMo)
+    const fis = mesAnoIso(d.data)
+    const b = porCompetencia.get(comp) || { valor: 0, porFis: new Map() }
+    b.valor += valor * d.peso
+    b.porFis.set(fis, (b.porFis.get(fis) || 0) + valor * d.peso)
+    porCompetencia.set(comp, b)
+  }
+
+  const fracaoRetida = dataLiberacaoRetencao && Number(retencaoPercentual) > 0
+    ? Math.min(1, Number(retencaoPercentual) / 100)
+    : 0
+
+  for (const [mesComp, b] of porCompetencia) {
+    const total = arredondar(b.valor)
+    const retido = arredondar(total * fracaoRetida)
+    const dataPag = dataPagamentoMo(mesComp, diaPagamentoMo)
+    eventos.push({
+      tipo: 'MAO_DE_OBRA',
+      mesCompetencia: mesComp,
+      mesFinanceiro: mesAnoIso(dataPag),
+      dataPagamento: dataPag,
+      valor: arredondar(total - retido),
+    })
+    if (retido > 0) {
+      eventos.push({
+        tipo: 'MAO_DE_OBRA',
+        mesCompetencia: mesComp,
+        mesFinanceiro: mesAnoIso(dataLiberacaoRetencao),
+        dataPagamento: dataLiberacaoRetencao,
+        valor: retido,
+        retencao: true,
+      })
+    }
+    for (const [fis, v] of b.porFis) {
+      const mComp = fis === mesComp ? `dias 1 a ${diaCorteMo}` : `dias ${diaCorteMo + 1} em diante (corte dia ${diaCorteMo})`
+      brutos.push({ tipo: 'MAO_DE_OBRA', fis, comp: mesComp, fin: mesAnoIso(dataPag), valor: v * (1 - fracaoRetida), mComp, mFin: `pago dia ${Number(dataPag.slice(8, 10))}` })
+      if (fracaoRetida > 0) {
+        brutos.push({
+          tipo: 'MAO_DE_OBRA', fis, comp: mesComp, fin: mesAnoIso(dataLiberacaoRetencao), valor: v * fracaoRetida, mComp,
+          mFin: `retenção ${Number(retencaoPercentual)}% (liberada em ${fmtData(dataLiberacaoRetencao)})`,
+        })
+      }
+    }
+  }
+
+  return { eventos, fluxos: agregarFluxos(brutos) }
+}
+
+/** Distribui Mão de Obra no tempo (ver maoDeObraComFluxos). Retorna só os eventos. */
+export function distribuirMaoDeObraEtapa(params) {
+  return maoDeObraComFluxos(params).eventos
+}
+
+/**
+ * Material:
+ * - Competência = data de chegada na obra.
+ *   - Proporcional (padrão): cada dia físico chega `diasAntecedencia` antes; uma "nota" por mês de
+ *     chegada, no dia médio ponderado.
+ *   - Lotes (`numEntregas` = N): o prazo da atividade é dividido em N períodos iguais; a entrega k chega
+ *     `diasAntecedencia` antes do início do seu período e leva o material do físico desse período.
+ * - Financeiro: data de chegada + prazo (único ou parcelado).
+ * Retorna { eventos, fluxos }.
+ */
+function materialComFluxos({
   custo,
   dataInicio,
   dataFim,
@@ -245,65 +269,90 @@ export function distribuirMaterialEtapa({
   pontosMensais = null,
 }) {
   const eventos = []
+  const brutos = []
   const valor = Number(custo || 0)
-  if (valor <= 0 || !dataInicio) return eventos
+  if (valor <= 0 || !dataInicio) return { eventos, fluxos: [] }
 
   const fim = dataFim && dataFim >= dataInicio ? dataFim : dataInicio
-  const duracao = Math.max(0, diferencaDias(dataInicio, fim))
-  const data1aEntrega = somarDiasIso(dataInicio, -Number(diasAntecedencia || 0))
+  const antecedencia = Number(diasAntecedencia || 0)
+  const dias = fisicoDiario({ dataInicio, fim, pontosMensais })
 
   // Condições de pagamento: lista de parcelas e seus prazos
   let condicoes = []
   if (tipoPagamento === 'PARCELADO' && Array.isArray(parcelasDias) && parcelasDias.length > 0) {
     const frac = 1 / parcelasDias.length
-    condicoes = parcelasDias.map((d) => ({ dias: Number(d), fracao: frac }))
+    condicoes = parcelasDias.map((d, i) => ({ dias: Number(d), fracao: frac, motivo: `parcela ${i + 1}/${parcelasDias.length} (${Number(d)} dias)` }))
   } else {
-    condicoes = [{ dias: Number(prazoDias ?? 28), fracao: 1 }]
+    const d = Number(prazoDias ?? 28)
+    condicoes = [{ dias: d, fracao: 1, motivo: `pagamento em ${d} dias` }]
   }
 
-  // Helper para gerar eventos a partir de uma entrega física
-  function adicionarEntrega(dataEntrega, valorEntrega) {
+  // Uma entrega: eventos por parcela + fluxos por mês físico de origem (porFis: mês -> peso)
+  function adicionarEntrega(dataEntrega, porFis, mComp) {
     const mesComp = mesAnoIso(dataEntrega)
+    const pesoEntrega = [...porFis.values()].reduce((s, p) => s + p, 0)
     for (const cond of condicoes) {
       const dataVenc = somarDiasIso(dataEntrega, cond.dias)
       const mesFin = mesAnoIso(dataVenc)
-      const valParcela = valorEntrega * cond.fracao
       eventos.push({
         tipo: 'MATERIAL',
         dataEntrega,
         dataVencimento: dataVenc,
         mesCompetencia: mesComp,
         mesFinanceiro: mesFin,
-        valor: Math.round(valParcela * 100) / 100,
+        valor: arredondar(valor * pesoEntrega * cond.fracao),
       })
-    }
-  }
-
-  // Modalidade 1: Lotes Fixos de Entrega (se numEntregas >= 1)
-  if (numEntregas && Number(numEntregas) >= 1) {
-    const N = Number(numEntregas)
-    const valorLote = valor / N
-
-    if (N === 1 || duracao === 0) {
-      adicionarEntrega(data1aEntrega, valor)
-    } else {
-      const step = duracao / (N - 1)
-      for (let k = 0; k < N; k++) {
-        const offsetDias = Math.round(k * step)
-        const dtEntrega = somarDiasIso(data1aEntrega, offsetDias)
-        adicionarEntrega(dtEntrega, valorLote)
+      for (const [fis, p] of porFis) {
+        brutos.push({ tipo: 'MATERIAL', fis, comp: mesComp, fin: mesFin, valor: valor * p * cond.fracao, mComp, mFin: cond.motivo })
       }
     }
-    return eventos
   }
 
-  // Modalidade 2 (padrão): chega conforme a execução — proporcional ao cronograma mensal da Prevision,
-  // ou uniforme entre início e fim se a etapa não tiver pontos mensais
-  for (const { dataEntrega, fracao } of chegadasProporcionais({ dataInicio, fim, pontosMensais, diasAntecedencia })) {
-    adicionarEntrega(dataEntrega, valor * fracao)
+  if (numEntregas && Number(numEntregas) >= 1) {
+    // Lotes: o prazo (T dias) é dividido em N períodos de dias inteiros; o período k começa no dia
+    // floor(k·T/N). Cada dia físico abastece o lote do seu período (dias fora da etapa: o mais próximo).
+    const N = Number(numEntregas)
+    const T = diferencaDias(dataInicio, fim) + 1
+    const inicioPeriodo = (k) => Math.floor((k * T) / N)
+    const lotes = Array.from({ length: N }, () => new Map())
+    for (const d of dias) {
+      const i = Math.min(T - 1, Math.max(0, diferencaDias(dataInicio, d.data)))
+      let k = N - 1
+      while (k > 0 && inicioPeriodo(k) > i) k--
+      const fis = mesAnoIso(d.data)
+      lotes[k].set(fis, (lotes[k].get(fis) || 0) + d.peso)
+    }
+    lotes.forEach((porFis, k) => {
+      if (![...porFis.values()].some((p) => p > 0)) return
+      const chegada = somarDiasIso(dataInicio, inicioPeriodo(k) - antecedencia)
+      adicionarEntrega(chegada, porFis, `entrega ${k + 1} de ${N} (chega ${antecedencia} dias antes)`)
+    })
+    return { eventos, fluxos: agregarFluxos(brutos) }
   }
-  return eventos
+
+  // Proporcional: agrupa os dias pelo mês de chegada
+  const porMesChegada = new Map()
+  for (const d of dias) {
+    const chegada = somarDiasIso(d.data, -antecedencia)
+    const mes = mesAnoIso(chegada)
+    const b = porMesChegada.get(mes) || { peso: 0, offset: 0, porFis: new Map() }
+    b.peso += d.peso
+    b.offset += d.peso * diferencaDias(dataInicio, chegada)
+    const fis = mesAnoIso(d.data)
+    b.porFis.set(fis, (b.porFis.get(fis) || 0) + d.peso)
+    porMesChegada.set(mes, b)
+  }
+  for (const b of porMesChegada.values()) {
+    adicionarEntrega(somarDiasIso(dataInicio, Math.round(b.offset / b.peso)), b.porFis, `chega ${antecedencia} dias antes da execução`)
+  }
+  return { eventos, fluxos: agregarFluxos(brutos) }
 }
+
+/** Distribui Material no tempo (ver materialComFluxos). Retorna só os eventos. */
+export function distribuirMaterialEtapa(params) {
+  return materialComFluxos(params).eventos
+}
+
 
 /**
  * Motor Principal: Calcula todas as curvas e a matriz mensal completa
@@ -358,8 +407,8 @@ export function calcularCurvasFinanceiras({
     const parcelas = param.parcelas_dias || null
 
     // 1. Distribuir Material
-    const eventosMat = cMat > 0
-      ? distribuirMaterialEtapa({
+    const mat = cMat > 0
+      ? materialComFluxos({
           custo: cMat,
           dataInicio: etapa.data_inicio,
           dataFim: etapa.data_fim,
@@ -370,11 +419,11 @@ export function calcularCurvasFinanceiras({
           parcelasDias: parcelas,
           pontosMensais: etapa.pontos_mensais,
         })
-      : []
+      : { eventos: [], fluxos: [] }
 
-    // 2. Distribuir Mão de Obra
-    const eventosMo = cMo > 0
-      ? distribuirMaoDeObraEtapa({
+    // 2. Distribuir Mão de Obra (segue o mesmo físico diário)
+    const mo = cMo > 0
+      ? maoDeObraComFluxos({
           custo: cMo,
           dataInicio: etapa.data_inicio,
           dataFim: etapa.data_fim,
@@ -382,29 +431,22 @@ export function calcularCurvasFinanceiras({
           diaPagamentoMo,
           retencaoPercentual: retencaoAtiva ? retencaoPct : 0,
           dataLiberacaoRetencao,
+          pontosMensais: etapa.pontos_mensais,
         })
-      : []
+      : { eventos: [], fluxos: [] }
+    const eventosMat = mat.eventos
+    const eventosMo = mo.eventos
 
-    // 3. Distribuição Econômica (CFF Puro)
+    // 3. Distribuição Econômica (físico-financeiro): custo total sobre o físico diário
     const eventosEcon = []
-    if (Array.isArray(etapa.pontos_mensais) && etapa.pontos_mensais.length > 0) {
-      const somaP = etapa.pontos_mensais.reduce((s, p) => s + (Number(p.previsto ?? p.base) || 0), 0)
-      if (somaP > 0) {
-        for (const p of etapa.pontos_mensais) {
-          const w = (Number(p.previsto ?? p.base) || 0) / somaP
-          if (w > 0) {
-            eventosEcon.push({
-              mes: p.data.slice(0, 7),
-              valor: Math.round(cTot * w * 100) / 100,
-            })
-          }
-        }
+    if (etapa.data_inicio && cTot > 0) {
+      const fimEtapa = etapa.data_fim && etapa.data_fim >= etapa.data_inicio ? etapa.data_fim : etapa.data_inicio
+      const porMes = new Map()
+      for (const d of fisicoDiario({ dataInicio: etapa.data_inicio, fim: fimEtapa, pontosMensais: etapa.pontos_mensais })) {
+        const m = mesAnoIso(d.data)
+        porMes.set(m, (porMes.get(m) || 0) + d.peso)
       }
-    } else if (etapa.data_inicio) {
-      eventosEcon.push({
-        mes: etapa.data_inicio.slice(0, 7),
-        valor: cTot,
-      })
+      for (const [mes, w] of [...porMes].sort()) eventosEcon.push({ mes, valor: arredondar(cTot * w) })
     }
 
     const eventosEtapa = [...eventosMat, ...eventosMo]
@@ -427,6 +469,7 @@ export function calcularCurvasFinanceiras({
       regraMaterial: origemRegra(regraMat),
       regraMo: origemRegra(regraMo),
       mensal: matrizMensal(eventosEtapa),
+      fluxos: [...mat.fluxos, ...mo.fluxos],
       eventos: eventosEtapa,
       eventosEconomico: eventosEcon,
     })
