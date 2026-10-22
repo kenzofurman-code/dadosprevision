@@ -572,3 +572,197 @@ export function calcularCurvasFinanceiras({
     etapas: etapasCalculadas,
   }
 }
+
+/**
+ * Realizado + projeção: até o fim do mês `corte` a competência é o apropriado do Mega
+ * (`realizado`); depois, o saldo de cada etapa e tipo (custo − realizado) segue o físico que resta,
+ * com as mesmas regras da curva teórica.
+ * - Excedente (realizado > custo): nada é projetado; a etapa fica em alerta.
+ * - Saldo sem físico depois do corte: pendente (fora das séries); a etapa fica em alerta.
+ * - Código sem etapa no cronograma: "fora do cronograma", entra nas séries e no total.
+ * - Financeiro do realizado: pelos vencimentos das APs em `pagamentos` (parcela vencida em aberto vai
+ *   para o mês seguinte ao corte); sem AP, estimado pelas regras de pagamento da etapa.
+ */
+export function projetarRealizado({
+  etapas,
+  parametrosObra = {},
+  parametrosEtapas = new Map(),
+  corte,
+  realizado = [],
+  pagamentos = new Map(),
+}) {
+  const teorica = calcularCurvasFinanceiras({ etapas, parametrosObra, parametrosEtapas })
+  const fimCorte = `${corte}-${String(ultimoDiaDoMes(corte)).padStart(2, '0')}`
+  const posCorte = proximoMesIso(corte)
+  const inicioPos = `${posCorte}-01`
+  const diaPagamentoMo = Number(parametrosObra.dia_pagamento_mo || 5)
+  const prazoPadrao = Number(parametrosObra.prazo_pagamento_padrao_dias ?? 28)
+  const dataLiberacaoRetencao = teorica.kpis.dataLiberacaoRetencao
+  const porCodigo = new Map(etapas.map((e) => [e.codigo_etapa, e]))
+
+  const meses = new Map()
+  const somar = (mes, campo, v) => {
+    if (!meses.has(mes)) meses.set(mes, { compMat: 0, compMo: 0, compFora: 0, finMat: 0, finMo: 0, finFora: 0 })
+    meses.get(mes)[campo] += v
+  }
+  const somarComp = (mes, tipo, fora, v) => {
+    somar(mes, tipo === 'MATERIAL' ? 'compMat' : 'compMo', v)
+    if (fora) somar(mes, 'compFora', v)
+  }
+  const somarFin = (mes, tipo, fora, v) => {
+    somar(mes, tipo === 'MATERIAL' ? 'finMat' : 'finMo', v)
+    if (fora) somar(mes, 'finFora', v)
+  }
+
+  // 1. Realizado até o corte: competência no mês do documento, financeiro pela AP ou estimado
+  const realPorChave = new Map()
+  let foraDoCronograma = 0
+  let realizadoSemPagamento = 0
+  let realizadoAteCorte = 0
+  for (const r of realizado) {
+    const valor = Number(r.valor) || 0
+    if (!valor || (r.data && r.data > fimCorte)) continue
+    const data = r.data || fimCorte
+    const mes = mesAnoIso(data)
+    const etapa = porCodigo.get(r.codigo_etapa)
+    const fora = !etapa
+    const chave = `${r.codigo_etapa}|${r.tipo}`
+    realizadoAteCorte += valor
+    somarComp(mes, r.tipo, fora, valor)
+    if (fora) foraDoCronograma += valor
+    else realPorChave.set(chave, (realPorChave.get(chave) || 0) + valor)
+
+    const parcelas = r.ap != null ? pagamentos.get(Number(r.ap)) : null
+    const totalAp = (parcelas || []).reduce((s, p) => s + (Number(p.valor) || 0), 0)
+    if (totalAp > 0) {
+      for (const p of parcelas) {
+        const parte = (valor * (Number(p.valor) || 0)) / totalAp
+        const mesV = mesAnoIso(p.vencimento)
+        const aberto = mesV <= corte && p.valor > 0 ? parte * Math.min(1, Math.max(0, Number(p.saldo) / p.valor)) : 0
+        if (parte - aberto) somarFin(mesV, r.tipo, fora, parte - aberto)
+        if (aberto) somarFin(posCorte, r.tipo, fora, aberto)
+      }
+      continue
+    }
+    realizadoSemPagamento += valor
+    const codigos = { codigoMega: r.codigo_etapa, codigoPrevision: etapa?.codigo_prevision }
+    if (r.tipo === 'MATERIAL') {
+      const regra = resolverRegra(parametrosEtapas, codigos, 'MATERIAL') || {}
+      const prazos = regra.tipo_pagamento === 'PARCELADO' && Array.isArray(regra.parcelas_dias) && regra.parcelas_dias.length
+        ? regra.parcelas_dias
+        : [regra.prazo_dias ?? prazoPadrao]
+      for (const d of prazos) somarFin(mesAnoIso(somarDiasIso(data, Number(d))), r.tipo, fora, valor / prazos.length)
+    } else {
+      const regra = resolverRegra(parametrosEtapas, codigos, 'MAO_DE_OBRA')
+      const ativa = regra?.retencao_ativa ?? parametrosObra.retencao_mo_ativa ?? false
+      const fracao = ativa && dataLiberacaoRetencao
+        ? Math.min(1, Number(regra?.retencao_percentual ?? parametrosObra.retencao_mo_percentual ?? 5) / 100)
+        : 0
+      somarFin(mesAnoIso(dataPagamentoMo(mes, diaPagamentoMo)), r.tipo, fora, valor * (1 - fracao))
+      if (fracao > 0) somarFin(mesAnoIso(dataLiberacaoRetencao), r.tipo, fora, valor * fracao)
+    }
+  }
+
+  // 2. Saldo por etapa e tipo: projetado pelo físico depois do corte, excedente ou pendente
+  const temFisicoDepois = (e) => {
+    const pontos = (Array.isArray(e.pontos_mensais) ? e.pontos_mensais : [])
+      .filter((p) => (Number(p.previsto ?? p.base) || 0) > 0 && /^\d{4}-\d{2}/.test(String(p.data || '')))
+    if (pontos.length) return pontos.some((p) => String(p.data).slice(0, 7) > corte)
+    return Boolean(e.data_inicio) && String(e.data_fim || e.data_inicio) > fimCorte
+  }
+  const resumo = []
+  const clones = []
+  for (const e of etapas) {
+    const custos = { MATERIAL: Number(e.custo_material || 0), MAO_DE_OBRA: Number(e.custo_mao_obra || 0) }
+    const futuro = temFisicoDepois(e)
+    const r = { codigo_etapa: e.codigo_etapa, nome: e.nome || e.descricao, projetado: 0, realizado: 0, saldoProjetado: 0, excedente: 0, pendente: 0 }
+    const aProjetar = { MATERIAL: 0, MAO_DE_OBRA: 0 }
+    for (const tipo of ['MATERIAL', 'MAO_DE_OBRA']) {
+      const real = realPorChave.get(`${e.codigo_etapa}|${tipo}`) || 0
+      const saldo = custos[tipo] - real
+      r.projetado += custos[tipo]
+      r.realizado += real
+      if (saldo < 0) r.excedente -= saldo
+      else if (saldo > 0 && futuro) { r.saldoProjetado += saldo; aProjetar[tipo] = saldo }
+      else if (saldo > 0) r.pendente += saldo
+    }
+    if (aProjetar.MATERIAL > 0 || aProjetar.MAO_DE_OBRA > 0) {
+      clones.push({
+        ...e,
+        custo_material: aProjetar.MATERIAL,
+        custo_mao_obra: aProjetar.MAO_DE_OBRA,
+        custo_total: aProjetar.MATERIAL + aProjetar.MAO_DE_OBRA,
+        data_inicio: e.data_inicio && e.data_inicio > inicioPos ? e.data_inicio : inicioPos,
+        pontos_mensais: (Array.isArray(e.pontos_mensais) ? e.pontos_mensais : [])
+          .map((p) => (String(p.data || '').slice(0, 7) <= corte ? { ...p, previsto: 0, base: 0 } : p)),
+      })
+    }
+    for (const k of ['projetado', 'realizado', 'saldoProjetado', 'excedente', 'pendente']) r[k] = arredondar(r[k])
+    r.alerta = r.excedente > 0 ? 'excedente' : r.pendente > 0 ? 'pendente' : null
+    if (r.projetado > 0 || r.realizado > 0) resumo.push(r)
+  }
+
+  const projecao = calcularCurvasFinanceiras({
+    etapas: clones,
+    parametrosObra: { ...parametrosObra, data_fim_obra: parametrosObra.data_fim_obra || teorica.kpis.dataFimObraEtapas },
+    parametrosEtapas,
+  })
+  for (const et of projecao.etapas) {
+    for (const ev of et.eventos) {
+      somarComp(ev.mesCompetencia <= corte ? posCorte : ev.mesCompetencia, ev.tipo, false, ev.valor)
+      somarFin(ev.mesFinanceiro <= corte ? posCorte : ev.mesFinanceiro, ev.tipo, false, ev.valor)
+    }
+  }
+
+  // 3. Séries com a teórica ao lado
+  const teoricaPorMes = new Map(teorica.seriesMensal.map((s) => [s.mes, s]))
+  const todosMeses = [...new Set([...meses.keys(), ...teoricaPorMes.keys()])].sort()
+  const vazio = { compMat: 0, compMo: 0, compFora: 0, finMat: 0, finMo: 0, finFora: 0 }
+  let teoricoAteCorte = 0
+  const seriesMensal = todosMeses.map((mes) => {
+    const v = meses.get(mes) || vazio
+    const t = teoricaPorMes.get(mes) || {}
+    if (mes <= corte) teoricoAteCorte += t.competenciaMensal || 0
+    return {
+      mes,
+      realizado: mes <= corte,
+      competenciaMaterial: arredondar(v.compMat),
+      competenciaMaoDeObra: arredondar(v.compMo),
+      competenciaForaCronograma: arredondar(v.compFora),
+      competenciaMensal: arredondar(v.compMat + v.compMo),
+      financeiroMaterial: arredondar(v.finMat),
+      financeiroMaoDeObra: arredondar(v.finMo),
+      financeiroForaCronograma: arredondar(v.finFora),
+      financeiroMensal: arredondar(v.finMat + v.finMo),
+      teoricoCompetenciaMaterial: t.competenciaMaterial || 0,
+      teoricoCompetenciaMaoDeObra: t.competenciaMaoDeObra || 0,
+      teoricoFinanceiroMaterial: t.financeiroMaterial || 0,
+      teoricoFinanceiroMaoDeObra: t.financeiroMaoDeObra || 0,
+      teoricoEconomicoMensal: t.economicoMensal || 0,
+    }
+  })
+
+  const soma = (k) => arredondar(resumo.reduce((s, r) => s + r[k], 0))
+  const base = teorica.kpis.totalOrcado
+  const desvio = arredondar(realizadoAteCorte - teoricoAteCorte)
+  return {
+    corte,
+    seriesMensal,
+    etapas: resumo,
+    kpis: {
+      base,
+      realizadoAteCorte: arredondar(realizadoAteCorte),
+      teoricoAteCorte: arredondar(teoricoAteCorte),
+      desvio,
+      desvioPct: base ? arredondar((desvio / base) * 100) : 0,
+      saldoProjetado: soma('saldoProjetado'),
+      excedente: soma('excedente'),
+      pendente: soma('pendente'),
+      foraDoCronograma: arredondar(foraDoCronograma),
+      custoFinalEstimado: arredondar(base + soma('excedente') + foraDoCronograma),
+      realizadoSemPagamento: arredondar(realizadoSemPagamento),
+      inicioTeorico: teorica.kpis.inicioProjecao,
+      dataLiberacaoRetencao,
+    },
+  }
+}
