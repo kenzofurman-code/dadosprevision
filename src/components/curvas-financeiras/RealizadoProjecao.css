@@ -1,0 +1,151 @@
+.rp-painel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rp-topo,
+.rp-controles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.rp-espaco {
+  flex: 1;
+}
+
+.rp-campo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted, #64748b);
+}
+
+.rp-campo input {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #cbd5e1);
+  background: var(--input-bg, #ffffff);
+  color: var(--text-primary, #0f172a);
+}
+
+.rp-carga {
+  font-size: 12px;
+  color: var(--text-muted, #64748b);
+}
+
+.rp-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted, #64748b);
+}
+
+.rp-aviso {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  background: rgba(245, 158, 11, 0.1);
+  color: #b45309;
+}
+
+.rp-erro {
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+}
+
+.rp-vermelho {
+  color: #dc2626 !important;
+}
+
+.curvas-fin-kpi-card.rp-card-alerta::before {
+  background: #dc2626;
+}
+
+.rp-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin: 10px 0 4px;
+  font-size: 12.5px;
+}
+
+.rp-legenda i {
+  display: inline-block;
+  width: 22px;
+  height: 3px;
+  margin-right: 6px;
+  vertical-align: middle;
+  border-radius: 2px;
+}
+
+.rp-legenda i.rp-tracejado {
+  height: 0;
+  border-top: 3px dashed;
+  background: none;
+}
+
+.rp-hover {
+  margin-left: auto;
+  color: var(--text-muted, #64748b);
+}
+
+.rp-bloco h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.rp-rolagem {
+  max-height: 420px;
+  overflow: auto;
+}
+
+.rp-tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.rp-tabela th,
+.rp-tabela td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.rp-tabela th:first-child,
+.rp-tabela td:first-child {
+  text-align: left;
+  white-space: normal;
+}
+
+.rp-tabela thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-bg, #ffffff);
+  color: var(--text-muted, #64748b);
+  font-weight: 600;
+}
+
+.rp-linha-alerta td {
+  color: #dc2626;
+}
+
+.rp-linha-corte td {
+  font-weight: 700;
+  background: rgba(220, 38, 38, 0.06);
+}
+
+.rp-linha-projecao td {
+  color: var(--text-muted, #64748b);
+}
