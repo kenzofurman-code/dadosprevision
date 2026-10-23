@@ -388,7 +388,9 @@ export async function obterRealizadoProjecao(projetoId, corte) {
     query(
       `SELECT raw_data->>'cod_estruturado' AS codigo, raw_data->>'cod_item' AS cod, raw_data->>'descricao_1' AS descricao,
               data_documento::text AS data, ap::int AS ap, SUM(COALESCE(valor_apropriacao, 0))::float AS valor
-       FROM mega.analise_realizado WHERE obra = $1 AND raw_data ? 'cod_estruturado' GROUP BY 1, 2, 3, 4, 5`, [obra]),
+       FROM mega.analise_realizado
+       -- cod_estruturado nulo é a linha de total do relatório
+       WHERE obra = $1 AND COALESCE(raw_data->>'cod_estruturado', '') <> '' GROUP BY 1, 2, 3, 4, 5`, [obra]),
     query('SELECT MAX(data_extracao)::text AS d FROM mega.analise_realizado WHERE obra = $1', [obra]),
   ])
   const realizado = realRes.rows.map((r) => ({

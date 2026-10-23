@@ -577,7 +577,7 @@ export function calcularCurvasFinanceiras({
  * Realizado + projeção: até o fim do mês `corte` a competência é o apropriado do Mega
  * (`realizado`); depois, o saldo de cada etapa e tipo (custo − realizado) segue o físico que resta,
  * com as mesmas regras da curva teórica.
- * - Excedente (realizado > custo): nada é projetado; a etapa fica em alerta.
+ * - Excedente (realizado da etapa > custo da etapa): nada é projetado; a etapa fica em alerta.
  * - Saldo sem físico depois do corte: pendente (fora das séries); a etapa fica em alerta.
  * - Código sem etapa no cronograma: "fora do cronograma", entra nas séries e no total.
  * - Financeiro do realizado: pelos vencimentos das APs em `pagamentos` (parcela vencida em aberto vai
@@ -676,15 +676,22 @@ export function projetarRealizado({
     const custos = { MATERIAL: Number(e.custo_material || 0), MAO_DE_OBRA: Number(e.custo_mao_obra || 0) }
     const futuro = temFisicoDepois(e)
     const r = { codigo_etapa: e.codigo_etapa, nome: e.nome || e.descricao, projetado: 0, realizado: 0, saldoProjetado: 0, excedente: 0, pendente: 0 }
+    // Excedente e pendente são da etapa: o Mega e o custo projetado podem classificar o mesmo
+    // insumo em tipos diferentes. O saldo é repartido entre os tipos pelo que falta em cada um.
+    const real = { MATERIAL: realPorChave.get(`${e.codigo_etapa}|MATERIAL`) || 0, MAO_DE_OBRA: realPorChave.get(`${e.codigo_etapa}|MAO_DE_OBRA`) || 0 }
+    r.projetado = custos.MATERIAL + custos.MAO_DE_OBRA
+    r.realizado = real.MATERIAL + real.MAO_DE_OBRA
+    const saldo = r.projetado - r.realizado
     const aProjetar = { MATERIAL: 0, MAO_DE_OBRA: 0 }
-    for (const tipo of ['MATERIAL', 'MAO_DE_OBRA']) {
-      const real = realPorChave.get(`${e.codigo_etapa}|${tipo}`) || 0
-      const saldo = custos[tipo] - real
-      r.projetado += custos[tipo]
-      r.realizado += real
-      if (saldo < 0) r.excedente -= saldo
-      else if (saldo > 0 && futuro) { r.saldoProjetado += saldo; aProjetar[tipo] = saldo }
-      else if (saldo > 0) r.pendente += saldo
+    if (saldo < 0) r.excedente = -saldo
+    else if (saldo > 0 && !futuro) r.pendente = saldo
+    else if (saldo > 0) {
+      r.saldoProjetado = saldo
+      const falta = { MATERIAL: Math.max(0, custos.MATERIAL - real.MATERIAL), MAO_DE_OBRA: Math.max(0, custos.MAO_DE_OBRA - real.MAO_DE_OBRA) }
+      const peso = falta.MATERIAL + falta.MAO_DE_OBRA > 0 ? falta : custos
+      const totalPeso = peso.MATERIAL + peso.MAO_DE_OBRA
+      aProjetar.MATERIAL = (saldo * peso.MATERIAL) / totalPeso
+      aProjetar.MAO_DE_OBRA = saldo - aProjetar.MATERIAL
     }
     if (aProjetar.MATERIAL > 0 || aProjetar.MAO_DE_OBRA > 0) {
       clones.push({

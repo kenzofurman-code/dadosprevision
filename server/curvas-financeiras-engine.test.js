@@ -468,22 +468,36 @@ test('projetarRealizado: realizado parcial — saldo só depois do corte', () =>
 test('projetarRealizado: excedente não distribui e marca a etapa', () => {
   const r = projetar({
     corte: '2026-03',
-    realizado: [{ codigo_etapa: '01.01.01.01.001', tipo: 'MAO_DE_OBRA', data: '2026-03-10', valor: 900, ap: null }],
+    realizado: [{ codigo_etapa: '01.01.01.01.001', tipo: 'MAO_DE_OBRA', data: '2026-03-10', valor: 1300, ap: null }],
   })
-  assert.equal(somaSerie(r, 'competenciaMaoDeObra', (s) => s.mes > '2026-03'), 0)
-  assert.equal(r.etapas[0].excedente, 300)
+  assert.equal(somaSerie(r, 'competenciaMensal', (s) => s.mes > '2026-03'), 0)
+  assert.equal(r.etapas[0].excedente, 100)
   assert.equal(r.etapas[0].alerta, 'excedente')
-  assert.equal(r.kpis.excedente, 300)
+  assert.equal(r.kpis.excedente, 100)
 })
 
-test('projetarRealizado: projetado zero no tipo — todo o realizado é excedente', () => {
+test('projetarRealizado: tipo diferente no Mega não gera excedente — o saldo é da etapa', () => {
   const r = projetar({
     etapas: [etapaE1({ custo_mao_obra: 0, custo_total: 600 })],
     corte: '2026-03',
     realizado: [{ codigo_etapa: '01.01.01.01.001', tipo: 'MAO_DE_OBRA', data: '2026-03-10', valor: 50, ap: null }],
   })
-  assert.equal(r.etapas[0].excedente, 50)
-  assert.equal(r.etapas[0].alerta, 'excedente')
+  assert.equal(r.etapas[0].excedente, 0)
+  assert.equal(r.etapas[0].alerta, null)
+  assert.equal(r.etapas[0].saldoProjetado, 550)
+  assert.ok(Math.abs(somaSerie(r, 'competenciaMaterial', (s) => s.mes > '2026-03') - 550) < 0.05)
+})
+
+test('projetarRealizado: saldo da etapa repartido pelo que falta em cada tipo', () => {
+  const r = projetar({
+    corte: '2026-03',
+    realizado: [{ codigo_etapa: '01.01.01.01.001', tipo: 'MAO_DE_OBRA', data: '2026-03-10', valor: 900, ap: null }],
+  })
+  // projetado 1200, realizado 900: saldo 300, todo em material (a MO já passou do seu custo)
+  assert.equal(r.etapas[0].excedente, 0)
+  assert.equal(r.etapas[0].saldoProjetado, 300)
+  assert.equal(somaSerie(r, 'competenciaMaoDeObra', (s) => s.mes > '2026-03'), 0)
+  assert.ok(Math.abs(somaSerie(r, 'competenciaMaterial', (s) => s.mes > '2026-03') - 300) < 0.05)
 })
 
 test('projetarRealizado: saldo sem físico futuro fica pendente', () => {

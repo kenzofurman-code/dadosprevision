@@ -30,8 +30,8 @@ teórica na mesma tela**:
 ## Fontes
 
 - **Competência realizada:** `mega.analise_realizado` (`valor_apropriacao`, `data_documento`, `ap`,
-  `raw_data.cod_estruturado`), a mesma do Painel 9 e de Contratações. Só linhas com `cod_estruturado`, o que já
-  descarta a linha de total do relatório. Na QOYA: 52,28 mi, sendo 44,71 mi com AP (origens E e R, desde 01/2025) e
+  `raw_data.cod_estruturado`), a mesma do Painel 9 e de Contratações. Só linhas com `cod_estruturado` preenchido: a
+  linha de total do relatório vem com ele nulo. Na QOYA: 52,28 mi, sendo 44,71 mi com AP (origens E e R, desde 01/2025) e
   7,57 mi sem AP (origem MVI, saldo de implantação até 12/2024).
 - **Pagamentos:** relatório **"Conciliação Financeira"** do Mega (exportado pelo usuário em xlsx), uma linha por AP,
   parcela e rateio, com `Número AP`, `Parcela`, `Tipo documento`, `Data vencimento`, `Valor rateado [A]`,
@@ -61,7 +61,10 @@ Para cada etapa nível 5 e cada tipo (material ou MO; a classificação é a mes
 
 1. **Competência realizada:** apropriado do Mega por mês do documento, até o fim do mês de corte. Documentos depois do
    corte são ignorados. Sem data: entram no mês de corte (**decisão do builder**).
-2. **Saldo** = custo projetado do tipo − realizado do tipo.
+2. **Saldo da etapa** = custo projetado da etapa − realizado da etapa. É calculado **por etapa, não por tipo**: na
+   conferência da QOYA, o Mega e o custo projetado classificam o mesmo insumo em tipos diferentes (concreto como MO no
+   projetado e como material no Mega), o que gerava falsos excedentes. O saldo é repartido entre material e MO pelo que
+   falta em cada tipo (custo − realizado, mínimo 0) e projetado com as regras de cada um.
    - **Saldo < 0 (excedente):** nada é projetado; a etapa fica **vermelha** com o valor do excedente.
    - **Saldo > 0 com físico depois do corte:** o motor atual roda com `custo = saldo` e o físico **só a partir do mês
      seguinte ao corte** (pesos até o corte zerados, demais renormalizados), com as mesmas regras de material
