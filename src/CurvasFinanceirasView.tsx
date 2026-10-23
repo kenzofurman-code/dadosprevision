@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import './CurvasFinanceirasView.css'
 import { PlanilhaAnalitica } from './components/curvas-financeiras/PlanilhaAnalitica'
+import { RealizadoProjecao } from './components/curvas-financeiras/RealizadoProjecao'
 
 interface CurvaKpis {
   totalOrcado: number
@@ -147,7 +148,7 @@ interface Props {
   onSelectProject: (id: string) => void
 }
 
-type TabMode = 'grafico' | 'mensal' | 'analitica' | 'etapas'
+type TabMode = 'grafico' | 'realizado' | 'mensal' | 'analitica' | 'etapas'
 type ScopeFilter = 'todos' | 'material' | 'mao_de_obra'
 type ChartMode = 'acumulado_pct' | 'acumulado_reais' | 'mensal_reais' | 'mensal_pct'
 
@@ -1025,6 +1026,14 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
           </button>
           <button
             type="button"
+            className={`curvas-fin-tab-btn ${activeTab === 'realizado' ? 'active' : ''}`}
+            onClick={() => setActiveTab('realizado')}
+          >
+            <History size={16} />
+            Realizado + projeção
+          </button>
+          <button
+            type="button"
             className={`curvas-fin-tab-btn ${activeTab === 'mensal' ? 'active' : ''}`}
             onClick={() => setActiveTab('mensal')}
           >
@@ -1118,6 +1127,10 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
           )}
         </div>
       </div>
+
+      {activeTab === 'realizado' && projectId && (
+        <RealizadoProjecao projectId={projectId} scopeFilter={scopeFilter} />
+      )}
 
       {/* Conteúdo da Aba: Gráfico S */}
       {activeTab === 'grafico' && chartData && (

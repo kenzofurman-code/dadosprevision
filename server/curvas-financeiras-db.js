@@ -1,8 +1,9 @@
 // Consultas e persistência de dados para as Curvas de Competência e Financeira
-import { query } from './db.js'
-import { calcularCurvasFinanceiras, separarForaDoCronograma } from './curvas-financeiras-engine.js'
-import { etapaParaMega } from './contratacoes.js'
-import { classificadorDaObra, projetadoPorTipo } from './contratacoes-db.js'
+import { query, withTransaction } from './db.js'
+import { calcularCurvasFinanceiras, projetarRealizado, proximoMesIso, separarForaDoCronograma } from './curvas-financeiras-engine.js'
+import { etapaParaMega, hojeNoBrasil } from './contratacoes.js'
+import { classificadorDaObra, obraDoProjeto, projetadoPorTipo } from './contratacoes-db.js'
+import { lerConciliacaoFinanceira } from './pagamentos-ap.js'
 
 /**
  * Busca os parâmetros da obra ou retorna defaults
@@ -138,11 +139,10 @@ export async function salvarParametrosCurvas(projetoId, { parametrosObra, parame
 }
 
 /**
- * Consulta e monta todo o payload das Curvas de Competência e Financeira para o projeto
+ * Entrada do motor (parâmetros e etapas nível 5 com custo e físico), comum à curva teórica e ao
+ * Realizado + projeção.
  */
-export async function obterDadosCurvasFinanceiras(projetoId) {
-  const pId = String(projetoId).trim()
-
+async function montarEntradaCurvas(pId) {
   // 1. Parâmetros da Obra e das Etapas
   const [paramsObra, paramsEtapasObj] = await Promise.all([
     obterParametrosObra(pId),
@@ -239,6 +239,18 @@ export async function obterDadosCurvasFinanceiras(projetoId) {
     })
   }
 
+  return { paramsObra, paramsEtapasObj, importacao, etapasParaCalculo, realizadoTotalPrevision, projetadoFora, totalFora, etapasSemProjetado }
+}
+
+/**
+ * Consulta e monta todo o payload das Curvas de Competência e Financeira para o projeto
+ */
+export async function obterDadosCurvasFinanceiras(projetoId) {
+  const pId = String(projetoId).trim()
+  const {
+    paramsObra, paramsEtapasObj, importacao, etapasParaCalculo, realizadoTotalPrevision, projetadoFora, totalFora, etapasSemProjetado,
+  } = await montarEntradaCurvas(pId)
+
   // 6. Rodar o motor de cálculo
   const resultadoMotor = calcularCurvasFinanceiras({
     etapas: etapasParaCalculo,
@@ -317,4 +329,108 @@ export async function obterVersaoCurvas(projetoId, id) {
 export async function excluirVersaoCurvas(projetoId, id) {
   await query(`DELETE FROM curva_versoes WHERE projeto_id = $1 AND id = $2`, [projetoId, id])
   return {}
+}
+
+// ---- Realizado + projeção -------------------------------------------------
+
+/** Grava a planilha "Conciliação Financeira" do projeto, substituindo a anterior. */
+export async function importarPagamentos(projetoId, { arquivo, matriz }) {
+  const { linhas, erros } = lerConciliacaoFinanceira(matriz)
+  if (erros.length) throw Object.assign(new Error(erros.join(' ')), { status: 400 })
+  if (!linhas.length) throw Object.assign(new Error('Nenhuma AP encontrada na planilha.'), { status: 400 })
+  const col = (k) => linhas.map((l) => l[k])
+  return withTransaction(async (q) => {
+    await q('DELETE FROM pagamentos_ap WHERE projeto_id = $1', [projetoId])
+    const { rows: [r] } = await q(
+      `INSERT INTO pagamentos_ap (projeto_id, ap, parcela, tipo_documento, vencimento, valor_rateado, pago, saldo, cod_estruturado, arquivo)
+       SELECT $1, ap, parcela, tipo, venc, valor, pago, saldo, cod, $10
+       FROM unnest($2::int[], $3::text[], $4::text[], $5::date[], $6::numeric[], $7::numeric[], $8::numeric[], $9::text[])
+         AS x(ap, parcela, tipo, venc, valor, pago, saldo, cod)
+       RETURNING importado_em`,
+      [projetoId, col('ap'), col('parcela'), col('tipo_documento'), col('vencimento'), col('valor_rateado'),
+        col('pago'), col('saldo'), col('cod_estruturado'), arquivo ? String(arquivo).slice(0, 200) : null])
+    return { linhas: linhas.length, total: Math.round(linhas.reduce((s, l) => s + l.valor_rateado, 0) * 100) / 100, importado_em: r?.importado_em }
+  })
+}
+
+/** Parcelas por AP (Map ap → [{ vencimento, valor, saldo }]) e quando a planilha foi carregada. */
+export async function pagamentosDoProjeto(projetoId) {
+  const { rows } = await query(
+    `SELECT ap, vencimento::text AS vencimento, valor_rateado::float AS valor, saldo::float AS saldo, arquivo, importado_em
+     FROM pagamentos_ap WHERE projeto_id = $1 AND vencimento IS NOT NULL`, [projetoId])
+  const mapa = new Map()
+  for (const r of rows) {
+    if (!mapa.has(r.ap)) mapa.set(r.ap, [])
+    mapa.get(r.ap).push({ vencimento: r.vencimento, valor: r.valor, saldo: r.saldo })
+  }
+  return { mapa, importado_em: rows[0]?.importado_em || null, arquivo: rows[0]?.arquivo || null }
+}
+
+const mesAnterior = (mes) => {
+  const [y, m] = mes.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 2, 15)).toISOString().slice(0, 7)
+}
+const fmtMes = (mes) => `${mes.slice(5, 7)}/${mes.slice(0, 4)}`
+
+/** Realizado do Mega até o corte + saldo projetado pelo físico restante (padrão: último mês fechado). */
+export async function obterRealizadoProjecao(projetoId, corte) {
+  const pId = String(projetoId).trim()
+  const cortePadrao = mesAnterior(hojeNoBrasil().slice(0, 7))
+  if (corte && !/^\d{4}-(0[1-9]|1[0-2])$/.test(corte)) throw Object.assign(new Error('Corte inválido (AAAA-MM).'), { status: 400 })
+  const mesCorte = corte || cortePadrao
+  const obra = await obraDoProjeto(pId)
+  if (!obra) return { obra: null, motivo: 'Este projeto não tem obra do Mega vinculada.', corte: mesCorte, cortePadrao }
+
+  const [entrada, classif, pag, realRes, cargaRes] = await Promise.all([
+    montarEntradaCurvas(pId),
+    classificadorDaObra(pId),
+    pagamentosDoProjeto(pId),
+    query(
+      `SELECT raw_data->>'cod_estruturado' AS codigo, raw_data->>'cod_item' AS cod, raw_data->>'descricao_1' AS descricao,
+              data_documento::text AS data, ap::int AS ap, SUM(COALESCE(valor_apropriacao, 0))::float AS valor
+       FROM mega.analise_realizado
+       -- cod_estruturado nulo é a linha de total do relatório
+       WHERE obra = $1 AND COALESCE(raw_data->>'cod_estruturado', '') <> '' GROUP BY 1, 2, 3, 4, 5`, [obra]),
+    query('SELECT MAX(data_extracao)::text AS d FROM mega.analise_realizado WHERE obra = $1', [obra]),
+  ])
+  const realizado = realRes.rows.map((r) => ({
+    codigo_etapa: etapaParaMega(r.codigo) || r.codigo,
+    tipo: classif.tipoDe(r.descricao, r.cod).tipo,
+    data: r.data,
+    valor: r.valor,
+    ap: r.ap,
+  }))
+
+  const resultado = projetarRealizado({
+    etapas: entrada.etapasParaCalculo,
+    parametrosObra: entrada.paramsObra,
+    parametrosEtapas: entrada.paramsEtapasObj.mapa,
+    corte: mesCorte,
+    realizado,
+    pagamentos: pag.mapa,
+  })
+
+  const inicioDoMesSeguinte = `${proximoMesIso(mesCorte)}-01`
+  const ultimaCargaMega = cargaRes.rows[0]?.d || null
+  const avisos = []
+  if (!ultimaCargaMega || ultimaCargaMega < inicioDoMesSeguinte) {
+    avisos.push(`A última carga do Mega é de ${ultimaCargaMega ? ultimaCargaMega.split('-').reverse().join('/') : '—'}: o realizado de ${fmtMes(mesCorte)} pode estar incompleto.`)
+  }
+  if (!pag.importado_em) {
+    avisos.push('Planilha de pagamentos (Conciliação Financeira) não carregada: o financeiro do realizado é estimado pelas regras.')
+  } else if (new Date(pag.importado_em).toISOString().slice(0, 10) < inicioDoMesSeguinte) {
+    avisos.push(`A planilha de pagamentos foi carregada antes do fim de ${fmtMes(mesCorte)}: pagamentos posteriores ficam estimados.`)
+  }
+  if (pag.importado_em && resultado.kpis.realizadoSemPagamento > 0) {
+    avisos.push(`R$ ${resultado.kpis.realizadoSemPagamento.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} do realizado sem AP na planilha: financeiro estimado pelas regras.`)
+  }
+
+  return {
+    obra,
+    cortePadrao,
+    ...resultado,
+    avisos,
+    pagamentos: pag.importado_em ? { importado_em: pag.importado_em, arquivo: pag.arquivo } : null,
+    ultimaCargaMega,
+  }
 }
