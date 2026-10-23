@@ -110,6 +110,7 @@ interface CurvaParametroEtapa {
   tipo_pagamento: 'DIAS' | 'PARCELADO'
   prazo_dias: number | null
   parcelas_dias: number[] | null
+  parcelas_pct?: number[] | null
   retencao_ativa?: boolean | null
   retencao_percentual?: number | null
   observacao?: string | null
@@ -172,8 +173,13 @@ const formatDataBr = (iso?: string | null) => (iso ? iso.slice(0, 10).split('-')
 const gerarParcelas = (n: number, primeiro: number, intervalo: number) =>
   Array.from({ length: Math.min(60, Math.max(1, n)) }, (_, i) => primeiro + i * intervalo)
 
-const resumoParcelas = (dias: number[]) =>
-  dias.length > 1 ? `${dias.length}× · ${dias[0]} a ${dias[dias.length - 1]} dias` : `${dias[0] ?? 0} dias`
+const resumoParcelas = (dias: number[], pct?: number[] | null) => {
+  if (pct && pct.length === dias.length) {
+    const soma = pct.reduce((s, p) => s + p, 0) || 1
+    return dias.map((d, i) => `${d}d (${Math.round((pct[i] / soma) * 100)}%)`).join(' / ')
+  }
+  return dias.length > 1 ? `${dias.length}× · ${dias[0]} a ${dias[dias.length - 1]} dias` : `${dias[0] ?? 0} dias`
+}
 
 const nivelDoCodigo = (codigo: string) => codigo.split('.').length
 
@@ -227,6 +233,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
     tipo_pagamento: 'DIAS' | 'PARCELADO'
     prazo_dias: number | ''
     parcelas_str: string
+    pct_str: string
     ger_parcelas: number
     ger_primeiro: number
     ger_intervalo: number
@@ -242,6 +249,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
     tipo_pagamento: 'DIAS',
     prazo_dias: 28,
     parcelas_str: '30, 60',
+    pct_str: '',
     ger_parcelas: 2,
     ger_primeiro: 30,
     ger_intervalo: 30,
@@ -257,6 +265,16 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
         .map((s) => parseInt(s.trim(), 10))
         .filter((n) => !isNaN(n) && n > 0),
     [draftEtapa.parcelas_str]
+  )
+
+  // % de cada parcela (opcional): vazio = parcelas iguais
+  const pctDoDraft = useMemo(
+    () =>
+      draftEtapa.pct_str
+        .split(/[;/\s]+|,(?=\s)/)
+        .map((s) => parseFloat(s.trim().replace(',', '.')))
+        .filter((n) => !isNaN(n) && n >= 0),
+    [draftEtapa.pct_str]
   )
 
   // Carregar dados da API
@@ -412,6 +430,9 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
       if (ehMaterial && draftEtapa.tipo_pagamento === 'PARCELADO') {
         if (!parcelasDoDraft.length) throw new Error('Informe ao menos uma parcela.')
         parcelas = parcelasDoDraft
+        if (pctDoDraft.length && pctDoDraft.length !== parcelas.length) {
+          throw new Error('Informe um % para cada parcela, ou deixe o campo de % vazio.')
+        }
       }
 
       // Regra de Material: entrega e pagamento. Regra de MO: só retenção técnica (corte e pagamento são da obra).
@@ -424,6 +445,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
             tipo_pagamento: draftEtapa.tipo_pagamento,
             prazo_dias: draftEtapa.prazo_dias !== '' ? Number(draftEtapa.prazo_dias) : 28,
             parcelas_dias: parcelas,
+            parcelas_pct: parcelas && pctDoDraft.length ? pctDoDraft : null,
             retencao_ativa: null,
             retencao_percentual: null,
             observacao: draftEtapa.observacao.trim() || null,
@@ -506,6 +528,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
       tipo_pagamento: override?.tipo_pagamento ?? 'DIAS',
       prazo_dias: override?.prazo_dias ?? draftObra.prazo_pagamento_padrao_dias,
       parcelas_str: parcelas.join(', '),
+      pct_str: override?.parcelas_pct?.length ? override.parcelas_pct.join('; ') : '',
       ger_parcelas: parcelas.length,
       ger_primeiro: parcelas[0],
       ger_intervalo: parcelas.length > 1 ? parcelas[1] - parcelas[0] : 30,
@@ -556,7 +579,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
     }
     const entrega = p.num_entregas ? `${p.num_entregas} entrega(s)` : 'conforme execução'
     const pagto = p.tipo_pagamento === 'PARCELADO' && p.parcelas_dias?.length
-      ? resumoParcelas(p.parcelas_dias)
+      ? resumoParcelas(p.parcelas_dias, p.parcelas_pct)
       : `${p.prazo_dias ?? draftObra.prazo_pagamento_padrao_dias} dias`
     return `Antecedência: ${p.dias_antecedencia ?? draftObra.dias_antecedencia_padrao}d • ${entrega} • Pagto: ${pagto}`
   }
@@ -1963,8 +1986,24 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                             />
                             <span className="curvas-fin-hint">
                               {parcelasDoDraft.length
-                                ? `${resumoParcelas(parcelasDoDraft)} — cada entrega dividida em ${parcelasDoDraft.length} parcela(s) iguais.`
+                                ? pctDoDraft.length === parcelasDoDraft.length
+                                  ? `${resumoParcelas(parcelasDoDraft, pctDoDraft)} — cada entrega dividida nesses percentuais.`
+                                  : `${resumoParcelas(parcelasDoDraft)} — cada entrega dividida em ${parcelasDoDraft.length} parcela(s) iguais.`
                                 : 'Informe os prazos separados por vírgula ou use o gerador.'}
+                            </span>
+                          </div>
+                          <div className="curvas-fin-form-field">
+                            <label>% de cada Parcela (opcional)</label>
+                            <input
+                              type="text"
+                              placeholder="vazio = parcelas iguais; ex.: 48; 11; 10; 10; 21"
+                              value={draftEtapa.pct_str}
+                              onChange={(e) => setDraftEtapa({ ...draftEtapa, pct_str: e.target.value })}
+                            />
+                            <span className="curvas-fin-hint">
+                              {pctDoDraft.length && pctDoDraft.length !== parcelasDoDraft.length
+                                ? `Informe ${parcelasDoDraft.length} percentuais (um por parcela).`
+                                : 'Separe por ponto e vírgula. Os valores são ajustados para somar 100%.'}
                             </span>
                           </div>
                         </>
