@@ -248,6 +248,25 @@ export function distribuirMaoDeObraEtapa(params) {
 }
 
 /**
+ * Condições de pagamento do material: prazo único ou parcelas. `parcelasPct` (mesmo tamanho de
+ * `parcelasDias`, normalizado para somar 100%) dá o peso de cada parcela; sem ele, parcelas iguais.
+ */
+function condicoesPagamento({ tipoPagamento = 'DIAS', prazoDias = 28, parcelasDias = null, parcelasPct = null }) {
+  if (tipoPagamento === 'PARCELADO' && Array.isArray(parcelasDias) && parcelasDias.length > 0) {
+    const n = parcelasDias.length
+    const pct = Array.isArray(parcelasPct) && parcelasPct.length === n ? parcelasPct.map((p) => Math.max(0, Number(p) || 0)) : null
+    const soma = pct ? pct.reduce((s, p) => s + p, 0) : 0
+    return parcelasDias.map((d, i) => {
+      const fracao = soma > 0 ? pct[i] / soma : 1 / n
+      const peso = soma > 0 ? `, ${Math.round(fracao * 100)}%` : ''
+      return { dias: Number(d), fracao, motivo: `parcela ${i + 1}/${n} (${Number(d)} dias${peso})` }
+    })
+  }
+  const d = Number(prazoDias ?? 28)
+  return [{ dias: d, fracao: 1, motivo: `pagamento em ${d} dias` }]
+}
+
+/**
  * Material:
  * - Competência = data de chegada na obra.
  *   - Proporcional (padrão): cada dia físico chega `diasAntecedencia` antes; uma "nota" por mês de
@@ -266,6 +285,7 @@ function materialComFluxos({
   tipoPagamento = 'DIAS',
   prazoDias = 28,
   parcelasDias = null,
+  parcelasPct = null,
   pontosMensais = null,
 }) {
   const eventos = []
@@ -277,15 +297,7 @@ function materialComFluxos({
   const antecedencia = Number(diasAntecedencia || 0)
   const dias = fisicoDiario({ dataInicio, fim, pontosMensais })
 
-  // Condições de pagamento: lista de parcelas e seus prazos
-  let condicoes = []
-  if (tipoPagamento === 'PARCELADO' && Array.isArray(parcelasDias) && parcelasDias.length > 0) {
-    const frac = 1 / parcelasDias.length
-    condicoes = parcelasDias.map((d, i) => ({ dias: Number(d), fracao: frac, motivo: `parcela ${i + 1}/${parcelasDias.length} (${Number(d)} dias)` }))
-  } else {
-    const d = Number(prazoDias ?? 28)
-    condicoes = [{ dias: d, fracao: 1, motivo: `pagamento em ${d} dias` }]
-  }
+  const condicoes = condicoesPagamento({ tipoPagamento, prazoDias, parcelasDias, parcelasPct })
 
   // Uma entrega: eventos por parcela + fluxos por mês físico de origem (porFis: mês -> peso)
   function adicionarEntrega(dataEntrega, porFis, mComp) {
@@ -421,6 +433,7 @@ export function calcularCurvasFinanceiras({
           tipoPagamento: tipoPag,
           prazoDias: prazMat,
           parcelasDias: parcelas,
+          parcelasPct: param.parcelas_pct || null,
           pontosMensais: etapa.pontos_mensais,
         })
       : { eventos: [], fluxos: [] }
@@ -648,10 +661,11 @@ export function projetarRealizado({
     const codigos = { codigoMega: r.codigo_etapa, codigoPrevision: etapa?.codigo_prevision }
     if (r.tipo === 'MATERIAL') {
       const regra = resolverRegra(parametrosEtapas, codigos, 'MATERIAL') || {}
-      const prazos = regra.tipo_pagamento === 'PARCELADO' && Array.isArray(regra.parcelas_dias) && regra.parcelas_dias.length
-        ? regra.parcelas_dias
-        : [regra.prazo_dias ?? prazoPadrao]
-      for (const d of prazos) somarFin(mesAnoIso(somarDiasIso(data, Number(d))), r.tipo, fora, valor / prazos.length)
+      const condicoes = condicoesPagamento({
+        tipoPagamento: regra.tipo_pagamento, prazoDias: regra.prazo_dias ?? prazoPadrao,
+        parcelasDias: regra.parcelas_dias, parcelasPct: regra.parcelas_pct,
+      })
+      for (const c of condicoes) somarFin(mesAnoIso(somarDiasIso(data, c.dias)), r.tipo, fora, valor * c.fracao)
     } else {
       const regra = resolverRegra(parametrosEtapas, codigos, 'MAO_DE_OBRA')
       const ativa = regra?.retencao_ativa ?? parametrosObra.retencao_mo_ativa ?? false

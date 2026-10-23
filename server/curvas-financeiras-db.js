@@ -38,7 +38,7 @@ export async function obterParametrosObra(projetoId) {
 export async function obterParametrosEtapas(projetoId) {
   const { rows } = await query(
     `SELECT id, projeto_id, codigo_etapa, tipo, dias_antecedencia, num_entregas,
-            tipo_pagamento, prazo_dias, parcelas_dias, retencao_ativa,
+            tipo_pagamento, prazo_dias, parcelas_dias, parcelas_pct::float8[] AS parcelas_pct, retencao_ativa,
             retencao_percentual::float AS retencao_percentual, observacao, atualizado_em
      FROM curva_parametros_etapa WHERE projeto_id = $1
      ORDER BY codigo_etapa, tipo`,
@@ -105,14 +105,15 @@ export async function salvarParametrosCurvas(projetoId, { parametrosObra, parame
     await query(
       `INSERT INTO curva_parametros_etapa (
          projeto_id, codigo_etapa, tipo, dias_antecedencia, num_entregas,
-         tipo_pagamento, prazo_dias, parcelas_dias, retencao_ativa, retencao_percentual, observacao, atualizado_em
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+         tipo_pagamento, prazo_dias, parcelas_dias, parcelas_pct, retencao_ativa, retencao_percentual, observacao, atualizado_em
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
        ON CONFLICT (projeto_id, codigo_etapa, tipo) DO UPDATE SET
          dias_antecedencia = EXCLUDED.dias_antecedencia,
          num_entregas = EXCLUDED.num_entregas,
          tipo_pagamento = EXCLUDED.tipo_pagamento,
          prazo_dias = EXCLUDED.prazo_dias,
          parcelas_dias = EXCLUDED.parcelas_dias,
+         parcelas_pct = EXCLUDED.parcelas_pct,
          retencao_ativa = EXCLUDED.retencao_ativa,
          retencao_percentual = EXCLUDED.retencao_percentual,
          observacao = EXCLUDED.observacao,
@@ -126,6 +127,9 @@ export async function salvarParametrosCurvas(projetoId, { parametrosObra, parame
         item.tipo_pagamento || 'DIAS',
         item.prazo_dias !== undefined ? item.prazo_dias : 28,
         Array.isArray(item.parcelas_dias) ? item.parcelas_dias.slice(0, 60) : null,
+        Array.isArray(item.parcelas_dias) && Array.isArray(item.parcelas_pct) && item.parcelas_pct.length === item.parcelas_dias.length
+          ? item.parcelas_pct.slice(0, 60).map(Number)
+          : null,
         typeof item.retencao_ativa === 'boolean' ? item.retencao_ativa : null,
         item.retencao_percentual !== undefined && item.retencao_percentual !== null && item.retencao_percentual !== ''
           ? Number(item.retencao_percentual)

@@ -731,6 +731,8 @@ ALTER TABLE curva_parametros_obra ADD COLUMN IF NOT EXISTS retencao_mo_percentua
 ALTER TABLE curva_parametros_obra ADD COLUMN IF NOT EXISTS data_fim_obra DATE;
 ALTER TABLE curva_parametros_etapa ADD COLUMN IF NOT EXISTS retencao_ativa BOOLEAN;
 ALTER TABLE curva_parametros_etapa ADD COLUMN IF NOT EXISTS retencao_percentual NUMERIC;
+-- % de cada parcela (mesmo tamanho de parcelas_dias); nulo = parcelas iguais
+ALTER TABLE curva_parametros_etapa ADD COLUMN IF NOT EXISTS parcelas_pct NUMERIC[];
 
 CREATE TABLE IF NOT EXISTS curva_versoes (
   id SERIAL PRIMARY KEY,

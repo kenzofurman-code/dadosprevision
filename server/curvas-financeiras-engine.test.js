@@ -234,6 +234,33 @@ test('material: parcelado em 12x de 28 em 28 dias', () => {
   assert.equal(eventos[11].dataVencimento, somarDiasIso('2026-06-20', 336))
 })
 
+test('material parcelado com % de cada parcela (histórico de pagamento)', () => {
+  const eventos = distribuirMaterialEtapa({
+    custo: 10000, dataInicio: '2026-06-01', dataFim: '2026-06-01', diasAntecedencia: 0, numEntregas: 1,
+    tipoPagamento: 'PARCELADO', parcelasDias: [20, 46, 76], parcelasPct: [50, 30, 20],
+  })
+  assert.deepEqual(eventos.map((e) => e.valor), [5000, 3000, 2000])
+  assert.deepEqual(eventos.map((e) => e.dataVencimento), ['2026-06-21', '2026-07-17', '2026-08-16'])
+})
+
+test('% das parcelas é normalizado para 100%; sem % ou com tamanho diferente, parcelas iguais', () => {
+  const base = { custo: 900, dataInicio: '2026-06-01', dataFim: '2026-06-01', diasAntecedencia: 0, numEntregas: 1, tipoPagamento: 'PARCELADO', parcelasDias: [10, 40, 70] }
+  assert.deepEqual(distribuirMaterialEtapa({ ...base, parcelasPct: [2, 1, 0] }).map((e) => e.valor), [600, 300, 0])
+  assert.deepEqual(distribuirMaterialEtapa({ ...base, parcelasPct: [50, 50] }).map((e) => e.valor), [300, 300, 300])
+  assert.deepEqual(distribuirMaterialEtapa({ ...base, parcelasPct: null }).map((e) => e.valor), [300, 300, 300])
+})
+
+test('regra com parcelas_pct chega ao motor das curvas', () => {
+  const r = calcularCurvasFinanceiras({
+    etapas: [{ codigo_etapa: 'A', data_inicio: '2026-06-01', data_fim: '2026-06-01', custo_material: 1000, custo_mao_obra: 0 }],
+    parametrosObra: { dias_antecedencia_padrao: 0 },
+    parametrosEtapas: new Map([['A|MATERIAL', { codigo_etapa: 'A', num_entregas: 1, tipo_pagamento: 'PARCELADO', parcelas_dias: [10, 45], parcelas_pct: [80, 20] }]]),
+  })
+  const fin = Object.fromEntries(r.seriesMensal.map((s) => [s.mes, s.financeiroMaterial]))
+  assert.equal(fin['2026-06'], 800)
+  assert.equal(fin['2026-07'], 200)
+})
+
 test('regras: nível 5 vence nível 4, que vence nível 3; MO e Material não colidem', () => {
   const etapa = { codigoMega: '01.02.03.04.005', codigoPrevision: '01.02.03.04.05' }
   const mapa = new Map([
