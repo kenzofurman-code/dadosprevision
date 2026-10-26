@@ -202,8 +202,8 @@ export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
 
   if (dados && !dados.obra) {
     return (
-      <section className="rp-painel">
-        <div className="rp-aviso"><AlertCircle size={16} /> {dados.motivo}</div>
+      <section className="rpj-painel">
+        <div className="rpj-aviso"><AlertCircle size={16} /> {dados.motivo}</div>
       </section>
     )
   }
@@ -217,9 +217,9 @@ export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
   const l = hover !== null ? linhas[hover] : null
 
   return (
-    <section className="rp-painel">
-      <div className="rp-topo">
-        <label className="rp-campo">
+    <section className="rpj-painel">
+      <div className="rpj-topo">
+        <label className="rpj-campo">
           Realizado até
           <input
             type="month"
@@ -243,8 +243,8 @@ export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
             Último mês fechado
           </button>
         )}
-        <div className="rp-espaco" />
-        <span className="rp-carga">
+        <div className="rpj-espaco" />
+        <span className="rpj-carga">
           {dados?.pagamentos
             ? `Pagamentos: ${dados.pagamentos.arquivo || 'planilha'} (${new Date(dados.pagamentos.importado_em).toLocaleDateString('pt-BR')})`
             : 'Pagamentos: planilha não carregada'}
@@ -268,9 +268,9 @@ export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
         </button>
       </div>
 
-      {erro && <div className="rp-aviso rp-erro"><AlertCircle size={16} /> {erro}</div>}
+      {erro && <div className="rpj-aviso rpj-erro"><AlertCircle size={16} /> {erro}</div>}
       {(dados?.avisos || []).map((a) => (
-        <div key={a} className="rp-aviso"><AlertCircle size={16} /> {a}</div>
+        <div key={a} className="rpj-aviso"><AlertCircle size={16} /> {a}</div>
       ))}
 
       {k && (
@@ -283,7 +283,7 @@ export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
           <div className="curvas-fin-kpi-card accent-blue">
             <div className="curvas-fin-kpi-label">Teórico até o corte</div>
             <div className="curvas-fin-kpi-val">{moeda(k.teoricoAteCorte)}</div>
-            <div className={`curvas-fin-kpi-sub ${k.desvio > 0 ? 'rp-vermelho' : ''}`}>
+            <div className={`curvas-fin-kpi-sub ${k.desvio > 0 ? 'rpj-vermelho' : ''}`}>
               Desvio {moeda(k.desvio)} ({pct(k.desvioPct)})
             </div>
           </div>
@@ -292,9 +292,9 @@ export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
             <div className="curvas-fin-kpi-val">{moeda(k.saldoProjetado)}</div>
             <div className="curvas-fin-kpi-sub">Custo final estimado {moeda(k.custoFinalEstimado)}</div>
           </div>
-          <div className={`curvas-fin-kpi-card ${k.excedente + k.pendente > 0 ? 'rp-card-alerta' : 'accent-teal'}`}>
+          <div className={`curvas-fin-kpi-card ${k.excedente + k.pendente > 0 ? 'rpj-card-alerta' : 'accent-teal'}`}>
             <div className="curvas-fin-kpi-label">Excedente / pendente</div>
-            <div className={`curvas-fin-kpi-val ${k.excedente + k.pendente > 0 ? 'rp-vermelho' : ''}`}>
+            <div className={`curvas-fin-kpi-val ${k.excedente + k.pendente > 0 ? 'rpj-vermelho' : ''}`}>
               {moeda(k.excedente)} / {moeda(k.pendente)}
             </div>
             <div className="curvas-fin-kpi-sub">Fora do cronograma {moeda(k.foraDoCronograma)}</div>
@@ -304,7 +304,7 @@ export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
 
       {grafico && (
         <div className="curvas-fin-chart-panel">
-          <div className="rp-controles">
+          <div className="rpj-controles">
             <div className="curvas-fin-toggle-pill">
               {(['competencia', 'financeiro'] as Medida[]).map((m) => (
                 <button key={m} type="button" className={`curvas-fin-pill-btn ${medida === m ? 'active' : ''}`} onClick={() => setMedida(m)}>
@@ -324,18 +324,18 @@ export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
                 </button>
               ))}
             </div>
-            <label className="rp-check">
+            <label className="rpj-check">
               <input type="checkbox" checked={mostrarTeorica} onChange={(e) => setMostrarTeorica(e.target.checked)} />
               Mostrar teórica
             </label>
           </div>
 
-          <div className="rp-legenda">
+          <div className="rpj-legenda">
             <span><i style={{ background: corMedida }} /> Realizado (até o corte)</span>
-            <span><i className="rp-tracejado" style={{ borderColor: corMedida }} /> Projeção</span>
+            <span><i className="rpj-tracejado" style={{ borderColor: corMedida }} /> Projeção</span>
             {mostrarTeorica && <span><i style={{ background: COR_TEORICA }} /> Teórica</span>}
             {l && (
-              <span className="rp-hover">
+              <span className="rpj-hover">
                 <strong>{rotuloMes(l.mes)}</strong> · {l.realizado ? 'realizado' : 'projeção'} {rotuloY(ponto(l, false))} · teórica{' '}
                 {rotuloY(ponto(l, true))}
               </span>
@@ -396,15 +396,15 @@ export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
       )}
 
       {alertas.length > 0 && (
-        <div className="rp-bloco">
-          <h4 className="rp-vermelho">Etapas em alerta ({alertas.length})</h4>
-          <table className="rp-tabela">
+        <div className="rpj-bloco">
+          <h4 className="rpj-vermelho">Etapas em alerta ({alertas.length})</h4>
+          <table className="rpj-tabela">
             <thead>
               <tr><th>Etapa</th><th>Situação</th><th>Projetado</th><th>Realizado</th><th>Excedente</th><th>Pendente</th></tr>
             </thead>
             <tbody>
               {alertas.map((e) => (
-                <tr key={e.codigo_etapa} className="rp-linha-alerta">
+                <tr key={e.codigo_etapa} className="rpj-linha-alerta">
                   <td><code>{e.codigo_etapa}</code> {e.nome}</td>
                   <td>{e.alerta === 'excedente' ? 'Gastou mais que o projetado' : 'Saldo sem físico pela frente'}</td>
                   <td>{moeda(e.projetado)}</td>
@@ -419,10 +419,10 @@ export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
       )}
 
       {linhas.length > 0 && (
-        <div className="rp-bloco">
+        <div className="rpj-bloco">
           <h4>Teórico x realizado + projeção ({medida === 'competencia' ? 'competência' : 'financeiro'})</h4>
-          <div className="rp-rolagem">
-            <table className="rp-tabela">
+          <div className="rpj-rolagem">
+            <table className="rpj-tabela">
               <thead>
                 <tr>
                   <th>Mês</th><th>Teórico</th><th>Realizado / projeção</th><th>Teórico acum.</th><th>Realizado acum.</th>
@@ -433,13 +433,13 @@ export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
                 {linhas.map((ln) => {
                   const dif = ln.acR - ln.acT
                   return (
-                    <tr key={ln.mes} className={ln.mes === dados?.corte ? 'rp-linha-corte' : ln.realizado ? '' : 'rp-linha-projecao'}>
+                    <tr key={ln.mes} className={ln.mes === dados?.corte ? 'rpj-linha-corte' : ln.realizado ? '' : 'rpj-linha-projecao'}>
                       <td>{rotuloMes(ln.mes)}</td>
                       <td>{moeda(ln.teo)}</td>
                       <td>{moeda(ln.real)}</td>
                       <td>{moeda(ln.acT)}</td>
                       <td>{moeda(ln.acR)}</td>
-                      <td className={dif > 0.5 ? 'rp-vermelho' : ''}>{moeda(dif)}</td>
+                      <td className={dif > 0.5 ? 'rpj-vermelho' : ''}>{moeda(dif)}</td>
                       <td>{pct(base ? (dif / base) * 100 : 0)}</td>
                     </tr>
                   )
