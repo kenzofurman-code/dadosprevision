@@ -21,6 +21,8 @@ import {
   saveAppPreferences,
   getRestrictions,
   getMegaObras,
+  getMegaVinculos,
+  salvarMegaVinculo,
   getMegaSummary,
   getMegaTable,
   getMegaCargasStatusDiario,
@@ -248,6 +250,25 @@ app.get('/api/mega/obras', async (_req, res) => {
   } catch (err) {
     console.error('Erro em /api/mega/obras:', err)
     res.status(500).json({ error: err.message || 'Erro ao carregar obras do Mega' })
+  }
+})
+
+app.get('/api/mega/vinculos', async (_req, res) => {
+  try {
+    res.json({ ok: true, ...(await getMegaVinculos()) })
+  } catch (err) {
+    console.error('Erro em /api/mega/vinculos:', err)
+    res.status(500).json({ error: err.message || 'Erro ao carregar vínculos do Mega' })
+  }
+})
+
+app.put('/api/mega/vinculos/:obra', async (req, res) => {
+  try {
+    await salvarMegaVinculo(req.params.obra, req.body?.id_prevision)
+    res.json({ ok: true })
+  } catch (err) {
+    if (!err.status) console.error('Erro em PUT /api/mega/vinculos:', err)
+    res.status(err.status || 500).json({ error: err.message || 'Erro ao salvar vínculo' })
   }
 })
 

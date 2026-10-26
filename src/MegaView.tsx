@@ -17,6 +17,7 @@ import {
   SlidersHorizontal,
   BookmarkPlus,
   FileText,
+  Link2,
 } from 'lucide-react'
 import './MegaView.css'
 import {
@@ -36,6 +37,7 @@ import { MegaSaveViewModal } from './components/mega/MegaSaveViewModal'
 import { MegaSavedViewsMenu } from './components/mega/MegaSavedViewsMenu'
 import { MegaReportModal } from './components/mega/MegaReportModal'
 import { MegaCargasStatus } from './components/mega/MegaCargasStatus'
+import { MegaVinculos } from './components/mega/MegaVinculos'
 
 export type MegaTabKey =
   | 'conciliacao_contratacoes'
@@ -46,6 +48,7 @@ export type MegaTabKey =
   | 'itens_solicitados'
   | 'solicitacoes_por_etapa'
   | 'cargas'
+  | 'vinculos'
   | 'follow_itenscontratos_itens'
   | 'follow_itenscontratos_medicoes'
   | 'follow_itenscontratos_historico'
@@ -281,7 +284,7 @@ export function MegaView() {
 
   // Carregar dados da tabela ativa
   const loadData = useCallback(async () => {
-    if (activeTab === 'cargas') return
+    if (activeTab === 'cargas' || activeTab === 'vinculos') return
     setLoading(true)
     try {
       const params = new URLSearchParams({
@@ -623,6 +626,15 @@ export function MegaView() {
             <Server size={15} />
             <span>Status das Cargas</span>
           </button>
+
+          <button
+            type="button"
+            className={`mega-tab-btn ${activeTab === 'vinculos' ? 'active' : ''}`}
+            onClick={() => handleTabChange('vinculos')}
+          >
+            <Link2 size={15} />
+            <span>Vínculo de Obras</span>
+          </button>
         </div>
 
         {activeTab === 'approvo' && (
@@ -675,6 +687,8 @@ export function MegaView() {
       {/* 3. Conteúdo da Aba */}
       {activeTab === 'cargas' ? (
         <MegaCargasStatus />
+      ) : activeTab === 'vinculos' ? (
+        <MegaVinculos />
       ) : (
         <>
           {/* 3. Toolbar de Filtros e Ações */}

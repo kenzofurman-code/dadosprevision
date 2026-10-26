@@ -354,6 +354,46 @@ export async function getMegaObras() {
   return rows
 }
 
+// Obras do Mega com o projeto da Prevision ao qual cada uma está vinculada
+// (mega.obra_projeto) e a lista de projetos disponíveis para vincular.
+export async function getMegaVinculos() {
+  const obras = await getMegaObras()
+  const { rows: pares } = await query('SELECT obra, id_prevision FROM mega.obra_projeto')
+  const porObra = new Map(pares.map((p) => [p.obra, p.id_prevision]))
+  const { rows: projetos } = await query(
+    'SELECT id_prevision, nome_projeto FROM projetos ORDER BY nome_projeto ASC',
+  )
+  return {
+    obras: obras.map((o) => ({ ...o, id_prevision: porObra.get(o.obra) || null })),
+    projetos,
+  }
+}
+
+// Vincula (ou desvincula, com idPrevision vazio) uma obra do Mega a um projeto.
+// Lança Error com .status para entrada inválida ou projeto já vinculado a outra obra.
+export async function salvarMegaVinculo(obra, idPrevision) {
+  const falha = (status, msg) => Object.assign(new Error(msg), { status })
+  obra = String(obra || '').trim()
+  idPrevision = String(idPrevision || '').trim() || null
+  if (!obra) throw falha(400, 'Obra é obrigatória.')
+
+  if (idPrevision) {
+    const proj = await getProject(idPrevision)
+    if (!proj) throw falha(404, 'Projeto não encontrado na Prevision.')
+    const { rows } = await query(
+      'SELECT obra FROM mega.obra_projeto WHERE id_prevision = $1 AND obra <> $2 LIMIT 1',
+      [idPrevision, obra],
+    )
+    if (rows[0]) throw falha(409, `Esse projeto já está vinculado à obra ${rows[0].obra} do Mega.`)
+  }
+
+  await query(
+    `INSERT INTO mega.obra_projeto (obra, id_prevision) VALUES ($1, $2)
+     ON CONFLICT (obra) DO UPDATE SET id_prevision = EXCLUDED.id_prevision`,
+    [obra, idPrevision],
+  )
+}
+
 export async function getMegaSummary(obra = '') {
   const params = obra ? [obra] : []
   const whereObra = obra ? 'WHERE obra = $1' : ''
