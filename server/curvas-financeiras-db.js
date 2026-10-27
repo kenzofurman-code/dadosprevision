@@ -360,12 +360,12 @@ export async function importarPagamentos(projetoId, { arquivo, matriz }) {
 /** Parcelas por AP (Map ap → [{ vencimento, valor, saldo }]) e quando a planilha foi carregada. */
 export async function pagamentosDoProjeto(projetoId) {
   const { rows } = await query(
-    `SELECT ap, vencimento::text AS vencimento, valor_rateado::float AS valor, saldo::float AS saldo, arquivo, importado_em
+    `SELECT ap, vencimento::text AS vencimento, valor_rateado::float AS valor, pago::float AS pago, saldo::float AS saldo, arquivo, importado_em
      FROM pagamentos_ap WHERE projeto_id = $1 AND vencimento IS NOT NULL`, [projetoId])
   const mapa = new Map()
   for (const r of rows) {
     if (!mapa.has(r.ap)) mapa.set(r.ap, [])
-    mapa.get(r.ap).push({ vencimento: r.vencimento, valor: r.valor, saldo: r.saldo })
+    mapa.get(r.ap).push({ vencimento: r.vencimento, valor: r.valor, pago: r.pago, saldo: r.saldo })
   }
   return { mapa, importado_em: rows[0]?.importado_em || null, arquivo: rows[0]?.arquivo || null }
 }

@@ -628,3 +628,15 @@ test('projetarRealizado: invariantes de fechamento', () => {
   assert.ok(Math.abs(somaSerie(r, 'competenciaMensal') - (k.base + k.excedente + k.foraDoCronograma - k.pendente)) < 0.05)
   assert.ok(Math.abs(somaSerie(r, 'financeiroMensal') - somaSerie(r, 'competenciaMensal')) < 0.05)
 })
+
+test('projetarRealizado: realizado financeiro = pago das parcelas com vencimento até o corte', () => {
+  const r = projetar({
+    corte: '2026-03',
+    pagamentos: new Map([
+      [7, [{ vencimento: '2026-02-10', valor: 100, pago: 80, saldo: 20 }, { vencimento: '2026-03-31', valor: 50, pago: 50, saldo: 0 }]],
+      [8, [{ vencimento: '2026-04-01', valor: 30, pago: 30, saldo: 0 }]],
+    ]),
+  })
+  assert.equal(r.kpis.realizadoFinanceiroAteCorte, 130)
+  assert.equal(r.kpis.realizadoAteCorte, 0)
+})

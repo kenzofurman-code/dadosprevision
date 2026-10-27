@@ -43,6 +43,7 @@ interface Resposta {
   kpis?: {
     base: number
     realizadoAteCorte: number
+    realizadoFinanceiroAteCorte: number
     teoricoAteCorte: number
     desvio: number
     desvioPct: number
@@ -210,6 +211,7 @@ export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
 
   const k = dados?.kpis
   const corMedida = COR_REAL[medida]
+  const realizadoKpi = k ? (medida === 'financeiro' ? k.realizadoFinanceiroAteCorte : k.realizadoAteCorte) : 0
   const alertas = (dados?.etapas || [])
     .filter((e) => e.alerta)
     .sort((a, b) => b.excedente + b.pendente - (a.excedente + a.pendente))
@@ -277,8 +279,10 @@ export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
         <div className="curvas-fin-kpis-grid">
           <div className="curvas-fin-kpi-card accent-amber">
             <div className="curvas-fin-kpi-label">Realizado até {rotuloMes(dados!.corte)}</div>
-            <div className="curvas-fin-kpi-val">{moeda(k.realizadoAteCorte)}</div>
-            <div className="curvas-fin-kpi-sub">{pct(base ? (k.realizadoAteCorte / base) * 100 : 0)} do custo projetado</div>
+            <div className="curvas-fin-kpi-val">{moeda(realizadoKpi)}</div>
+            <div className="curvas-fin-kpi-sub">
+              {pct(base ? (realizadoKpi / base) * 100 : 0)} do custo projetado · {medida === 'financeiro' ? 'pago (conciliação)' : 'apropriado (Mega)'}
+            </div>
           </div>
           <div className="curvas-fin-kpi-card accent-blue">
             <div className="curvas-fin-kpi-label">Teórico até o corte</div>

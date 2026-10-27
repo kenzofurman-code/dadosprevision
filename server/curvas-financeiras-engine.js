@@ -632,6 +632,12 @@ export function projetarRealizado({
   let foraDoCronograma = 0
   let realizadoSemPagamento = 0
   let realizadoAteCorte = 0
+  // Visão financeira: o realizado é o pago da Conciliação Financeira (coluna "Pagamentos"), todas as
+  // APs, com vencimento até o fim do corte — independe do apropriado do Mega.
+  let realizadoFinanceiroAteCorte = 0
+  for (const parcelas of pagamentos.values()) {
+    for (const p of parcelas) if (p.vencimento && p.vencimento <= fimCorte) realizadoFinanceiroAteCorte += Number(p.pago) || 0
+  }
   for (const r of realizado) {
     const valor = Number(r.valor) || 0
     if (!valor || (r.data && r.data > fimCorte)) continue
@@ -773,6 +779,7 @@ export function projetarRealizado({
     kpis: {
       base,
       realizadoAteCorte: arredondar(realizadoAteCorte),
+      realizadoFinanceiroAteCorte: arredondar(realizadoFinanceiroAteCorte),
       teoricoAteCorte: arredondar(teoricoAteCorte),
       desvio,
       desvioPct: base ? arredondar((desvio / base) * 100) : 0,
