@@ -44,6 +44,11 @@ interface Resposta {
     base: number
     realizadoAteCorte: number
     realizadoFinanceiroAteCorte: number
+    teoricoFinanceiroAteCorte: number
+    desvioFinanceiro: number
+    desvioFinanceiroPct: number
+    saldoFinanceiro: number
+    abertoVencido: number
     teoricoAteCorte: number
     desvio: number
     desvioPct: number
@@ -211,7 +216,8 @@ export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
 
   const k = dados?.kpis
   const corMedida = COR_REAL[medida]
-  const realizadoKpi = k ? (medida === 'financeiro' ? k.realizadoFinanceiroAteCorte : k.realizadoAteCorte) : 0
+  const fin = medida === 'financeiro'
+  const realizadoKpi = k ? (fin ? k.realizadoFinanceiroAteCorte : k.realizadoAteCorte) : 0
   const alertas = (dados?.etapas || [])
     .filter((e) => e.alerta)
     .sort((a, b) => b.excedente + b.pendente - (a.excedente + a.pendente))
@@ -286,23 +292,35 @@ export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
           </div>
           <div className="curvas-fin-kpi-card accent-blue">
             <div className="curvas-fin-kpi-label">Teórico até o corte</div>
-            <div className="curvas-fin-kpi-val">{moeda(k.teoricoAteCorte)}</div>
-            <div className={`curvas-fin-kpi-sub ${k.desvio > 0 ? 'rpj-vermelho' : ''}`}>
-              Desvio {moeda(k.desvio)} ({pct(k.desvioPct)})
+            <div className="curvas-fin-kpi-val">{moeda(fin ? k.teoricoFinanceiroAteCorte : k.teoricoAteCorte)}</div>
+            <div className={`curvas-fin-kpi-sub ${(fin ? k.desvioFinanceiro : k.desvio) > 0 ? 'rpj-vermelho' : ''}`}>
+              Desvio {moeda(fin ? k.desvioFinanceiro : k.desvio)} ({pct(fin ? k.desvioFinanceiroPct : k.desvioPct)})
             </div>
           </div>
           <div className="curvas-fin-kpi-card accent-emerald">
-            <div className="curvas-fin-kpi-label">Saldo a projetar</div>
-            <div className="curvas-fin-kpi-val">{moeda(k.saldoProjetado)}</div>
-            <div className="curvas-fin-kpi-sub">Custo final estimado {moeda(k.custoFinalEstimado)}</div>
-          </div>
-          <div className={`curvas-fin-kpi-card ${k.excedente + k.pendente > 0 ? 'rpj-card-alerta' : 'accent-teal'}`}>
-            <div className="curvas-fin-kpi-label">Excedente / pendente</div>
-            <div className={`curvas-fin-kpi-val ${k.excedente + k.pendente > 0 ? 'rpj-vermelho' : ''}`}>
-              {moeda(k.excedente)} / {moeda(k.pendente)}
+            <div className="curvas-fin-kpi-label">{fin ? 'Saldo a pagar projetado' : 'Saldo a projetar'}</div>
+            <div className="curvas-fin-kpi-val">{moeda(fin ? k.saldoFinanceiro : k.saldoProjetado)}</div>
+            <div className="curvas-fin-kpi-sub">
+              {fin
+                ? `Total financeiro estimado ${moeda(k.realizadoFinanceiroAteCorte + k.saldoFinanceiro)}`
+                : `Custo final estimado ${moeda(k.custoFinalEstimado)}`}
             </div>
-            <div className="curvas-fin-kpi-sub">Fora do cronograma {moeda(k.foraDoCronograma)}</div>
           </div>
+          {fin ? (
+            <div className={`curvas-fin-kpi-card ${k.abertoVencido > 0 ? 'rpj-card-alerta' : 'accent-teal'}`}>
+              <div className="curvas-fin-kpi-label">Vencido em aberto</div>
+              <div className={`curvas-fin-kpi-val ${k.abertoVencido > 0 ? 'rpj-vermelho' : ''}`}>{moeda(k.abertoVencido)}</div>
+              <div className="curvas-fin-kpi-sub">Parcelas com vencimento até o corte, ainda sem pagamento (entram no mês seguinte)</div>
+            </div>
+          ) : (
+            <div className={`curvas-fin-kpi-card ${k.excedente + k.pendente > 0 ? 'rpj-card-alerta' : 'accent-teal'}`}>
+              <div className="curvas-fin-kpi-label">Excedente / pendente</div>
+              <div className={`curvas-fin-kpi-val ${k.excedente + k.pendente > 0 ? 'rpj-vermelho' : ''}`}>
+                {moeda(k.excedente)} / {moeda(k.pendente)}
+              </div>
+              <div className="curvas-fin-kpi-sub">Fora do cronograma {moeda(k.foraDoCronograma)}</div>
+            </div>
+          )}
         </div>
       )}
 

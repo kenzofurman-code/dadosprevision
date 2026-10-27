@@ -567,20 +567,22 @@ test('projetarRealizado: fora do cronograma entra no total e no %', () => {
   assert.equal(r.etapas.some((e) => e.codigo_etapa === '99.99.99.99.999'), false)
 })
 
-test('projetarRealizado: financeiro pela AP — parcelas, rateio e aberto vencido', () => {
+test('projetarRealizado: financeiro até o corte = pago por mês de vencimento; aberto vencido vai ao mês seguinte', () => {
   const r = projetar({
     etapas: [etapaE1({ custo_material: 0, custo_mao_obra: 0, custo_total: 0 })],
     corte: '2026-03',
     realizado: [{ codigo_etapa: '01.01.01.01.001', tipo: 'MATERIAL', data: '2026-02-05', valor: 50, ap: 7 }],
     pagamentos: new Map([[7, [
-      { vencimento: '2026-03-15', valor: 60, saldo: 0 },
-      { vencimento: '2026-02-15', valor: 40, saldo: 40 },
+      { vencimento: '2026-03-15', valor: 60, pago: 55, saldo: 5 },
+      { vencimento: '2026-02-15', valor: 40, pago: 0, saldo: 40 },
     ]]]),
   })
   const fin = (m) => r.seriesMensal.find((s) => s.mes === m)?.financeiroMaterial || 0
   assert.equal(fin('2026-02'), 0)
-  assert.equal(fin('2026-03'), 30)
-  assert.equal(fin('2026-04'), 20)
+  assert.equal(fin('2026-03'), 55)
+  assert.equal(fin('2026-04'), 22.5)
+  assert.equal(r.kpis.realizadoFinanceiroAteCorte, 55)
+  assert.equal(r.kpis.abertoVencido, 45)
   assert.equal(r.kpis.realizadoSemPagamento, 0)
 })
 
@@ -639,4 +641,24 @@ test('projetarRealizado: realizado financeiro = pago das parcelas com vencimento
   })
   assert.equal(r.kpis.realizadoFinanceiroAteCorte, 130)
   assert.equal(r.kpis.realizadoAteCorte, 0)
+})
+
+test('projetarRealizado: pago repartido pela composição do apropriado da AP; AP sem apropriado vira material', () => {
+  const r = projetar({
+    etapas: [etapaE1({ custo_material: 0, custo_mao_obra: 0, custo_total: 0 })],
+    corte: '2026-03',
+    realizado: [
+      { codigo_etapa: '01.01.01.01.001', tipo: 'MATERIAL', data: '2026-02-05', valor: 30, ap: 7 },
+      { codigo_etapa: '01.01.01.01.001', tipo: 'MAO_DE_OBRA', data: '2026-02-05', valor: 10, ap: 7 },
+    ],
+    pagamentos: new Map([
+      [7, [{ vencimento: '2026-02-20', valor: 40, pago: 40, saldo: 0 }]],
+      [9, [{ vencimento: '2026-01-10', valor: 25, pago: 25, saldo: 0 }]],
+    ]),
+  })
+  const mes = (m) => r.seriesMensal.find((s) => s.mes === m)
+  assert.equal(mes('2026-02').financeiroMaterial, 30)
+  assert.equal(mes('2026-02').financeiroMaoDeObra, 10)
+  assert.equal(mes('2026-01').financeiroMaterial, 25)
+  assert.equal(r.kpis.realizadoFinanceiroAteCorte, 65)
 })
