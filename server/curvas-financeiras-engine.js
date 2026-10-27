@@ -603,6 +603,7 @@ export function projetarRealizado({
   corte,
   realizado = [],
   pagamentos = new Map(),
+  projetadoFora = 0,
 }) {
   const teorica = calcularCurvasFinanceiras({ etapas, parametrosObra, parametrosEtapas })
   const fimCorte = `${corte}-${String(ultimoDiaDoMes(corte)).padStart(2, '0')}`
@@ -781,14 +782,13 @@ export function projetarRealizado({
   const vazio = { compMat: 0, compMo: 0, compFora: 0, finMat: 0, finMo: 0, finFora: 0 }
   let teoricoAteCorte = 0
   let teoricoFinanceiroAteCorte = 0
-  let saldoFinanceiro = 0
   const seriesMensal = todosMeses.map((mes) => {
     const v = meses.get(mes) || vazio
     const t = teoricaPorMes.get(mes) || {}
     if (mes <= corte) {
       teoricoAteCorte += t.competenciaMensal || 0
       teoricoFinanceiroAteCorte += (t.financeiroMaterial || 0) + (t.financeiroMaoDeObra || 0)
-    } else saldoFinanceiro += v.finMat + v.finMo
+    }
     return {
       mes,
       realizado: mes <= corte,
@@ -810,6 +810,8 @@ export function projetarRealizado({
 
   const soma = (k) => arredondar(resumo.reduce((s, r) => s + r[k], 0))
   const base = teorica.kpis.totalOrcado
+  // Custo projetado total = etapas do cronograma + o que o custo projetado traz fora dele
+  const custoProjetado = arredondar(base + (Number(projetadoFora) || 0))
   const desvio = arredondar(realizadoAteCorte - teoricoAteCorte)
   const desvioFinanceiro = arredondar(realizadoFinanceiroAteCorte - teoricoFinanceiroAteCorte)
   return {
@@ -818,12 +820,16 @@ export function projetarRealizado({
     etapas: resumo,
     kpis: {
       base,
+      custoProjetado,
+      foraProjetado: arredondar(Number(projetadoFora) || 0),
       realizadoAteCorte: arredondar(realizadoAteCorte),
       realizadoFinanceiroAteCorte: arredondar(realizadoFinanceiroAteCorte),
       teoricoFinanceiroAteCorte: arredondar(teoricoFinanceiroAteCorte),
       desvioFinanceiro,
       desvioFinanceiroPct: base ? arredondar((desvioFinanceiro / base) * 100) : 0,
-      saldoFinanceiro: arredondar(saldoFinanceiro),
+      // O custo projetado já traz os excedentes: o saldo é sempre custo projetado − incorrido (ou − pago)
+      saldoCompetencia: arredondar(custoProjetado - realizadoAteCorte),
+      saldoFinanceiro: arredondar(custoProjetado - realizadoFinanceiroAteCorte),
       abertoVencido: arredondar(abertoVencido),
       teoricoAteCorte: arredondar(teoricoAteCorte),
       desvio,
@@ -832,7 +838,7 @@ export function projetarRealizado({
       excedente: soma('excedente'),
       pendente: soma('pendente'),
       foraDoCronograma: arredondar(foraDoCronograma),
-      custoFinalEstimado: arredondar(base + soma('excedente') + foraDoCronograma),
+      custoFinalEstimado: custoProjetado,
       realizadoSemPagamento: arredondar(realizadoSemPagamento),
       inicioTeorico: teorica.kpis.inicioProjecao,
       dataLiberacaoRetencao,

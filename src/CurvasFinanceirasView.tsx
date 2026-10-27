@@ -97,7 +97,17 @@ interface CurvaParametrosObra {
   retencao_mo_ativa?: boolean
   retencao_mo_percentual?: number
   data_fim_obra?: string | null
+  niveis1_excluidos?: string[]
   atualizado_em?: string | null
+}
+
+interface Nivel1Disponivel {
+  codigo: string
+  nome: string | null
+  projetado: number
+  apropriado: number
+  pago: number
+  considerado: boolean
 }
 
 interface CurvaParametroEtapa {
@@ -136,6 +146,7 @@ interface CurvasApiResponse {
   parametrosObra: CurvaParametrosObra
   parametrosEtapas: CurvaParametroEtapa[]
   etapasHierarquia?: EtapaHierarquia[]
+  niveis1?: Nivel1Disponivel[]
   kpis: CurvaKpis
   meses: string[]
   seriesMensal: CurvaMensalPonto[]
@@ -221,6 +232,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
     retencao_mo_ativa: false,
     retencao_mo_percentual: 5,
     data_fim_obra: '',
+    niveis1_excluidos: [] as string[],
   })
 
   // Draft Parâmetros de Etapa
@@ -298,6 +310,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
           retencao_mo_ativa: Boolean(json.parametrosObra.retencao_mo_ativa),
           retencao_mo_percentual: json.parametrosObra.retencao_mo_percentual ?? 5,
           data_fim_obra: json.parametrosObra.data_fim_obra || '',
+          niveis1_excluidos: json.parametrosObra.niveis1_excluidos || [],
         })
       }
     } catch (err: any) {
@@ -1152,7 +1165,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
       </div>
 
       {activeTab === 'realizado' && projectId && (
-        <RealizadoProjecao projectId={projectId} scopeFilter={scopeFilter} />
+        <RealizadoProjecao projectId={projectId} scopeFilter={scopeFilter} versao={data?.parametrosObra?.atualizado_em || ''} />
       )}
 
       {/* Conteúdo da Aba: Gráfico S */}
@@ -1745,6 +1758,41 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                       </span>
                     </div>
                   </div>
+
+                  {(data?.niveis1?.length ?? 0) > 0 && (
+                    <div className="curvas-fin-form-field">
+                      <label>Níveis do orçamento considerados</label>
+                      <span className="curvas-fin-hint">
+                        Vale para a previsão e para o realizado (competência e financeiro). Nível desmarcado sai do custo projetado, do
+                        apropriado do Mega e do pago da conciliação. Nível sem cronograma na Prevision aparece como fora do cronograma.
+                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+                        {data!.niveis1!.map((n) => {
+                          const marcado = !draftObra.niveis1_excluidos.includes(n.codigo)
+                          return (
+                            <label key={n.codigo} style={{ display: 'flex', gap: '8px', alignItems: 'center', fontWeight: 400 }}>
+                              <input
+                                type="checkbox"
+                                checked={marcado}
+                                onChange={() =>
+                                  setDraftObra({
+                                    ...draftObra,
+                                    niveis1_excluidos: marcado
+                                      ? [...draftObra.niveis1_excluidos, n.codigo]
+                                      : draftObra.niveis1_excluidos.filter((c) => c !== n.codigo),
+                                  })
+                                }
+                              />
+                              <span>
+                                {n.codigo}{n.nome ? ` · ${n.nome}` : ''} — projetado {formatCurrency(n.projetado)} · apropriado{' '}
+                                {formatCurrency(n.apropriado)} · pago {formatCurrency(n.pago)}
+                              </span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="curvas-fin-modal-footer" style={{ padding: 0, background: 'transparent' }}>
                     <button type="submit" className="curvas-fin-btn curvas-fin-btn-primary" disabled={savingConfig}>

@@ -43,10 +43,13 @@ interface Resposta {
   kpis?: {
     base: number
     realizadoAteCorte: number
+    custoProjetado: number
+    foraProjetado: number
     realizadoFinanceiroAteCorte: number
     teoricoFinanceiroAteCorte: number
     desvioFinanceiro: number
     desvioFinanceiroPct: number
+    saldoCompetencia: number
     saldoFinanceiro: number
     abertoVencido: number
     teoricoAteCorte: number
@@ -66,6 +69,8 @@ interface Resposta {
 interface Props {
   projectId: string
   scopeFilter: Escopo
+  /** Muda quando os parâmetros da obra são salvos: recalcula o realizado */
+  versao?: string
 }
 
 const moeda = (v: number) =>
@@ -83,7 +88,7 @@ const mesAnterior = (m: string) => {
 const COR_REAL = { competencia: '#f59e0b', financeiro: '#10b981' }
 const COR_TEORICA = '#94a3b8'
 
-export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
+export function RealizadoProjecao({ projectId, scopeFilter, versao = '' }: Props) {
   const [dados, setDados] = useState<Resposta | null>(null)
   const [corte, setCorte] = useState('')
   const [carregando, setCarregando] = useState(false)
@@ -112,7 +117,7 @@ export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
     } finally {
       setCarregando(false)
     }
-  }, [projectId])
+  }, [projectId, versao])
 
   useEffect(() => {
     setDados(null)
@@ -287,7 +292,7 @@ export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
             <div className="curvas-fin-kpi-label">Realizado até {rotuloMes(dados!.corte)}</div>
             <div className="curvas-fin-kpi-val">{moeda(realizadoKpi)}</div>
             <div className="curvas-fin-kpi-sub">
-              {pct(base ? (realizadoKpi / base) * 100 : 0)} do custo projetado · {medida === 'financeiro' ? 'pago (conciliação)' : 'apropriado (Mega)'}
+              {pct(k.custoProjetado ? (realizadoKpi / k.custoProjetado) * 100 : 0)} do custo projetado · {medida === 'financeiro' ? 'pago (conciliação)' : 'apropriado (Mega)'}
             </div>
           </div>
           <div className="curvas-fin-kpi-card accent-blue">
@@ -298,12 +303,10 @@ export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
             </div>
           </div>
           <div className="curvas-fin-kpi-card accent-emerald">
-            <div className="curvas-fin-kpi-label">{fin ? 'Saldo a pagar projetado' : 'Saldo a projetar'}</div>
-            <div className="curvas-fin-kpi-val">{moeda(fin ? k.saldoFinanceiro : k.saldoProjetado)}</div>
+            <div className="curvas-fin-kpi-label">{fin ? 'Saldo a pagar' : 'Saldo a incorrer'}</div>
+            <div className="curvas-fin-kpi-val">{moeda(fin ? k.saldoFinanceiro : k.saldoCompetencia)}</div>
             <div className="curvas-fin-kpi-sub">
-              {fin
-                ? `Total financeiro estimado ${moeda(k.realizadoFinanceiroAteCorte + k.saldoFinanceiro)}`
-                : `Custo final estimado ${moeda(k.custoFinalEstimado)}`}
+              Custo projetado {moeda(k.custoFinalEstimado)} − {fin ? 'pago' : 'incorrido'}
             </div>
           </div>
           {fin ? (

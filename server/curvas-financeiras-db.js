@@ -5,6 +5,18 @@ import { etapaParaMega, hojeNoBrasil } from './contratacoes.js'
 import { classificadorDaObra, obraDoProjeto, projetadoPorTipo } from './contratacoes-db.js'
 import { lerConciliacaoFinanceira } from './pagamentos-ap.js'
 
+/** Nível 1 do orçamento de um código estruturado ('01.03.05.02.002' → '01'). */
+export const nivel1DoCodigo = (codigo) => {
+  const n = String(codigo ?? '').trim().split('.')[0]
+  return /^\d+$/.test(n) ? n.padStart(2, '0') : ''
+}
+
+/** Quais níveis 1 entram nas curvas: tudo, menos os desmarcados nos parâmetros da obra. */
+const nivel1Considerado = (parametrosObra) => {
+  const fora = new Set((parametrosObra?.niveis1_excluidos || []).map(String))
+  return (codigo) => !fora.has(nivel1DoCodigo(codigo))
+}
+
 /**
  * Busca os parâmetros da obra ou retorna defaults
  */
@@ -13,7 +25,7 @@ export async function obterParametrosObra(projetoId) {
     `SELECT projeto_id, dias_antecedencia_padrao, prazo_pagamento_padrao_dias,
             dia_corte_medicao_mo, dia_pagamento_mo, retencao_mo_ativa,
             retencao_mo_percentual::float AS retencao_mo_percentual, data_fim_obra::text AS data_fim_obra,
-            atualizado_em
+            niveis1_excluidos, atualizado_em
      FROM curva_parametros_obra WHERE projeto_id = $1`,
     [projetoId]
   )
@@ -28,6 +40,7 @@ export async function obterParametrosObra(projetoId) {
     retencao_mo_ativa: false,
     retencao_mo_percentual: 5,
     data_fim_obra: null,
+    niveis1_excluidos: [],
     atualizado_em: null,
   }
 }
@@ -60,8 +73,8 @@ export async function salvarParametrosCurvas(projetoId, { parametrosObra, parame
   if (parametrosObra) {
     await query(
       `INSERT INTO curva_parametros_obra (projeto_id, dias_antecedencia_padrao, prazo_pagamento_padrao_dias, dia_corte_medicao_mo, dia_pagamento_mo,
-                                          retencao_mo_ativa, retencao_mo_percentual, data_fim_obra, atualizado_em)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+                                          retencao_mo_ativa, retencao_mo_percentual, data_fim_obra, niveis1_excluidos, atualizado_em)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::text[], '{}'), NOW())
        ON CONFLICT (projeto_id) DO UPDATE SET
          dias_antecedencia_padrao = EXCLUDED.dias_antecedencia_padrao,
          prazo_pagamento_padrao_dias = EXCLUDED.prazo_pagamento_padrao_dias,
@@ -70,6 +83,7 @@ export async function salvarParametrosCurvas(projetoId, { parametrosObra, parame
          retencao_mo_ativa = EXCLUDED.retencao_mo_ativa,
          retencao_mo_percentual = EXCLUDED.retencao_mo_percentual,
          data_fim_obra = EXCLUDED.data_fim_obra,
+         niveis1_excluidos = COALESCE($9::text[], curva_parametros_obra.niveis1_excluidos),
          atualizado_em = NOW()`,
       [
         projetoId,
@@ -80,6 +94,9 @@ export async function salvarParametrosCurvas(projetoId, { parametrosObra, parame
         Boolean(parametrosObra.retencao_mo_ativa),
         Number(parametrosObra.retencao_mo_percentual ?? 5),
         /^\d{4}-\d{2}-\d{2}$/.test(String(parametrosObra.data_fim_obra || '')) ? parametrosObra.data_fim_obra : null,
+        Array.isArray(parametrosObra.niveis1_excluidos)
+          ? [...new Set(parametrosObra.niveis1_excluidos.map(nivel1DoCodigo).filter(Boolean))]
+          : null,
       ]
     )
   }
@@ -162,6 +179,7 @@ async function montarEntradaCurvas(pId) {
     [pId]
   )
   const importacao = impRes.rows[0] || null
+  const considera = nivel1Considerado(paramsObra)
 
   // 3. Custo projetado por etapa, separado em Material x MO com a MESMA classificação da
   //    Gestão de Contratações (insumos da empresa + ajustes da obra).
@@ -171,6 +189,7 @@ async function montarEntradaCurvas(pId) {
     const proj = await projetadoPorTipo(importacao.id, classif.tipoDe)
     for (const [chave, v] of proj.mapa) {
       const [cod, tipo] = chave.split('|')
+      if (!considera(cod)) continue
       if (!custosPorEtapaMega.has(cod)) custosPorEtapaMega.set(cod, { material: 0, mao_de_obra: 0, total: 0, descricao: '' })
       const item = custosPorEtapaMega.get(cod)
       if (tipo === 'MAO_DE_OBRA') item.mao_de_obra += v
@@ -204,6 +223,7 @@ async function montarEntradaCurvas(pId) {
 
   for (const row of cffRes.rows) {
     const codMega = etapaParaMega(row.codigo) || row.codigo
+    if (!considera(codMega)) continue
     const cp = projetadoNoCronograma.get(codMega)
     if (importacao && !(cp && cp.total > 0) && Number(row.custo_total) > 0) {
       etapasSemProjetado.push({ codigo: codMega, nome: row.descricao, orcamento: Number(row.custo_total) })
@@ -254,6 +274,7 @@ export async function obterDadosCurvasFinanceiras(projetoId) {
   const {
     paramsObra, paramsEtapasObj, importacao, etapasParaCalculo, realizadoTotalPrevision, projetadoFora, totalFora, etapasSemProjetado,
   } = await montarEntradaCurvas(pId)
+  const niveis1 = await niveis1Disponiveis(pId, await obraDoProjeto(pId), importacao?.id, paramsObra)
 
   // 6. Rodar o motor de cálculo
   const resultadoMotor = calcularCurvasFinanceiras({
@@ -279,6 +300,7 @@ export async function obterDadosCurvasFinanceiras(projetoId) {
     parametrosObra: paramsObra,
     parametrosEtapas: paramsEtapasObj.lista,
     etapasHierarquia: hierRes.rows,
+    niveis1,
     // Custo projetado que não entra nas curvas (sem etapa nível 5 no cronograma) e etapas do
     // cronograma sem custo projetado (essas seguem com o orçamento da Prevision).
     conciliacaoProjetado: importacao
@@ -358,16 +380,54 @@ export async function importarPagamentos(projetoId, { arquivo, matriz }) {
 }
 
 /** Parcelas por AP (Map ap → [{ vencimento, valor, saldo }]) e quando a planilha foi carregada. */
-export async function pagamentosDoProjeto(projetoId) {
+export async function pagamentosDoProjeto(projetoId, considera = () => true) {
   const { rows } = await query(
-    `SELECT ap, vencimento::text AS vencimento, valor_rateado::float AS valor, pago::float AS pago, saldo::float AS saldo, arquivo, importado_em
+    `SELECT ap, vencimento::text AS vencimento, valor_rateado::float AS valor, pago::float AS pago, saldo::float AS saldo,
+            cod_estruturado, arquivo, importado_em
      FROM pagamentos_ap WHERE projeto_id = $1 AND vencimento IS NOT NULL`, [projetoId])
   const mapa = new Map()
   for (const r of rows) {
+    if (!considera(r.cod_estruturado)) continue
     if (!mapa.has(r.ap)) mapa.set(r.ap, [])
     mapa.get(r.ap).push({ vencimento: r.vencimento, valor: r.valor, pago: r.pago, saldo: r.saldo })
   }
   return { mapa, importado_em: rows[0]?.importado_em || null, arquivo: rows[0]?.arquivo || null }
+}
+
+/**
+ * Níveis 1 do orçamento que aparecem no custo projetado, no apropriado do Mega ou na conciliação,
+ * com o total de cada fonte (para escolher o que entra nas curvas) e se estão considerados.
+ */
+async function niveis1Disponiveis(projetoId, obra, importacaoId, paramsObra) {
+  const [proj, real, pago, nomes] = await Promise.all([
+    importacaoId
+      ? query(`SELECT split_part(codigo_etapa, '.', 1) AS n1, SUM(custo_projetado)::float AS v
+               FROM custo_projetado_itens WHERE importacao_id = $1 GROUP BY 1`, [importacaoId])
+      : { rows: [] },
+    obra
+      ? query(`SELECT split_part(raw_data->>'cod_estruturado', '.', 1) AS n1, SUM(COALESCE(valor_apropriacao, 0))::float AS v
+               FROM mega.analise_realizado WHERE obra = $1 AND COALESCE(raw_data->>'cod_estruturado', '') <> '' GROUP BY 1`, [obra])
+      : { rows: [] },
+    query(`SELECT split_part(cod_estruturado, '.', 1) AS n1, SUM(pago)::float AS v
+           FROM pagamentos_ap WHERE projeto_id = $1 GROUP BY 1`, [projetoId]),
+    query(`SELECT codigo, MAX(descricao) AS nome FROM (
+             SELECT codigo, descricao FROM pesos_orcamento WHERE projeto_id = $1
+             UNION ALL SELECT codigo, descricao FROM cff_itens WHERE projeto_id = $1
+           ) o WHERE codigo ~ '^\\d{1,2}$' GROUP BY codigo`, [projetoId]),
+  ])
+  const nome = new Map(nomes.rows.map((r) => [nivel1DoCodigo(r.codigo), r.nome]))
+  const lista = new Map()
+  const item = (n1) => {
+    if (!lista.has(n1)) lista.set(n1, { codigo: n1, nome: nome.get(n1) || null, projetado: 0, apropriado: 0, pago: 0 })
+    return lista.get(n1)
+  }
+  for (const r of proj.rows) if (nivel1DoCodigo(r.n1)) item(nivel1DoCodigo(r.n1)).projetado += r.v
+  for (const r of real.rows) if (nivel1DoCodigo(r.n1)) item(nivel1DoCodigo(r.n1)).apropriado += r.v
+  for (const r of pago.rows) if (nivel1DoCodigo(r.n1)) item(nivel1DoCodigo(r.n1)).pago += r.v
+  const considera = nivel1Considerado(paramsObra)
+  return [...lista.values()]
+    .map((n) => ({ ...n, considerado: considera(n.codigo) }))
+    .sort((a, b) => a.codigo.localeCompare(b.codigo))
 }
 
 const mesAnterior = (mes) => {
@@ -385,10 +445,11 @@ export async function obterRealizadoProjecao(projetoId, corte) {
   const obra = await obraDoProjeto(pId)
   if (!obra) return { obra: null, motivo: 'Este projeto não tem obra do Mega vinculada.', corte: mesCorte, cortePadrao }
 
+  const considera = nivel1Considerado(await obterParametrosObra(pId))
   const [entrada, classif, pag, realRes, cargaRes] = await Promise.all([
     montarEntradaCurvas(pId),
     classificadorDaObra(pId),
-    pagamentosDoProjeto(pId),
+    pagamentosDoProjeto(pId, considera),
     query(
       `SELECT raw_data->>'cod_estruturado' AS codigo, raw_data->>'cod_item' AS cod, raw_data->>'descricao_1' AS descricao,
               data_documento::text AS data, ap::int AS ap, SUM(COALESCE(valor_apropriacao, 0))::float AS valor
@@ -397,7 +458,7 @@ export async function obterRealizadoProjecao(projetoId, corte) {
        WHERE obra = $1 AND COALESCE(raw_data->>'cod_estruturado', '') <> '' GROUP BY 1, 2, 3, 4, 5`, [obra]),
     query('SELECT MAX(data_extracao)::text AS d FROM mega.analise_realizado WHERE obra = $1', [obra]),
   ])
-  const realizado = realRes.rows.map((r) => ({
+  const realizado = realRes.rows.filter((r) => considera(r.codigo)).map((r) => ({
     codigo_etapa: etapaParaMega(r.codigo) || r.codigo,
     tipo: classif.tipoDe(r.descricao, r.cod).tipo,
     data: r.data,
@@ -412,6 +473,7 @@ export async function obterRealizadoProjecao(projetoId, corte) {
     corte: mesCorte,
     realizado,
     pagamentos: pag.mapa,
+    projetadoFora: entrada.totalFora,
   })
 
   const inicioDoMesSeguinte = `${proximoMesIso(mesCorte)}-01`
@@ -419,6 +481,10 @@ export async function obterRealizadoProjecao(projetoId, corte) {
   const avisos = []
   if (!ultimaCargaMega || ultimaCargaMega < inicioDoMesSeguinte) {
     avisos.push(`A última carga do Mega é de ${ultimaCargaMega ? ultimaCargaMega.split('-').reverse().join('/') : '—'}: o realizado de ${fmtMes(mesCorte)} pode estar incompleto.`)
+  }
+  if (entrada.totalFora > 0) {
+    const niveisFora = [...new Set(entrada.projetadoFora.map((f) => nivel1DoCodigo(f.codigo)))].filter(Boolean).sort()
+    avisos.push(`R$ ${entrada.totalFora.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} do custo projetado está fora do cronograma da Prevision (nível ${niveisFora.join(', ')}): entra no custo projetado e no realizado, mas não é distribuído nas curvas.`)
   }
   if (!pag.importado_em) {
     avisos.push('Planilha de pagamentos (Conciliação Financeira) não carregada: o financeiro do realizado é estimado pelas regras.')
@@ -434,6 +500,7 @@ export async function obterRealizadoProjecao(projetoId, corte) {
     cortePadrao,
     ...resultado,
     avisos,
+    niveis1: await niveis1Disponiveis(pId, obra, entrada.importacao?.id, entrada.paramsObra),
     pagamentos: pag.importado_em ? { importado_em: pag.importado_em, arquivo: pag.arquivo } : null,
     ultimaCargaMega,
   }
