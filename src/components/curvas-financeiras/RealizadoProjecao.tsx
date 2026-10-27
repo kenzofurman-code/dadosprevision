@@ -47,6 +47,7 @@ interface Resposta {
     teoricoFinanceiroAteCorte: number
     desvioFinanceiro: number
     desvioFinanceiroPct: number
+    saldoCompetencia: number
     saldoFinanceiro: number
     abertoVencido: number
     teoricoAteCorte: number
@@ -298,12 +299,10 @@ export function RealizadoProjecao({ projectId, scopeFilter }: Props) {
             </div>
           </div>
           <div className="curvas-fin-kpi-card accent-emerald">
-            <div className="curvas-fin-kpi-label">{fin ? 'Saldo a pagar projetado' : 'Saldo a projetar'}</div>
-            <div className="curvas-fin-kpi-val">{moeda(fin ? k.saldoFinanceiro : k.saldoProjetado)}</div>
+            <div className="curvas-fin-kpi-label">{fin ? 'Saldo a pagar' : 'Saldo a incorrer'}</div>
+            <div className="curvas-fin-kpi-val">{moeda(fin ? k.saldoFinanceiro : k.saldoCompetencia)}</div>
             <div className="curvas-fin-kpi-sub">
-              {fin
-                ? `Total financeiro estimado ${moeda(k.realizadoFinanceiroAteCorte + k.saldoFinanceiro)}`
-                : `Custo final estimado ${moeda(k.custoFinalEstimado)}`}
+              Custo projetado {moeda(k.custoFinalEstimado)} − {fin ? 'pago' : 'incorrido'}
             </div>
           </div>
           {fin ? (
