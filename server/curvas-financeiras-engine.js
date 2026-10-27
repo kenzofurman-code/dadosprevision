@@ -632,6 +632,22 @@ export function projetarRealizado({
   let foraDoCronograma = 0
   let realizadoSemPagamento = 0
   let realizadoAteCorte = 0
+  // Visão financeira: o realizado é o pago da Conciliação Financeira (coluna "Pagamentos"), todas as
+  // APs, com vencimento até o fim do corte — independe do apropriado do Mega.
+  let realizadoFinanceiroAteCorte = 0
+  let abertoVencido = 0
+  for (const parcelas of pagamentos.values()) {
+    for (const p of parcelas) {
+      if (!p.vencimento || p.vencimento > fimCorte) continue
+      realizadoFinanceiroAteCorte += Number(p.pago) || 0
+      abertoVencido += Number(p.saldo) || 0
+    }
+  }
+  const temPagamentos = pagamentos.size > 0
+  // Composição (tipo, fora do cronograma) do apropriado de cada AP: reparte o pago, que não traz tipo
+  const mixAp = new Map()
+  // Com a conciliação carregada, o que ela não cobre não conta como pago: o estimado até o corte vai para o mês seguinte
+  const mesFinanceiroReal = (mesFin) => (temPagamentos && mesFin <= corte ? posCorte : mesFin)
   for (const r of realizado) {
     const valor = Number(r.valor) || 0
     if (!valor || (r.data && r.data > fimCorte)) continue
@@ -641,6 +657,12 @@ export function projetarRealizado({
     const fora = !etapa
     const chave = `${r.codigo_etapa}|${r.tipo}`
     realizadoAteCorte += valor
+    if (r.ap != null) {
+      const mix = mixAp.get(Number(r.ap)) || new Map()
+      const kMix = `${r.tipo}|${fora ? 1 : 0}`
+      mix.set(kMix, (mix.get(kMix) || 0) + valor)
+      mixAp.set(Number(r.ap), mix)
+    }
     somarComp(mes, r.tipo, fora, valor)
     if (fora) foraDoCronograma += valor
     else realPorChave.set(chave, (realPorChave.get(chave) || 0) + valor)
@@ -652,7 +674,8 @@ export function projetarRealizado({
         const parte = (valor * (Number(p.valor) || 0)) / totalAp
         const mesV = mesAnoIso(p.vencimento)
         const aberto = mesV <= corte && p.valor > 0 ? parte * Math.min(1, Math.max(0, Number(p.saldo) / p.valor)) : 0
-        if (parte - aberto) somarFin(mesV, r.tipo, fora, parte - aberto)
+        // Até o corte o financeiro é o pago da própria conciliação (somado depois do laço)
+        if (mesV > corte && parte) somarFin(mesV, r.tipo, fora, parte)
         if (aberto) somarFin(posCorte, r.tipo, fora, aberto)
       }
       continue
@@ -665,15 +688,32 @@ export function projetarRealizado({
         tipoPagamento: regra.tipo_pagamento, prazoDias: regra.prazo_dias ?? prazoPadrao,
         parcelasDias: regra.parcelas_dias, parcelasPct: regra.parcelas_pct,
       })
-      for (const c of condicoes) somarFin(mesAnoIso(somarDiasIso(data, c.dias)), r.tipo, fora, valor * c.fracao)
+      for (const c of condicoes) somarFin(mesFinanceiroReal(mesAnoIso(somarDiasIso(data, c.dias))), r.tipo, fora, valor * c.fracao)
     } else {
       const regra = resolverRegra(parametrosEtapas, codigos, 'MAO_DE_OBRA')
       const ativa = regra?.retencao_ativa ?? parametrosObra.retencao_mo_ativa ?? false
       const fracao = ativa && dataLiberacaoRetencao
         ? Math.min(1, Number(regra?.retencao_percentual ?? parametrosObra.retencao_mo_percentual ?? 5) / 100)
         : 0
-      somarFin(mesAnoIso(dataPagamentoMo(mes, diaPagamentoMo)), r.tipo, fora, valor * (1 - fracao))
-      if (fracao > 0) somarFin(mesAnoIso(dataLiberacaoRetencao), r.tipo, fora, valor * fracao)
+      somarFin(mesFinanceiroReal(mesAnoIso(dataPagamentoMo(mes, diaPagamentoMo))), r.tipo, fora, valor * (1 - fracao))
+      if (fracao > 0) somarFin(mesFinanceiroReal(mesAnoIso(dataLiberacaoRetencao)), r.tipo, fora, valor * fracao)
+    }
+  }
+
+  // Pago da conciliação por mês de vencimento, repartido pela composição do apropriado da AP
+  for (const [ap, parcelas] of pagamentos) {
+    const mix = mixAp.get(Number(ap))
+    const totalMix = mix ? [...mix.values()].reduce((a, b) => a + b, 0) : 0
+    for (const p of parcelas) {
+      const pago = Number(p.pago) || 0
+      if (!pago || !p.vencimento || p.vencimento > fimCorte) continue
+      const mesV = mesAnoIso(p.vencimento)
+      if (totalMix > 0) {
+        for (const [kMix, v] of mix) {
+          const [tipo, fora] = kMix.split('|')
+          somarFin(mesV, tipo, fora === '1', (pago * v) / totalMix)
+        }
+      } else somarFin(mesV, 'MATERIAL', false, pago) // AP sem apropriado no Mega: tipo desconhecido
     }
   }
 
@@ -740,10 +780,15 @@ export function projetarRealizado({
   const todosMeses = [...new Set([...meses.keys(), ...teoricaPorMes.keys()])].sort()
   const vazio = { compMat: 0, compMo: 0, compFora: 0, finMat: 0, finMo: 0, finFora: 0 }
   let teoricoAteCorte = 0
+  let teoricoFinanceiroAteCorte = 0
+  let saldoFinanceiro = 0
   const seriesMensal = todosMeses.map((mes) => {
     const v = meses.get(mes) || vazio
     const t = teoricaPorMes.get(mes) || {}
-    if (mes <= corte) teoricoAteCorte += t.competenciaMensal || 0
+    if (mes <= corte) {
+      teoricoAteCorte += t.competenciaMensal || 0
+      teoricoFinanceiroAteCorte += (t.financeiroMaterial || 0) + (t.financeiroMaoDeObra || 0)
+    } else saldoFinanceiro += v.finMat + v.finMo
     return {
       mes,
       realizado: mes <= corte,
@@ -766,6 +811,7 @@ export function projetarRealizado({
   const soma = (k) => arredondar(resumo.reduce((s, r) => s + r[k], 0))
   const base = teorica.kpis.totalOrcado
   const desvio = arredondar(realizadoAteCorte - teoricoAteCorte)
+  const desvioFinanceiro = arredondar(realizadoFinanceiroAteCorte - teoricoFinanceiroAteCorte)
   return {
     corte,
     seriesMensal,
@@ -773,6 +819,12 @@ export function projetarRealizado({
     kpis: {
       base,
       realizadoAteCorte: arredondar(realizadoAteCorte),
+      realizadoFinanceiroAteCorte: arredondar(realizadoFinanceiroAteCorte),
+      teoricoFinanceiroAteCorte: arredondar(teoricoFinanceiroAteCorte),
+      desvioFinanceiro,
+      desvioFinanceiroPct: base ? arredondar((desvioFinanceiro / base) * 100) : 0,
+      saldoFinanceiro: arredondar(saldoFinanceiro),
+      abertoVencido: arredondar(abertoVencido),
       teoricoAteCorte: arredondar(teoricoAteCorte),
       desvio,
       desvioPct: base ? arredondar((desvio / base) * 100) : 0,
