@@ -663,3 +663,17 @@ test('projetarRealizado: pago repartido pela composição do apropriado da AP; A
   assert.equal(mes('2026-01').financeiroMaterial, 25)
   assert.equal(r.kpis.realizadoFinanceiroAteCorte, 65)
 })
+
+test('projetarRealizado: custo projetado fora do cronograma entra no custo final e no saldo', () => {
+  const r = projetar({
+    corte: '2026-03',
+    projetadoFora: 300,
+    realizado: [{ codigo_etapa: '16.01.01.01.001', tipo: 'MATERIAL', data: '2026-02-01', valor: 100, ap: null }],
+  })
+  assert.equal(r.kpis.base, 1200)
+  assert.equal(r.kpis.foraProjetado, 300)
+  assert.equal(r.kpis.custoProjetado, 1500)
+  assert.equal(r.kpis.custoFinalEstimado, 1500)
+  assert.equal(r.kpis.saldoCompetencia, 1400)
+  assert.equal(r.kpis.saldoFinanceiro, 1500)
+})

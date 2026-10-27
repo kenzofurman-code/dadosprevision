@@ -773,3 +773,6 @@ CREATE TABLE IF NOT EXISTS pagamentos_ap (
   importado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_pagamentos_ap_projeto ON pagamentos_ap (projeto_id, ap);
+
+-- Curvas: níveis 1 do orçamento fora das curvas (previsão e realizado). Vazio = todos considerados.
+ALTER TABLE curva_parametros_obra ADD COLUMN IF NOT EXISTS niveis1_excluidos TEXT[] NOT NULL DEFAULT '{}';
