@@ -39,7 +39,7 @@ import {
 import {
   obterDadosCurvasFinanceiras, salvarParametrosCurvas,
   salvarVersaoCurvas, listarVersoesCurvas, obterVersaoCurvas, excluirVersaoCurvas,
-  importarPagamentos, obterRealizadoProjecao,
+  importarPagamentos, obterRealizadoProjecao, salvarVinculoEtapa,
 } from './curvas-financeiras-db.js'
 import { obterPainelTeorico, salvarMesBase } from './painel-teorico-db.js'
 import { sincronizarIncc, sincronizarInccSeVazio } from './incc.js'
@@ -384,6 +384,13 @@ app.post('/api/curvas-financeiras/parametros', rota((req) =>
     parametrosObra: req.body?.parametrosObra,
     parametrosEtapa: req.body?.parametrosEtapa,
     parametrosEtapas: req.body?.parametrosEtapas,
+  })))
+
+app.post('/api/curvas-financeiras/vinculos', rota((req) =>
+  salvarVinculoEtapa(exigirProjeto(req.body?.projectId), {
+    codigo_origem: req.body?.codigo_origem,
+    codigo_destino: req.body?.codigo_destino,
+    remover: Boolean(req.body?.remover),
   })))
 
 app.get('/api/curvas-financeiras/realizado', rota((req) =>

@@ -85,6 +85,25 @@ export function resolverRegra(mapa, { codigoMega, codigoPrevision }, tipo) {
 }
 
 /**
+ * Aplica os vínculos manuais (código de origem → etapa do cronograma): o custo projetado do código
+ * de origem passa a somar na etapa de destino. Um nível só — o destino não é remapeado.
+ */
+export function aplicarVinculos(custos, vinculos) {
+  if (!vinculos?.size) return custos
+  const saida = new Map()
+  for (const [codigo, v] of custos) {
+    const destino = vinculos.get(codigo) || codigo
+    const atual = saida.get(destino) || { material: 0, mao_de_obra: 0, total: 0, descricao: '' }
+    atual.material += v.material
+    atual.mao_de_obra += v.mao_de_obra
+    atual.total += v.total
+    if (!atual.descricao || destino === codigo) atual.descricao = v.descricao || atual.descricao
+    saida.set(destino, atual)
+  }
+  return saida
+}
+
+/**
  * Custo projetado por etapa (código Mega) dividido entre o que tem etapa nível 5 no cronograma
  * (`dentro`, entra nas curvas) e o que não tem (`fora`: taxas, itens fora de orçamento, etapas
  * que não existem na Prevision), do maior para o menor valor.

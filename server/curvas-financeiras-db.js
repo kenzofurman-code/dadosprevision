@@ -1,6 +1,6 @@
 // Consultas e persistência de dados para as Curvas de Competência e Financeira
 import { query, withTransaction } from './db.js'
-import { calcularCurvasFinanceiras, projetarRealizado, proximoMesIso, separarForaDoCronograma } from './curvas-financeiras-engine.js'
+import { aplicarVinculos, calcularCurvasFinanceiras, projetarRealizado, proximoMesIso, separarForaDoCronograma } from './curvas-financeiras-engine.js'
 import { etapaParaMega, hojeNoBrasil } from './contratacoes.js'
 import { classificadorDaObra, obraDoProjeto, projetadoPorTipo } from './contratacoes-db.js'
 import { lerConciliacaoFinanceira } from './pagamentos-ap.js'
@@ -9,6 +9,34 @@ import { lerConciliacaoFinanceira } from './pagamentos-ap.js'
 export const nivel1DoCodigo = (codigo) => {
   const n = String(codigo ?? '').trim().split('.')[0]
   return /^\d+$/.test(n) ? n.padStart(2, '0') : ''
+}
+
+/** Vínculos manuais da obra: Map código de origem (custo projetado/Mega) → etapa do cronograma. */
+export async function obterVinculosEtapa(projetoId) {
+  const { rows } = await query('SELECT codigo_origem, codigo_destino FROM curva_vinculo_etapa WHERE projeto_id = $1 ORDER BY codigo_origem', [projetoId])
+  return { lista: rows, mapa: new Map(rows.map((r) => [r.codigo_origem, r.codigo_destino])) }
+}
+
+/** Cria, troca ou remove o vínculo de um código de origem. O destino precisa ser etapa nível 5 do cronograma. */
+export async function salvarVinculoEtapa(projetoId, { codigo_origem, codigo_destino, remover }) {
+  const origem = etapaParaMega(codigo_origem) || String(codigo_origem ?? '').trim()
+  if (!origem) throw Object.assign(new Error('Informe o código de origem.'), { status: 400 })
+  if (remover) {
+    await query('DELETE FROM curva_vinculo_etapa WHERE projeto_id = $1 AND codigo_origem = $2', [projetoId, origem])
+    return { ok: true }
+  }
+  const destino = etapaParaMega(codigo_destino)
+  if (!destino) throw Object.assign(new Error('Código de destino inválido.'), { status: 400 })
+  if (destino === origem) throw Object.assign(new Error('Origem e destino são o mesmo código.'), { status: 400 })
+  const { rows } = await query('SELECT codigo FROM cff_itens WHERE projeto_id = $1 AND nivel = 5', [projetoId])
+  if (!rows.some((r) => (etapaParaMega(r.codigo) || r.codigo) === destino)) {
+    throw Object.assign(new Error('O destino precisa ser uma etapa (nível 5) do cronograma da Prevision.'), { status: 400 })
+  }
+  await query(
+    `INSERT INTO curva_vinculo_etapa (projeto_id, codigo_origem, codigo_destino, atualizado_em) VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (projeto_id, codigo_origem) DO UPDATE SET codigo_destino = EXCLUDED.codigo_destino, atualizado_em = NOW()`,
+    [projetoId, origem, destino])
+  return { ok: true }
 }
 
 /** Quais níveis 1 entram nas curvas: tudo, menos os desmarcados nos parâmetros da obra. */
@@ -183,7 +211,8 @@ async function montarEntradaCurvas(pId) {
 
   // 3. Custo projetado por etapa, separado em Material x MO com a MESMA classificação da
   //    Gestão de Contratações (insumos da empresa + ajustes da obra).
-  const custosPorEtapaMega = new Map()
+  const vinculos = await obterVinculosEtapa(pId)
+  let custosPorEtapaMega = new Map()
   if (importacao) {
     const classif = await classificadorDaObra(pId)
     const proj = await projetadoPorTipo(importacao.id, classif.tipoDe)
@@ -200,6 +229,8 @@ async function montarEntradaCurvas(pId) {
       if (maior && !item.descricao) item.descricao = maior.descricao
     }
   }
+
+  custosPorEtapaMega = aplicarVinculos(custosPorEtapaMega, vinculos.mapa)
 
   // 4. Buscar etapas nível 5 de cff_itens (Prevision)
   const cffRes = await query(
@@ -263,7 +294,7 @@ async function montarEntradaCurvas(pId) {
     })
   }
 
-  return { paramsObra, paramsEtapasObj, importacao, etapasParaCalculo, realizadoTotalPrevision, projetadoFora, totalFora, etapasSemProjetado }
+  return { paramsObra, paramsEtapasObj, importacao, etapasParaCalculo, realizadoTotalPrevision, projetadoFora, totalFora, etapasSemProjetado, vinculos: vinculos.lista }
 }
 
 /**
@@ -272,7 +303,7 @@ async function montarEntradaCurvas(pId) {
 export async function obterDadosCurvasFinanceiras(projetoId) {
   const pId = String(projetoId).trim()
   const {
-    paramsObra, paramsEtapasObj, importacao, etapasParaCalculo, realizadoTotalPrevision, projetadoFora, totalFora, etapasSemProjetado,
+    paramsObra, paramsEtapasObj, importacao, etapasParaCalculo, realizadoTotalPrevision, projetadoFora, totalFora, etapasSemProjetado, vinculos,
   } = await montarEntradaCurvas(pId)
   const niveis1 = await niveis1Disponiveis(pId, await obraDoProjeto(pId), importacao?.id, paramsObra)
 
@@ -304,7 +335,10 @@ export async function obterDadosCurvasFinanceiras(projetoId) {
     // Custo projetado que não entra nas curvas (sem etapa nível 5 no cronograma) e etapas do
     // cronograma sem custo projetado (essas seguem com o orçamento da Prevision).
     conciliacaoProjetado: importacao
-      ? { totalFora, fora: projetadoFora, etapasSemProjetado }
+      ? {
+          totalFora, fora: projetadoFora, etapasSemProjetado, vinculos,
+          etapasDestino: etapasParaCalculo.map((e) => ({ codigo: e.codigo_etapa, nome: e.nome })),
+        }
       : null,
     ...resultadoMotor,
   }
@@ -458,8 +492,9 @@ export async function obterRealizadoProjecao(projetoId, corte) {
        WHERE obra = $1 AND COALESCE(raw_data->>'cod_estruturado', '') <> '' GROUP BY 1, 2, 3, 4, 5`, [obra]),
     query('SELECT MAX(data_extracao)::text AS d FROM mega.analise_realizado WHERE obra = $1', [obra]),
   ])
+  const vinculoPorOrigem = new Map(entrada.vinculos.map((v) => [v.codigo_origem, v.codigo_destino]))
   const realizado = realRes.rows.filter((r) => considera(r.codigo)).map((r) => ({
-    codigo_etapa: etapaParaMega(r.codigo) || r.codigo,
+    codigo_etapa: vinculoPorOrigem.get(etapaParaMega(r.codigo) || r.codigo) || etapaParaMega(r.codigo) || r.codigo,
     tipo: classif.tipoDe(r.descricao, r.cod).tipo,
     data: r.data,
     valor: r.valor,
