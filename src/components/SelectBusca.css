@@ -1,0 +1,70 @@
+.select-busca {
+  position: relative;
+  min-width: 220px;
+}
+
+.select-busca > input[type='text'] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #cbd5e1);
+  font-size: 13px;
+  background: var(--input-bg, #ffffff);
+  color: var(--text-primary, #0f172a);
+  outline: none;
+}
+
+.select-busca > input[type='text']:focus {
+  border-color: #10b981;
+}
+
+/* mantém o required nativo sem aparecer */
+.select-busca .select-busca-req {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  padding: 0;
+  border: 0;
+}
+
+.select-busca-lista {
+  position: absolute;
+  z-index: 50;
+  left: 0;
+  right: 0;
+  margin: 2px 0 0;
+  padding: 4px 0;
+  max-height: 260px;
+  min-width: 320px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: 6px;
+  background: var(--input-bg, #ffffff);
+  color: var(--text-primary, #0f172a);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.18);
+  font-size: 13px;
+}
+
+.select-busca-lista li {
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.select-busca-lista li.ativo {
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.select-busca-lista li.sel {
+  font-weight: 600;
+}
+
+.select-busca-lista .select-busca-vazio {
+  color: var(--text-muted, #64748b);
+  cursor: default;
+}

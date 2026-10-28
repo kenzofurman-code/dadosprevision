@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import './CurvasFinanceirasView.css'
 import { PlanilhaAnalitica } from './components/curvas-financeiras/PlanilhaAnalitica'
+import { SelectBusca } from './components/SelectBusca'
 import { RealizadoProjecao } from './components/curvas-financeiras/RealizadoProjecao'
 
 interface CurvaKpis {
@@ -971,16 +972,15 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                         <td className="col-left">{f.descricao || '-'}</td>
                         <td>{formatCurrency(f.total)}</td>
                         <td className="col-left">
-                          <select
+                          <SelectBusca
                             value=""
+                            placeholder="Buscar etapa…"
                             disabled={vinculando === f.codigo}
-                            onChange={(e) => e.target.value && void salvarVinculo(f.codigo, e.target.value)}
-                          >
-                            <option value="">Escolher etapa…</option>
-                            {(data.conciliacaoProjetado?.etapasDestino || []).map((et) => (
-                              <option key={et.codigo} value={et.codigo}>{et.codigo} · {et.nome}</option>
-                            ))}
-                          </select>
+                            opcoes={(data.conciliacaoProjetado?.etapasDestino || []).map((et) => ({
+                              value: et.codigo, label: `${et.codigo} · ${et.nome}`,
+                            }))}
+                            onChange={(v) => v && void salvarVinculo(f.codigo, v)}
+                          />
                         </td>
                       </tr>
                     ))}
@@ -1915,19 +1915,16 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
 
                     <div className="curvas-fin-form-field">
                       <label>Etapa de Nível {draftEtapa.nivel} (Orçamento / Cronograma)</label>
-                      <select
+                      <SelectBusca
                         value={draftEtapa.codigo_etapa}
-                        onChange={(e) => carregarRegraNoDraft(e.target.value, draftEtapa.nivel, draftEtapa.tipo)}
+                        placeholder="Buscar etapa por código ou nome…"
                         required
-                      >
-                        <option value="">Selecione a etapa...</option>
-                        {opcoesEtapaPorNivel.map((et) => (
-                          <option key={et.codigo} value={et.codigo}>
-                            {et.codigo} — {et.nome}
-                            {et.custo !== null ? ` (${formatCurrency(et.custo)})` : ''}
-                          </option>
-                        ))}
-                      </select>
+                        opcoes={opcoesEtapaPorNivel.map((et) => ({
+                          value: et.codigo,
+                          label: `${et.codigo} — ${et.nome}${et.custo !== null ? ` (${formatCurrency(et.custo)})` : ''}`,
+                        }))}
+                        onChange={(v) => carregarRegraNoDraft(v, draftEtapa.nivel, draftEtapa.tipo)}
+                      />
                       {draftEtapa.nivel < 5 && (
                         <span className="curvas-fin-hint">
                           Uma regra de nível {draftEtapa.nivel} vale para todas as etapas de nível 5 abaixo dela, exceto
