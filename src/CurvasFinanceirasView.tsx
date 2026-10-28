@@ -130,6 +130,8 @@ interface ConciliacaoProjetado {
   totalFora: number
   fora: Array<{ codigo: string; total: number; material: number; mao_de_obra: number; descricao: string }>
   etapasSemProjetado: Array<{ codigo: string; nome: string; orcamento: number }>
+  vinculos?: Array<{ codigo_origem: string; codigo_destino: string }>
+  etapasDestino?: Array<{ codigo: string; nome: string }>
 }
 
 interface CurvasApiResponse {
@@ -428,6 +430,32 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
       setConfigFeedback(`Erro: ${err.message}`)
     } finally {
       setSavingConfig(false)
+    }
+  }
+
+  // Vínculo manual: código do custo projetado/Mega → etapa do cronograma
+  const [vinculando, setVinculando] = useState<string | null>(null)
+  async function salvarVinculo(codigoOrigem: string, codigoDestino: string | null) {
+    if (!projectId) return
+    setVinculando(codigoOrigem)
+    try {
+      const res = await fetch('/api/curvas-financeiras/vinculos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId,
+          codigo_origem: codigoOrigem,
+          codigo_destino: codigoDestino,
+          remover: codigoDestino === null,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok || json.error) throw new Error(json.error || 'Erro ao salvar o vínculo')
+      await carregarDados(projectId)
+    } catch (err: any) {
+      setError(err.message || 'Erro ao salvar o vínculo')
+    } finally {
+      setVinculando(null)
     }
   }
 
@@ -906,7 +934,8 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
 
       {/* Conciliação: custo projetado que não entra nas curvas e etapas sem projetado */}
       {data?.conciliacaoProjetado &&
-        (data.conciliacaoProjetado.fora.length > 0 || data.conciliacaoProjetado.etapasSemProjetado.length > 0) && (
+        (data.conciliacaoProjetado.fora.length > 0 || data.conciliacaoProjetado.etapasSemProjetado.length > 0
+          || (data.conciliacaoProjetado.vinculos?.length ?? 0) > 0) && (
           <details className="feedback" style={{ margin: 0, display: 'block' }}>
             <summary style={{ cursor: 'pointer' }}>
               <AlertCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />
@@ -932,6 +961,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                       <th className="col-left">Código (fora do cronograma)</th>
                       <th className="col-left">Maior insumo</th>
                       <th>Projetado</th>
+                      <th className="col-left">Vincular à etapa</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -940,6 +970,50 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                         <td className="col-left" style={{ fontFamily: 'monospace' }}>{f.codigo}</td>
                         <td className="col-left">{f.descricao || '-'}</td>
                         <td>{formatCurrency(f.total)}</td>
+                        <td className="col-left">
+                          <select
+                            value=""
+                            disabled={vinculando === f.codigo}
+                            onChange={(e) => e.target.value && void salvarVinculo(f.codigo, e.target.value)}
+                          >
+                            <option value="">Escolher etapa…</option>
+                            {(data.conciliacaoProjetado?.etapasDestino || []).map((et) => (
+                              <option key={et.codigo} value={et.codigo}>{et.codigo} · {et.nome}</option>
+                            ))}
+                          </select>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {(data.conciliacaoProjetado.vinculos?.length ?? 0) > 0 && (
+                <table className="curvas-fin-data-table" style={{ width: 'auto' }}>
+                  <thead>
+                    <tr>
+                      <th className="col-left">Código vinculado (custo projetado/Mega)</th>
+                      <th className="col-left">Etapa do cronograma</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.conciliacaoProjetado.vinculos!.map((v) => (
+                      <tr key={v.codigo_origem}>
+                        <td className="col-left" style={{ fontFamily: 'monospace' }}>{v.codigo_origem}</td>
+                        <td className="col-left">
+                          <span style={{ fontFamily: 'monospace' }}>{v.codigo_destino}</span>{' '}
+                          {data.conciliacaoProjetado?.etapasDestino?.find((et) => et.codigo === v.codigo_destino)?.nome || ''}
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="curvas-fin-btn"
+                            disabled={vinculando === v.codigo_origem}
+                            onClick={() => void salvarVinculo(v.codigo_origem, null)}
+                          >
+                            Remover
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1165,7 +1239,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
       </div>
 
       {activeTab === 'realizado' && projectId && (
-        <RealizadoProjecao projectId={projectId} scopeFilter={scopeFilter} versao={data?.parametrosObra?.atualizado_em || ''} />
+        <RealizadoProjecao projectId={projectId} scopeFilter={scopeFilter} versao={`${data?.parametrosObra?.atualizado_em || ''}|${(data?.conciliacaoProjetado?.vinculos || []).map((v) => `${v.codigo_origem}>${v.codigo_destino}`).join(',')}`} />
       )}
 
       {/* Conteúdo da Aba: Gráfico S */}

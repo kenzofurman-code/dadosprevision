@@ -774,5 +774,15 @@ CREATE TABLE IF NOT EXISTS pagamentos_ap (
 );
 CREATE INDEX IF NOT EXISTS idx_pagamentos_ap_projeto ON pagamentos_ap (projeto_id, ap);
 
+-- Curvas: vínculo manual de um código do custo projetado/Mega a uma etapa do cronograma da Prevision.
+-- Vale para o custo projetado e para o realizado (competência e financeiro).
+CREATE TABLE IF NOT EXISTS curva_vinculo_etapa (
+  projeto_id TEXT NOT NULL REFERENCES projetos(id_prevision) ON DELETE CASCADE,
+  codigo_origem TEXT NOT NULL,
+  codigo_destino TEXT NOT NULL,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (projeto_id, codigo_origem)
+);
+
 -- Curvas: níveis 1 do orçamento fora das curvas (previsão e realizado). Vazio = todos considerados.
 ALTER TABLE curva_parametros_obra ADD COLUMN IF NOT EXISTS niveis1_excluidos TEXT[] NOT NULL DEFAULT '{}';

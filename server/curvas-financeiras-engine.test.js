@@ -8,6 +8,7 @@ import {
   distribuirMaterialEtapa,
   mesCompetenciaMo,
   projetarRealizado,
+  aplicarVinculos,
   resolverRegra,
   separarForaDoCronograma,
   somarDiasIso,
@@ -676,4 +677,17 @@ test('projetarRealizado: custo projetado fora do cronograma entra no custo final
   assert.equal(r.kpis.custoFinalEstimado, 1500)
   assert.equal(r.kpis.saldoCompetencia, 1400)
   assert.equal(r.kpis.saldoFinanceiro, 1500)
+})
+
+test('aplicarVinculos: soma o custo do código de origem na etapa de destino', () => {
+  const custos = new Map([
+    ['01.03.02.07.002', { material: 100, mao_de_obra: 50, total: 150, descricao: 'TIRANTE' }],
+    ['01.03.02.07.020', { material: 10, mao_de_obra: 0, total: 10, descricao: 'OUTRO' }],
+    ['99.01.01.01.001', { material: 5, mao_de_obra: 5, total: 10, descricao: 'FORA' }],
+  ])
+  const r = aplicarVinculos(custos, new Map([['99.01.01.01.001', '01.03.02.07.002']]))
+  assert.equal(r.size, 2)
+  assert.deepEqual(r.get('01.03.02.07.002'), { material: 105, mao_de_obra: 55, total: 160, descricao: 'TIRANTE' })
+  assert.equal(r.has('99.01.01.01.001'), false)
+  assert.equal(aplicarVinculos(custos, new Map()), custos)
 })
