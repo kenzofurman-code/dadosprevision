@@ -39,8 +39,11 @@
   right: 0;
   margin: 2px 0 0;
   padding: 4px 0;
-  max-height: 260px;
-  min-width: 320px;
+  max-height: 320px;
+  /* a lista cresce até caber o título inteiro da etapa; só quebra linha em títulos gigantes */
+  width: max-content;
+  min-width: 100%;
+  max-width: min(760px, 92vw);
   overflow-y: auto;
   list-style: none;
   border: 1px solid var(--border-color, #cbd5e1);

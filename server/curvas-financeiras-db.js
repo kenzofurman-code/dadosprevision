@@ -2,7 +2,7 @@
 import { query, withTransaction } from './db.js'
 import { aplicarVinculos, calcularCurvasFinanceiras, projetarRealizado, proximoMesIso, separarForaDoCronograma } from './curvas-financeiras-engine.js'
 import { etapaParaMega, hojeNoBrasil } from './contratacoes.js'
-import { classificadorDaObra, obraDoProjeto, projetadoPorTipo } from './contratacoes-db.js'
+import { classificadorDaObra, obraDoProjeto, orcamentoDaObra, projetadoPorTipo } from './contratacoes-db.js'
 import { lerConciliacaoFinanceira } from './pagamentos-ap.js'
 
 /** Nível 1 do orçamento de um código estruturado ('01.03.05.02.002' → '01'). */
@@ -251,6 +251,15 @@ async function montarEntradaCurvas(pId) {
     custosPorEtapaMega,
     new Set(cffRes.rows.map((r) => etapaParaMega(r.codigo) || r.codigo))
   )
+  // Nome da etapa no orçamento da obra (nível 5; sem ele, o do grupo nível 4) para identificar o que está fora
+  if (projetadoFora.length) {
+    const orcamento = await orcamentoDaObra(pId)
+    for (const f of projetadoFora) {
+      const exato = orcamento.get(f.codigo)
+      const grupo = orcamento.get(f.codigo.split('.').slice(0, 4).join('.'))
+      f.etapa = exato ? { nome: exato, aproximado: false } : grupo ? { nome: grupo, aproximado: true } : null
+    }
+  }
 
   for (const row of cffRes.rows) {
     const codMega = etapaParaMega(row.codigo) || row.codigo

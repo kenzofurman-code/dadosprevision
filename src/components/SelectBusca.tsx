@@ -15,6 +15,8 @@ interface Props {
   required?: boolean
   /** Quando preenchido, mostra esta opção "vazia" no topo da lista (ex.: "Sem vínculo"). */
   rotuloVazio?: string
+  /** Largura mínima do campo, em px (padrão 220) */
+  largura?: number
 }
 
 const normalizar = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -23,7 +25,7 @@ const normalizar = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toL
  * Seletor com busca: digite parte do código ou do nome para filtrar. Todas as palavras digitadas
  * precisam aparecer no texto da opção (sem diferenciar maiúsculas nem acentos).
  */
-export function SelectBusca({ opcoes, value, onChange, placeholder = 'Buscar…', disabled, required, rotuloVazio }: Props) {
+export function SelectBusca({ opcoes, value, onChange, placeholder = 'Buscar…', disabled, required, rotuloVazio, largura }: Props) {
   const [aberto, setAberto] = useState(false)
   const [busca, setBusca] = useState('')
   const [ativo, setAtivo] = useState(0)
@@ -62,7 +64,7 @@ export function SelectBusca({ opcoes, value, onChange, placeholder = 'Buscar…'
   }
 
   return (
-    <div className="select-busca" ref={raiz}>
+    <div className="select-busca" ref={raiz} style={largura ? { minWidth: largura } : undefined}>
       <input
         type="text"
         role="combobox"
