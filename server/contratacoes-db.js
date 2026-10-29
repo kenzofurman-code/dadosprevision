@@ -331,8 +331,8 @@ export async function importarCusto(projetoId, { referencia, arquivo, matriz }) 
       `INSERT INTO custo_projetado_importacoes (projeto_id, referencia, arquivo, total) VALUES ($1, $2, $3, $4) RETURNING id`,
       [projetoId, `${referencia}-01`, arquivo || null, lido.total])
     for (const i of lido.itens) {
-      await q('INSERT INTO custo_projetado_itens (importacao_id, codigo_etapa, custo_projetado) VALUES ($1,$2,$3)',
-        [imp.id, i.codigo_etapa, i.custo_projetado])
+      await q('INSERT INTO custo_projetado_itens (importacao_id, codigo_etapa, custo_projetado, nome_etapa) VALUES ($1,$2,$3,$4)',
+        [imp.id, i.codigo_etapa, i.custo_projetado, i.nome_etapa])
     }
     await q(
       `INSERT INTO custo_projetado_insumos (importacao_id, codigo_etapa, descricao, custo_projetado)

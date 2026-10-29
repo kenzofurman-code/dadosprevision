@@ -974,7 +974,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                         <td className="col-left" style={{ fontFamily: 'monospace' }}>{f.codigo}</td>
                         <td className="col-left" style={{ maxWidth: 420 }}>
                           <div style={{ fontWeight: 600 }}>
-                            {f.etapa?.nome ? `${f.etapa.aproximado ? 'Grupo: ' : ''}${f.etapa.nome}` : 'Etapa não encontrada no orçamento'}
+                            {f.etapa?.nome ? `${f.etapa.aproximado ? 'Grupo: ' : ''}${f.etapa.nome}` : 'Sem nome (reimporte o custo projetado para trazer os nomes das etapas)'}
                           </div>
                           <div style={{ fontSize: 11.5, opacity: 0.8 }}>Maior insumo: {f.descricao || '-'}</div>
                         </td>
