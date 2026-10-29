@@ -125,8 +125,8 @@ test('lerCustoProjetado: CÓDIGO mais perto de CUSTO PROJETADO, só a linha de m
   ]
   const r = lerCustoProjetado(matriz)
   assert.deepEqual(r.itens, [
-    { codigo_etapa: '01.01.01.01.001', custo_projetado: 1335 },
-    { codigo_etapa: '01.01.01.01.002', custo_projetado: 10 },
+    { codigo_etapa: '01.01.01.01.001', custo_projetado: 1335, nome_etapa: 'CIP' },
+    { codigo_etapa: '01.01.01.01.002', custo_projetado: 10, nome_etapa: 'FORMATO PREVISION' },
   ])
   assert.equal(r.total, 1345)
   assert.equal(r.ignoradas, 1)
@@ -139,7 +139,7 @@ test('lerCustoProjetado: planilha simples sem NÍVEL soma códigos repetidos e a
     ['01.01.01.01.001', 10],
     ['01.01.01.01.001', '1.234,56'],
   ])
-  assert.deepEqual(r.itens, [{ codigo_etapa: '01.01.01.01.001', custo_projetado: 1244.56 }])
+  assert.deepEqual(r.itens, [{ codigo_etapa: '01.01.01.01.001', custo_projetado: 1244.56, nome_etapa: null }])
   assert.deepEqual(r.erros, [])
 })
 

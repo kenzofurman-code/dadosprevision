@@ -786,3 +786,6 @@ CREATE TABLE IF NOT EXISTS curva_vinculo_etapa (
 
 -- Curvas: níveis 1 do orçamento fora das curvas (previsão e realizado). Vazio = todos considerados.
 ALTER TABLE curva_parametros_obra ADD COLUMN IF NOT EXISTS niveis1_excluidos TEXT[] NOT NULL DEFAULT '{}';
+
+-- Nome da etapa (descrição da linha N4 da planilha do custo projetado); nulo nas importações antigas.
+ALTER TABLE custo_projetado_itens ADD COLUMN IF NOT EXISTS nome_etapa TEXT;

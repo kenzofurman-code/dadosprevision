@@ -253,11 +253,21 @@ async function montarEntradaCurvas(pId) {
   )
   // Nome da etapa no orçamento da obra (nível 5; sem ele, o do grupo nível 4) para identificar o que está fora
   if (projetadoFora.length) {
-    const orcamento = await orcamentoDaObra(pId)
+    // 1º o nome que vem do próprio custo projetado importado; depois o orçamento da obra
+    const [orcamento, nomesCusto] = await Promise.all([
+      orcamentoDaObra(pId),
+      importacao
+        ? query('SELECT codigo_etapa, nome_etapa FROM custo_projetado_itens WHERE importacao_id = $1 AND nome_etapa IS NOT NULL', [importacao.id])
+        : { rows: [] },
+    ])
+    const nomeCusto = new Map(nomesCusto.rows.map((r) => [r.codigo_etapa, r.nome_etapa]))
     for (const f of projetadoFora) {
+      const doCusto = nomeCusto.get(f.codigo)
       const exato = orcamento.get(f.codigo)
       const grupo = orcamento.get(f.codigo.split('.').slice(0, 4).join('.'))
-      f.etapa = exato ? { nome: exato, aproximado: false } : grupo ? { nome: grupo, aproximado: true } : null
+      f.etapa = doCusto ? { nome: doCusto, aproximado: false }
+        : exato ? { nome: exato, aproximado: false }
+        : grupo ? { nome: grupo, aproximado: true } : null
     }
   }
 

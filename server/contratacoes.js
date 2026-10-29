@@ -171,15 +171,17 @@ export function lerCustoProjetado(matriz) {
     if (v.invalido) { erros.push({ linha: i + 1, motivo: `custo projetado inválido: "${linha[colCusto]}"` }); continue }
     const nivel = colNivel >= 0 ? Number(String(linha[colNivel] ?? '').replace(/\D/g, '')) || 99 : 0
     const atual = porEtapa.get(codigo)
-    if (!atual || nivel < atual.nivel) porEtapa.set(codigo, { nivel, soma: v.numero })
-    else if (nivel === atual.nivel) atual.soma += v.numero
+    // Nome da etapa = descrição da linha de menor N (a N4, que é a etapa; as N5 são os insumos)
+    const nome = colDescricao >= 0 ? String(linha[colDescricao] ?? '').trim() : ''
+    if (!atual || nivel < atual.nivel) porEtapa.set(codigo, { nivel, soma: v.numero, nome })
+    else if (nivel === atual.nivel) { atual.soma += v.numero; if (!atual.nome) atual.nome = nome }
     const linhaDet = { codigo_etapa: codigo, descricao: colDescricao >= 0 ? String(linha[colDescricao] ?? '').trim() : '', custo_projetado: v.numero }
     const det = detalhe.get(codigo)
     if (!det || nivel > det.nivel) detalhe.set(codigo, { nivel, linhas: [linhaDet] })
     else if (nivel === det.nivel) det.linhas.push(linhaDet)
   }
   const itens = [...porEtapa.entries()].sort(([a], [b]) => a.localeCompare(b))
-    .map(([codigo_etapa, { soma }]) => ({ codigo_etapa, custo_projetado: Math.round(soma * 100) / 100 }))
+    .map(([codigo_etapa, { soma, nome }]) => ({ codigo_etapa, custo_projetado: Math.round(soma * 100) / 100, nome_etapa: nome || null }))
   const total = Math.round(itens.reduce((s, i) => s + i.custo_projetado, 0) * 100) / 100
   const linhas = [...detalhe.keys()].sort().flatMap((c) => detalhe.get(c).linhas)
   return { itens, linhas, total, ignoradas, erros }
