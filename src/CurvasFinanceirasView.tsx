@@ -129,7 +129,10 @@ interface CurvaParametroEtapa {
 
 interface ConciliacaoProjetado {
   totalFora: number
-  fora: Array<{ codigo: string; total: number; material: number; mao_de_obra: number; descricao: string }>
+  fora: Array<{
+    codigo: string; total: number; material: number; mao_de_obra: number; descricao: string
+    etapa?: { nome: string; aproximado: boolean } | null
+  }>
   etapasSemProjetado: Array<{ codigo: string; nome: string; orcamento: number }>
   vinculos?: Array<{ codigo_origem: string; codigo_destino: string }>
   etapasDestino?: Array<{ codigo: string; nome: string }>
@@ -960,7 +963,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                   <thead>
                     <tr>
                       <th className="col-left">Código (fora do cronograma)</th>
-                      <th className="col-left">Maior insumo</th>
+                      <th className="col-left">Etapa e maior insumo</th>
                       <th>Projetado</th>
                       <th className="col-left">Vincular à etapa</th>
                     </tr>
@@ -969,11 +972,17 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                     {data.conciliacaoProjetado.fora.map((f) => (
                       <tr key={f.codigo}>
                         <td className="col-left" style={{ fontFamily: 'monospace' }}>{f.codigo}</td>
-                        <td className="col-left">{f.descricao || '-'}</td>
+                        <td className="col-left" style={{ maxWidth: 420 }}>
+                          <div style={{ fontWeight: 600 }}>
+                            {f.etapa?.nome ? `${f.etapa.aproximado ? 'Grupo: ' : ''}${f.etapa.nome}` : 'Etapa não encontrada no orçamento'}
+                          </div>
+                          <div style={{ fontSize: 11.5, opacity: 0.8 }}>Maior insumo: {f.descricao || '-'}</div>
+                        </td>
                         <td>{formatCurrency(f.total)}</td>
                         <td className="col-left">
                           <SelectBusca
                             value=""
+                            largura={420}
                             placeholder="Buscar etapa…"
                             disabled={vinculando === f.codigo}
                             opcoes={(data.conciliacaoProjetado?.etapasDestino || []).map((et) => ({
