@@ -362,6 +362,16 @@ test('custo projetado: separa o que não tem etapa nível 5 no cronograma, do ma
   assert.equal(r.fora[1].mao_de_obra, 100)
 })
 
+test('custo projetado: etapa fora do cronograma com valor zero não é listada', () => {
+  const custos = new Map([
+    ['24.01.01.01.001', { material: 0, mao_de_obra: 0, total: 0, descricao: 'ZERADO' }],
+    ['21.03.01.01.001', { material: 900, mao_de_obra: 100, total: 1000, descricao: 'ITENS FORA DE ORÇAMENTO' }],
+  ])
+  const r = separarForaDoCronograma(custos, new Set())
+  assert.deepEqual(r.fora.map((f) => f.codigo), ['21.03.01.01.001'])
+  assert.equal(r.totalFora, 1000)
+})
+
 // ---- Rastreio: físico diário como base única, regra de lotes e fluxos ------------------------
 
 const somaPorChave = (itens, chave, campo = 'valor') => {

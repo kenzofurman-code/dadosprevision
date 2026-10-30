@@ -951,8 +951,8 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
               )}
               {data.conciliacaoProjetado.etapasSemProjetado.length > 0 && (
                 <>
-                  {data.conciliacaoProjetado.etapasSemProjetado.length} etapa(s) do cronograma sem custo projetado usam o
-                  orçamento da Prevision.{' '}
+                  {data.conciliacaoProjetado.etapasSemProjetado.length} etapa(s) do cronograma sem custo projetado valem
+                  zero (economia).{' '}
                 </>
               )}
               Ver detalhes
@@ -972,7 +972,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                     {data.conciliacaoProjetado.fora.map((f) => (
                       <tr key={f.codigo}>
                         <td className="col-left" style={{ fontFamily: 'monospace' }}>{f.codigo}</td>
-                        <td className="col-left" style={{ maxWidth: 420 }}>
+                        <td className="col-left" style={{ width: 420, minWidth: 420, whiteSpace: 'normal' }}>
                           <div style={{ fontWeight: 600 }}>
                             {f.etapa?.nome ? `${f.etapa.aproximado ? 'Grupo: ' : ''}${f.etapa.nome}` : 'Sem nome (reimporte o custo projetado para trazer os nomes das etapas)'}
                           </div>
@@ -1033,7 +1033,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
                   <thead>
                     <tr>
                       <th className="col-left">Etapa sem custo projetado</th>
-                      <th>Orçamento Prevision usado</th>
+                      <th>Orçamento Prevision (economia)</th>
                     </tr>
                   </thead>
                   <tbody>
