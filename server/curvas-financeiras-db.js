@@ -39,6 +39,29 @@ export async function salvarVinculoEtapa(projetoId, { codigo_origem, codigo_dest
   return { ok: true }
 }
 
+/** Meses para apropriar o saldo de cada etapa atrasada: Map código da etapa → meses (sem linha = 1). */
+async function obterMesesAtraso(projetoId) {
+  const { rows } = await query('SELECT codigo_etapa, meses FROM curva_atraso_etapa WHERE projeto_id = $1', [projetoId])
+  return new Map(rows.map((r) => [r.codigo_etapa, r.meses]))
+}
+
+/** Define em quantos meses o saldo da etapa atrasada é apropriado (1 volta ao padrão). */
+export async function salvarMesesAtrasoEtapa(projetoId, { codigo_etapa, meses }) {
+  const codigo = etapaParaMega(codigo_etapa) || String(codigo_etapa ?? '').trim()
+  const n = Number(meses)
+  if (!codigo) throw Object.assign(new Error('Informe a etapa.'), { status: 400 })
+  if (!Number.isInteger(n) || n < 1 || n > 24) throw Object.assign(new Error('Meses deve ser um inteiro de 1 a 24.'), { status: 400 })
+  if (n === 1) {
+    await query('DELETE FROM curva_atraso_etapa WHERE projeto_id = $1 AND codigo_etapa = $2', [projetoId, codigo])
+    return { ok: true }
+  }
+  await query(
+    `INSERT INTO curva_atraso_etapa (projeto_id, codigo_etapa, meses, atualizado_em) VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (projeto_id, codigo_etapa) DO UPDATE SET meses = EXCLUDED.meses, atualizado_em = NOW()`,
+    [projetoId, codigo, n])
+  return { ok: true }
+}
+
 /** Quais níveis 1 entram nas curvas: tudo, menos os desmarcados nos parâmetros da obra. */
 const nivel1Considerado = (parametrosObra) => {
   const fora = new Set((parametrosObra?.niveis1_excluidos || []).map(String))
@@ -501,7 +524,7 @@ export async function obterRealizadoProjecao(projetoId, corte) {
   if (!obra) return { obra: null, motivo: 'Este projeto não tem obra do Mega vinculada.', corte: mesCorte, cortePadrao }
 
   const considera = nivel1Considerado(await obterParametrosObra(pId))
-  const [entrada, classif, pag, realRes, cargaRes] = await Promise.all([
+  const [entrada, classif, pag, realRes, cargaRes, mesesAtraso] = await Promise.all([
     montarEntradaCurvas(pId),
     classificadorDaObra(pId),
     pagamentosDoProjeto(pId, considera),
@@ -512,6 +535,7 @@ export async function obterRealizadoProjecao(projetoId, corte) {
        -- cod_estruturado nulo é a linha de total do relatório
        WHERE obra = $1 AND COALESCE(raw_data->>'cod_estruturado', '') <> '' GROUP BY 1, 2, 3, 4, 5`, [obra]),
     query('SELECT MAX(data_extracao)::text AS d FROM mega.analise_realizado WHERE obra = $1', [obra]),
+    obterMesesAtraso(pId),
   ])
   const vinculoPorOrigem = new Map(entrada.vinculos.map((v) => [v.codigo_origem, v.codigo_destino]))
   const realizado = realRes.rows.filter((r) => considera(r.codigo)).map((r) => ({
@@ -530,6 +554,7 @@ export async function obterRealizadoProjecao(projetoId, corte) {
     realizado,
     pagamentos: pag.mapa,
     projetadoFora: entrada.totalFora,
+    mesesAtraso,
   })
 
   const inicioDoMesSeguinte = `${proximoMesIso(mesCorte)}-01`

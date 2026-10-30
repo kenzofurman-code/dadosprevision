@@ -31,7 +31,9 @@ interface EtapaResumo {
   saldoProjetado: number
   excedente: number
   pendente: number
-  alerta: 'excedente' | 'pendente' | null
+  alerta: 'excedente' | 'pendente' | 'atrasada' | null
+  /** Em quantos meses o saldo da etapa atrasada é apropriado (só em 'atrasada') */
+  mesesAtraso: number | null
 }
 
 interface Resposta {
@@ -59,6 +61,7 @@ interface Resposta {
     saldoProjetado: number
     excedente: number
     pendente: number
+    atrasada: number
     foraDoCronograma: number
     custoFinalEstimado: number
     inicioTeorico: string | null
@@ -152,6 +155,22 @@ export function RealizadoProjecao({ projectId, scopeFilter, versao = '', etapasD
     }
   }
 
+  const salvarMesesAtraso = async (codigoEtapa: string, meses: number) => {
+    setErro(null)
+    try {
+      const res = await fetch('/api/curvas-financeiras/atraso', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, codigo_etapa: codigoEtapa, meses }),
+      })
+      const json = await res.json()
+      if (!res.ok || json.error) throw new Error(json.error || 'Falha ao salvar os meses.')
+      await carregar(corte || undefined)
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   // Valores mensais do escopo e da medida escolhidos, com acumulados
   const linhas = useMemo(() => {
     const series = dados?.seriesMensal || []
@@ -230,7 +249,10 @@ export function RealizadoProjecao({ projectId, scopeFilter, versao = '', etapasD
   const realizadoKpi = k ? (fin ? k.realizadoFinanceiroAteCorte : k.realizadoAteCorte) : 0
   const alertas = (dados?.etapas || [])
     .filter((e) => e.alerta)
-    .sort((a, b) => b.excedente + b.pendente - (a.excedente + a.pendente))
+    .sort((a, b) => {
+      const peso = (x: EtapaResumo) => x.excedente + x.pendente + (x.alerta === 'atrasada' ? x.saldoProjetado : 0)
+      return peso(b) - peso(a)
+    })
   const minCorte = k?.inicioTeorico ? mesAnterior(k.inicioTeorico) : undefined
   const l = hover !== null ? linhas[hover] : null
 
@@ -428,6 +450,12 @@ export function RealizadoProjecao({ projectId, scopeFilter, versao = '', etapasD
       {alertas.length > 0 && (
         <div className="rpj-bloco">
           <h4 className="rpj-vermelho">Etapas em alerta ({alertas.length})</h4>
+          {k && k.atrasada > 0 && (
+            <p className="rpj-nota">
+              Atrasada a realizar: {moeda(k.atrasada)} de etapas cujo previsto acabou mas o físico não fechou 100% no corte.
+              O saldo é apropriado em partes iguais nos meses escolhidos (padrão 1), a partir do mês seguinte ao corte.
+            </p>
+          )}
           {k && k.pendente > 0 && (
             <p className="rpj-nota">
               Saldo pendente de {moeda(k.pendente)}: custo projetado de etapas sem físico pela frente, que não entra nas
@@ -439,6 +467,7 @@ export function RealizadoProjecao({ projectId, scopeFilter, versao = '', etapasD
             <thead>
               <tr>
                 <th>Etapa</th><th>Situação</th><th>Projetado</th><th>Realizado</th><th>Excedente</th><th>Pendente</th>
+                <th>A realizar</th><th>Meses para realizar</th>
                 {onVincular && <th>Vincular à etapa</th>}
               </tr>
             </thead>
@@ -446,11 +475,32 @@ export function RealizadoProjecao({ projectId, scopeFilter, versao = '', etapasD
               {alertas.map((e) => (
                 <tr key={e.codigo_etapa} className="rpj-linha-alerta">
                   <td><code>{e.codigo_etapa}</code> {e.nome}</td>
-                  <td>{e.alerta === 'excedente' ? 'Gastou mais que o projetado' : 'Saldo sem físico pela frente'}</td>
+                  <td>{e.alerta === 'excedente' ? 'Gastou mais que o projetado' : e.alerta === 'atrasada' ? 'Atrasada a realizar' : 'Saldo sem físico pela frente'}</td>
                   <td>{moeda(e.projetado)}</td>
                   <td>{moeda(e.realizado)}</td>
                   <td>{e.excedente ? moeda(e.excedente) : '–'}</td>
                   <td>{e.pendente ? moeda(e.pendente) : '–'}</td>
+                  <td>{e.alerta === 'atrasada' ? moeda(e.saldoProjetado) : '–'}</td>
+                  <td>
+                    {e.alerta === 'atrasada' && (
+                      <input
+                        key={`${e.codigo_etapa}-${e.mesesAtraso}`}
+                        type="number"
+                        min={1}
+                        max={24}
+                        step={1}
+                        defaultValue={e.mesesAtraso ?? 1}
+                        style={{ width: 64 }}
+                        aria-label={`Meses para realizar ${e.nome}`}
+                        onBlur={(ev) => {
+                          const n = Number(ev.target.value)
+                          if (Number.isInteger(n) && n >= 1 && n <= 24 && n !== (e.mesesAtraso ?? 1)) void salvarMesesAtraso(e.codigo_etapa, n)
+                          else ev.target.value = String(e.mesesAtraso ?? 1)
+                        }}
+                        onKeyDown={(ev) => { if (ev.key === 'Enter') ev.currentTarget.blur() }}
+                      />
+                    )}
+                  </td>
                   {onVincular && (
                     <td>
                       {e.alerta === 'pendente' && (
