@@ -279,16 +279,18 @@ async function montarEntradaCurvas(pId) {
       etapasSemProjetado.push({ codigo: codMega, nome: row.descricao, orcamento: Number(row.custo_total) })
     }
 
-    // Se temos Custo Projetado detalhado da Piemonte, usamos ele com prioridade máxima.
-    // Senão, fallback para os custos do CFF da Prevision.
+    // Com Custo Projetado importado, ele manda: etapa sem projetado vale zero (economia ou
+    // etapa que não será feita). Sem importação, fallback para os custos do CFF da Prevision.
     let cMat = 0
     let cMo = 0
     let cTot = 0
 
-    if (cp && cp.total > 0) {
-      cMat = cp.material
-      cMo = cp.mao_de_obra
-      cTot = cp.total
+    if (importacao) {
+      if (cp && cp.total > 0) {
+        cMat = cp.material
+        cMo = cp.mao_de_obra
+        cTot = cp.total
+      }
     } else {
       cMat = Number(row.custo_material || 0)
       cMo = Number(row.custo_mao_obra || 0)
@@ -352,7 +354,7 @@ export async function obterDadosCurvasFinanceiras(projetoId) {
     etapasHierarquia: hierRes.rows,
     niveis1,
     // Custo projetado que não entra nas curvas (sem etapa nível 5 no cronograma) e etapas do
-    // cronograma sem custo projetado (essas seguem com o orçamento da Prevision).
+    // cronograma sem custo projetado (essas valem zero: economia).
     conciliacaoProjetado: importacao
       ? {
           totalFora, fora: projetadoFora, etapasSemProjetado, vinculos,

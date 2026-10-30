@@ -113,7 +113,7 @@ export function separarForaDoCronograma(custos, codigosEap) {
   const fora = []
   for (const [codigo, v] of custos) {
     if (codigosEap.has(codigo)) dentro.set(codigo, v)
-    else fora.push({ codigo, ...v })
+    else if (arredondar(v.total) !== 0) fora.push({ codigo, ...v })
   }
   fora.sort((a, b) => b.total - a.total)
   return { dentro, fora, totalFora: arredondar(fora.reduce((s, f) => s + f.total, 0)) }
