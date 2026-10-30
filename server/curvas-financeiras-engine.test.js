@@ -558,6 +558,51 @@ test('projetarRealizado: pontos só até o corte com data_fim depois → pendent
   assert.equal(somaSerie(r, 'competenciaMensal', (s) => s.mes > '2026-04'), 0)
 })
 
+test('projetarRealizado: etapa atrasada (previsto acabou, físico < 100% no corte) apropria o saldo todo no mês seguinte', () => {
+  const pontos = (acum) => ['2026-01', '2026-02', '2026-03'].map((m, i) => ({
+    data: `${m}-28`, previsto: 1 / 3, realizado_acumulado: acum[i],
+  }))
+  const atrasada = projetar({
+    etapas: [etapaE1({ data_fim: '2026-03-31', pontos_mensais: pontos([0.3, 0.6, 0.9]) })],
+    corte: '2026-03',
+    realizado: [{ codigo_etapa: '01.01.01.01.001', tipo: 'MATERIAL', data: '2026-03-10', valor: 900, ap: null }],
+  })
+  assert.equal(atrasada.etapas[0].pendente, 0)
+  assert.equal(atrasada.etapas[0].alerta, 'atrasada')
+  assert.equal(atrasada.etapas[0].mesesAtraso, 1)
+  assert.equal(atrasada.kpis.atrasada, 300)
+  assert.equal(atrasada.etapas[0].saldoProjetado, 300)
+  // todo o saldo cai logo após o corte (a MO segue a regra do dia de corte: parte pode ir a maio)
+  assert.ok(Math.abs(somaSerie(atrasada, 'competenciaMensal', (s) => s.mes > '2026-03') - 300) < 0.05)
+  assert.equal(somaSerie(atrasada, 'competenciaMensal', (s) => s.mes > '2026-05'), 0)
+  assert.ok(atrasada.seriesMensal.find((s) => s.mes === '2026-04').competenciaMensal > 0)
+
+  // físico já em 100% no corte: o saldo continua pendente
+  const concluida = projetar({
+    etapas: [etapaE1({ data_fim: '2026-03-31', pontos_mensais: pontos([0.3, 0.6, 1]) })],
+    corte: '2026-03',
+    realizado: [{ codigo_etapa: '01.01.01.01.001', tipo: 'MATERIAL', data: '2026-03-10', valor: 900, ap: null }],
+  })
+  assert.equal(concluida.etapas[0].pendente, 300)
+})
+
+test('projetarRealizado: etapa atrasada distribui o saldo pelos meses escolhidos', () => {
+  const etapa = etapaE1({
+    custo_mao_obra: 0, custo_total: 600, data_fim: '2026-03-31',
+    pontos_mensais: ['2026-01', '2026-02', '2026-03'].map((m, i) => ({ data: `${m}-28`, previsto: 1 / 3, realizado_acumulado: [0.3, 0.6, 0.9][i] })),
+  })
+  const r = projetar({
+    etapas: [etapa],
+    corte: '2026-03',
+    mesesAtraso: new Map([['01.01.01.01.001', 3]]),
+    realizado: [{ codigo_etapa: '01.01.01.01.001', tipo: 'MATERIAL', data: '2026-03-10', valor: 300, ap: null }],
+  })
+  assert.equal(r.etapas[0].mesesAtraso, 3)
+  const serie = (mes) => r.seriesMensal.find((s) => s.mes === mes)?.competenciaMensal || 0
+  for (const mes of ['2026-04', '2026-05', '2026-06']) assert.ok(Math.abs(serie(mes) - 100) < 0.05, mes)
+  assert.equal(serie('2026-07'), 0)
+})
+
 test('projetarRealizado: chegada de material antes do corte vai para o mês seguinte', () => {
   const r = projetar({ parametrosObra: { ...OBRA, dias_antecedencia_padrao: 40 }, corte: '2026-02' })
   assert.equal(somaSerie(r, 'competenciaMaterial', (s) => s.mes <= '2026-02'), 0)

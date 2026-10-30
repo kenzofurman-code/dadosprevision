@@ -784,6 +784,15 @@ CREATE TABLE IF NOT EXISTS curva_vinculo_etapa (
   PRIMARY KEY (projeto_id, codigo_origem)
 );
 
+-- Curvas: em quantos meses (a partir do corte) o saldo de uma etapa atrasada é apropriado. Sem linha = 1.
+CREATE TABLE IF NOT EXISTS curva_atraso_etapa (
+  projeto_id TEXT NOT NULL REFERENCES projetos(id_prevision) ON DELETE CASCADE,
+  codigo_etapa TEXT NOT NULL,
+  meses INTEGER NOT NULL CHECK (meses BETWEEN 1 AND 24),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (projeto_id, codigo_etapa)
+);
+
 -- Curvas: níveis 1 do orçamento fora das curvas (previsão e realizado). Vazio = todos considerados.
 ALTER TABLE curva_parametros_obra ADD COLUMN IF NOT EXISTS niveis1_excluidos TEXT[] NOT NULL DEFAULT '{}';
 

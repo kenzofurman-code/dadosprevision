@@ -623,6 +623,7 @@ export function projetarRealizado({
   realizado = [],
   pagamentos = new Map(),
   projetadoFora = 0,
+  mesesAtraso = new Map(),
 }) {
   const teorica = calcularCurvasFinanceiras({ etapas, parametrosObra, parametrosEtapas })
   const fimCorte = `${corte}-${String(ultimoDiaDoMes(corte)).padStart(2, '0')}`
@@ -744,12 +745,26 @@ export function projetarRealizado({
     if (pontos.length) return pontos.some((p) => String(p.data).slice(0, 7) > corte)
     return Boolean(e.data_inicio) && String(e.data_fim || e.data_inicio) > fimCorte
   }
+  // Físico realizado acumulado (0–1) da etapa no corte; null sem pontos mensais
+  const fisicoRealizadoNoCorte = (e) => {
+    const pontos = (Array.isArray(e.pontos_mensais) ? e.pontos_mensais : [])
+      .filter((p) => /^\d{4}-\d{2}/.test(String(p.data || '')) && String(p.data).slice(0, 7) <= corte && p.realizado_acumulado != null)
+      .sort((a, b) => String(a.data).localeCompare(String(b.data)))
+    return pontos.length ? Number(pontos[pontos.length - 1].realizado_acumulado) : null
+  }
+  const ultimoDiaIso = (mes) => `${mes}-${String(ultimoDiaDoMes(mes)).padStart(2, '0')}`
   const resumo = []
   const clones = []
   for (const e of etapas) {
     const custos = { MATERIAL: Number(e.custo_material || 0), MAO_DE_OBRA: Number(e.custo_mao_obra || 0) }
-    const futuro = temFisicoDepois(e)
-    const r = { codigo_etapa: e.codigo_etapa, nome: e.nome || e.descricao, projetado: 0, realizado: 0, saldoProjetado: 0, excedente: 0, pendente: 0 }
+    // Etapa atrasada a realizar: o previsto já acabou, mas o físico realizado ainda não fechou 100% no
+    // corte. O saldo é apropriado em N meses (padrão 1) a partir do mês seguinte, em partes iguais, e
+    // paga pela condição de pagamento da etapa.
+    const fisicoCorte = fisicoRealizadoNoCorte(e)
+    const atrasada = !temFisicoDepois(e) && fisicoCorte !== null && fisicoCorte < 0.999
+    const meses = atrasada ? Math.max(1, Math.min(24, Math.trunc(Number(mesesAtraso.get(e.codigo_etapa))) || 1)) : 0
+    const futuro = atrasada || temFisicoDepois(e)
+    const r = { codigo_etapa: e.codigo_etapa, nome: e.nome || e.descricao, projetado: 0, realizado: 0, saldoProjetado: 0, excedente: 0, pendente: 0, mesesAtraso: meses || null }
     // Excedente e pendente são da etapa: o Mega e o custo projetado podem classificar o mesmo
     // insumo em tipos diferentes. O saldo é repartido entre os tipos pelo que falta em cada um.
     const real = { MATERIAL: realPorChave.get(`${e.codigo_etapa}|MATERIAL`) || 0, MAO_DE_OBRA: realPorChave.get(`${e.codigo_etapa}|MAO_DE_OBRA`) || 0 }
@@ -773,13 +788,26 @@ export function projetarRealizado({
         custo_material: aProjetar.MATERIAL,
         custo_mao_obra: aProjetar.MAO_DE_OBRA,
         custo_total: aProjetar.MATERIAL + aProjetar.MAO_DE_OBRA,
-        data_inicio: e.data_inicio && e.data_inicio > inicioPos ? e.data_inicio : inicioPos,
-        pontos_mensais: (Array.isArray(e.pontos_mensais) ? e.pontos_mensais : [])
-          .map((p) => (String(p.data || '').slice(0, 7) <= corte ? { ...p, previsto: 0, base: 0 } : p)),
+        ...(atrasada
+          ? (() => {
+              const mesesProjecao = []
+              for (let m = posCorte, i = 0; i < meses; i++, m = proximoMesIso(m)) mesesProjecao.push(m)
+              return {
+                data_inicio: inicioPos,
+                data_fim: ultimoDiaIso(mesesProjecao[mesesProjecao.length - 1]),
+                pontos_mensais: mesesProjecao.map((m) => ({ data: ultimoDiaIso(m), previsto: 1 / meses, base: 1 / meses })),
+              }
+            })()
+          : {
+              data_inicio: e.data_inicio && e.data_inicio > inicioPos ? e.data_inicio : inicioPos,
+              pontos_mensais: (Array.isArray(e.pontos_mensais) ? e.pontos_mensais : [])
+                .map((p) => (String(p.data || '').slice(0, 7) <= corte ? { ...p, previsto: 0, base: 0 } : p)),
+            }),
       })
     }
     for (const k of ['projetado', 'realizado', 'saldoProjetado', 'excedente', 'pendente']) r[k] = arredondar(r[k])
-    r.alerta = r.excedente > 0 ? 'excedente' : r.pendente > 0 ? 'pendente' : null
+    r.alerta = r.excedente > 0 ? 'excedente' : r.pendente > 0 ? 'pendente' : atrasada && r.saldoProjetado > 0 ? 'atrasada' : null
+    if (r.alerta !== 'atrasada') r.mesesAtraso = null
     if (r.projetado > 0 || r.realizado > 0) resumo.push(r)
   }
 
@@ -856,6 +884,7 @@ export function projetarRealizado({
       saldoProjetado: soma('saldoProjetado'),
       excedente: soma('excedente'),
       pendente: soma('pendente'),
+      atrasada: arredondar(resumo.filter((r) => r.alerta === 'atrasada').reduce((s, r) => s + r.saldoProjetado, 0)),
       foraDoCronograma: arredondar(foraDoCronograma),
       custoFinalEstimado: custoProjetado,
       realizadoSemPagamento: arredondar(realizadoSemPagamento),
