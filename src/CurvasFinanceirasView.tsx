@@ -1248,7 +1248,7 @@ export function CurvasFinanceirasView({ projectId, projectName, projects, onSele
       </div>
 
       {activeTab === 'realizado' && projectId && (
-        <RealizadoProjecao projectId={projectId} scopeFilter={scopeFilter} versao={`${data?.parametrosObra?.atualizado_em || ''}|${(data?.conciliacaoProjetado?.vinculos || []).map((v) => `${v.codigo_origem}>${v.codigo_destino}`).join(',')}`} />
+        <RealizadoProjecao projectId={projectId} scopeFilter={scopeFilter} etapasDestino={data?.conciliacaoProjetado?.etapasDestino} vinculando={vinculando} onVincular={(o, d) => void salvarVinculo(o, d)} versao={`${data?.parametrosObra?.atualizado_em || ''}|${(data?.conciliacaoProjetado?.vinculos || []).map((v) => `${v.codigo_origem}>${v.codigo_destino}`).join(',')}`} />
       )}
 
       {/* Conteúdo da Aba: Gráfico S */}

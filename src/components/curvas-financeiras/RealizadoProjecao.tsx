@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { AlertCircle, RefreshCw, Upload } from 'lucide-react'
+import { SelectBusca } from '../SelectBusca'
 import './RealizadoProjecao.css'
 
 type Escopo = 'todos' | 'material' | 'mao_de_obra'
@@ -71,6 +72,10 @@ interface Props {
   scopeFilter: Escopo
   /** Muda quando os parâmetros da obra são salvos: recalcula o realizado */
   versao?: string
+  /** Etapas do cronograma que podem receber o custo de uma etapa em alerta (de-para) */
+  etapasDestino?: Array<{ codigo: string; nome: string }>
+  vinculando?: string | null
+  onVincular?: (codigoOrigem: string, codigoDestino: string) => void
 }
 
 const moeda = (v: number) =>
@@ -88,7 +93,7 @@ const mesAnterior = (m: string) => {
 const COR_REAL = { competencia: '#f59e0b', financeiro: '#10b981' }
 const COR_TEORICA = '#94a3b8'
 
-export function RealizadoProjecao({ projectId, scopeFilter, versao = '' }: Props) {
+export function RealizadoProjecao({ projectId, scopeFilter, versao = '', etapasDestino = [], vinculando = null, onVincular }: Props) {
   const [dados, setDados] = useState<Resposta | null>(null)
   const [corte, setCorte] = useState('')
   const [carregando, setCarregando] = useState(false)
@@ -423,9 +428,19 @@ export function RealizadoProjecao({ projectId, scopeFilter, versao = '' }: Props
       {alertas.length > 0 && (
         <div className="rpj-bloco">
           <h4 className="rpj-vermelho">Etapas em alerta ({alertas.length})</h4>
+          {k && k.pendente > 0 && (
+            <p className="rpj-nota">
+              Saldo pendente de {moeda(k.pendente)}: custo projetado de etapas sem físico pela frente, que não entra nas
+              curvas. É a diferença entre a teórica e o realizado + projeção. Vincule cada etapa a uma que ainda tenha físico
+              para levar o custo projetado e o realizado dela para lá.
+            </p>
+          )}
           <table className="rpj-tabela">
             <thead>
-              <tr><th>Etapa</th><th>Situação</th><th>Projetado</th><th>Realizado</th><th>Excedente</th><th>Pendente</th></tr>
+              <tr>
+                <th>Etapa</th><th>Situação</th><th>Projetado</th><th>Realizado</th><th>Excedente</th><th>Pendente</th>
+                {onVincular && <th>Vincular à etapa</th>}
+              </tr>
             </thead>
             <tbody>
               {alertas.map((e) => (
@@ -436,6 +451,22 @@ export function RealizadoProjecao({ projectId, scopeFilter, versao = '' }: Props
                   <td>{moeda(e.realizado)}</td>
                   <td>{e.excedente ? moeda(e.excedente) : '–'}</td>
                   <td>{e.pendente ? moeda(e.pendente) : '–'}</td>
+                  {onVincular && (
+                    <td>
+                      {e.alerta === 'pendente' && (
+                        <SelectBusca
+                          value=""
+                          largura={320}
+                          placeholder="Buscar etapa…"
+                          disabled={vinculando === e.codigo_etapa}
+                          opcoes={etapasDestino
+                            .filter((d) => d.codigo !== e.codigo_etapa)
+                            .map((d) => ({ value: d.codigo, label: `${d.codigo} · ${d.nome}` }))}
+                          onChange={(v) => v && onVincular(e.codigo_etapa, v)}
+                        />
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
