@@ -592,9 +592,10 @@ class Operador:
             time.sleep(5)
 
         pai = ponto_menu
+        regiao_menu = (max(0, x - 150), 100, 800, 650)
         for i, item in enumerate(caminho_menu):
             self.log("      aguardando item do menu: %r" % item)
-            caixa = self.esperar_texto(item, timeout=25, ponto_cutucao=pai)
+            caixa = self.esperar_texto(item, timeout=25, ponto_cutucao=pai, regiao=regiao_menu)
             cx = caixa.x + min(45, max(15, caixa.largura // 4))
             cy = caixa.y + caixa.altura // 2
             if i < len(caminho_menu) - 1:
