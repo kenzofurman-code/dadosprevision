@@ -42,6 +42,7 @@ TABELA_POR_ARQUIVO = {
     "Analise_Realizado": "analise_realizado",
     "Medicoes": "medicoes_contratos",
     "Follow_Up_Itens": "contratos_itens",
+    "Conciliacao_Financeira": "conciliacao_financeira",
 }
 
 # Colunas que cada tabela de sql/schema_mega.sql realmente declara (sem id, sem
@@ -92,6 +93,13 @@ TABELA_COLUNAS = {
         "cod_agrupador", "aditivo", "item_alternativo", "descricao",
         "cod_padrao", "cod_unidade", "unidade", "quantidade",
         "valor_unitario", "total_item", "total_contratado", "situacao",
+    ],
+    "conciliacao_financeira": [
+        "serie_ap", "numero_ap", "parcela", "tipo_documento", "numero_documento",
+        "codigo_agente", "descricao_agente", "data_emissao", "data_entrada",
+        "data_vencimento", "valor_total_ap", "valor_rateado", "deducoes",
+        "acrescimos", "pagamentos", "saldo_a_pagar", "total", "doc_origem",
+        "codigo_estruturado",
     ],
 }
 
@@ -271,6 +279,19 @@ def _ler_crystal_medicoes(caminho):
 
 
 
+def _formatar_parcela(v):
+    if v is None or (isinstance(v, float) and math.isnan(v)):
+        return ""
+    if isinstance(v, float) and v.is_integer():
+        v = int(v)
+    s = str(v).strip()
+    if s.endswith(".0"):
+        s = s[:-2]
+    if s.isdigit():
+        return s.zfill(3)
+    return s
+
+
 def _serializavel(valor):
     """JSON nao entende NaN, Timestamp nem os escalares do numpy; normaliza
     para algo que entenda. As colunas numericas do .xlsx viram numpy.int64 /
@@ -324,6 +345,18 @@ def _separar_raw_data(df, tabela):
                 pass
         if "aditivo" in saida.columns:
             saida["aditivo"] = saida["aditivo"].fillna("").astype(str)
+    if tabela == "conciliacao_financeira":
+        # Descarta linhas de agrupamento (ex: 'Nivel1 : 01 LIOR') que nao tem numero_ap valido
+        if "numero_ap" in saida.columns:
+            saida = saida[pd.to_numeric(saida["numero_ap"], errors="coerce").notna()].copy()
+            try:
+                saida["numero_ap"] = saida["numero_ap"].astype(int)
+            except Exception:
+                pass
+        if "parcela" in saida.columns:
+            saida["parcela"] = saida["parcela"].apply(_formatar_parcela)
+        if "codigo_estruturado" in saida.columns:
+            saida["codigo_estruturado"] = saida["codigo_estruturado"].fillna("").astype(str)
     # NaN do pandas nao vira NULL sozinho: o Postgres recusa NaN num campo
     # BIGINT/NUMERIC com "out of range" (confirmado contra um Postgres 16 real
     # em 2026-09-08 — cod_contrato vazio, comum quando o item ainda nao foi

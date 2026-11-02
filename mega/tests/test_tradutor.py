@@ -107,3 +107,29 @@ def test_renomeio_manual_por_chave_composta_para_analise_saldo_solicitacao():
     df_contratos = pd.DataFrame({"obra": [340], "Código": [449]})
     saida_contratos = traduzir_colunas(df_contratos, "analise_saldo_solicitacao", aba="Contratos")
     assert "codigo_contrato" in saida_contratos.columns
+
+def test_traduzir_colunas_conciliacao_financeira():
+    df = pd.DataFrame({
+        "Série AP": ["AP"],
+        "Número AP": [68],
+        "Parcela": ["001"],
+        "Valor rateado [A]": [100.5],
+        "Deduções [B]": [0.0],
+        "Acréscimos [C]": [0.0],
+        "Pagamentos [D]": [100.5],
+        "Saldo a pagar [E] = A-B+C-D": [0.0],
+        "Total [F] = D + E ": [100.5],
+        "Código estruturado": ["01.01.01.01.001"],
+    })
+    saida = traduzir_colunas(df, "conciliacao_financeira")
+    assert "serie_ap" in saida.columns
+    assert "numero_ap" in saida.columns
+    assert "parcela" in saida.columns
+    assert "valor_rateado" in saida.columns
+    assert "deducoes" in saida.columns
+    assert "acrescimos" in saida.columns
+    assert "pagamentos" in saida.columns
+    assert "saldo_a_pagar" in saida.columns
+    assert "total" in saida.columns
+    assert "codigo_estruturado" in saida.columns
+

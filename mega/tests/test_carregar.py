@@ -437,3 +437,53 @@ def test_carga_solicitacoes_por_etapa_sqlite(tmp_path):
     linhas = conn.execute("SELECT obra, codigo_solicitacao, numero_insumo, descricao_insumo FROM solicitacoes_por_etapa").fetchall()
     assert len(linhas) == 1
     assert linhas[0] == ("650", 861, 7889, "CONSUMO DE ÁGUA E ESGOTO")
+
+def test_carga_conciliacao_financeira_descarta_agrupamentos_e_grava(tmp_path):
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE conciliacao_financeira ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, obra TEXT, obra_nome TEXT, "
+        "data_extracao TEXT, serie_ap TEXT, numero_ap INTEGER, parcela TEXT, "
+        "tipo_documento TEXT, numero_documento TEXT, codigo_agente INTEGER, "
+        "descricao_agente TEXT, data_emissao TEXT, data_entrada TEXT, "
+        "data_vencimento TEXT, valor_total_ap REAL, valor_rateado REAL, "
+        "deducoes REAL, acrescimos REAL, pagamentos REAL, saldo_a_pagar REAL, "
+        "total REAL, doc_origem TEXT, codigo_estruturado TEXT, raw_data TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE carga (relatorio TEXT, arquivo TEXT, data_extracao TEXT, "
+        "obras_ok TEXT, obras_sem_movimento TEXT, obras_falhou TEXT, "
+        "bloqueado INTEGER, motivo_bloqueio TEXT)"
+    )
+
+    df_planilha = pd.DataFrame({
+        "Série AP": [None, "AP", "AP"],
+        "Número AP": ["Nivel1 : 01 LIOR", 68, 69],
+        "Parcela": [None, "001", "001"],
+        "Tipo documento": [None, "NF MAT", "NF MAT"],
+        "Data vencimento": [None, "2025-01-15", "2025-01-15"],
+        "Valor rateado [A]": [None, 7750.0, 1990.48],
+        "Pagamentos [D]": [None, 7750.0, 0.0],
+        "Saldo a pagar [E] = A-B+C-D": [None, 0.0, 1990.48],
+        "Código estruturado": [None, "01.01.01.01.001", "01.01.01.01.002"],
+    })
+    caminho = tmp_path / "Conciliacao_Financeira_630_2026-11-02.xlsx"
+    df_planilha.to_excel(caminho, index=False)
+
+    cfg = cfgmod.carregar()
+    resultado_execucao = {"ok": ["630"], "sem_movimento": [], "falhou": []}
+    relatos = carregar.carregar_relatorio(
+        cfg, conn, "conciliacao_financeira", "2026-11-02", tmp_path,
+        resultado_execucao, marcador_parametro="?")
+    conn.commit()
+
+    assert relatos[0]["estado"] == "OK"
+    linhas = conn.execute(
+        "SELECT obra, numero_ap, parcela, valor_rateado, pagamentos, saldo_a_pagar "
+        "FROM conciliacao_financeira ORDER BY numero_ap"
+    ).fetchall()
+    # A linha 'Nivel1 : 01 LIOR' deve ter sido descartada, restando apenas as 2 APs reais
+    assert len(linhas) == 2
+    assert linhas[0] == ("630", 68, "001", 7750.0, 7750.0, 0.0)
+    assert linhas[1] == ("630", 69, "001", 1990.48, 0.0, 1990.48)
+

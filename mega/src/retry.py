@@ -28,9 +28,9 @@ from visao import Visao
 RAIZ = Path(__file__).resolve().parent.parent
 ORDEM_RELATORIOS = ["itens_solicitados", "analise_saldo_solicitacao",
                     "visualizacao_itens", "pedidos_compra", "solicitacoes_por_etapa",
-                    "medicoes_contratos", "contratos_itens"]
+                    "medicoes_contratos", "contratos_itens", "conciliacao_financeira"]
 RELATORIOS_RETRY_PADRAO = ["itens_solicitados", "analise_saldo_solicitacao", "visualizacao_itens",
-                           "pedidos_compra", "solicitacoes_por_etapa", "medicoes_contratos", "contratos_itens"]
+                           "pedidos_compra", "solicitacoes_por_etapa", "medicoes_contratos", "contratos_itens", "conciliacao_financeira"]
 
 
 def _log(msg):
@@ -99,6 +99,13 @@ def identificar_pendencias(cfg, conn, data_iso, pasta=None, marcador_parametro="
         obras_ok_por_tabela["contratos_itens"] = set(r[0] for r in cur.fetchall())
     except Exception:
         obras_ok_por_tabela["contratos_itens"] = set()
+
+    # conciliacao_financeira
+    try:
+        cur.execute("SELECT DISTINCT obra FROM %sconciliacao_financeira WHERE data_extracao = %s" % (prefixo, m), (data_iso,))
+        obras_ok_por_tabela["conciliacao_financeira"] = set(r[0] for r in cur.fetchall())
+    except Exception:
+        obras_ok_por_tabela["conciliacao_financeira"] = set()
 
     def _para_set(val):
         if isinstance(val, (list, set)):

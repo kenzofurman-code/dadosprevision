@@ -329,6 +329,64 @@ def preparar_contratos_itens(op, rel, obra):
     time.sleep(15)
 
 
+def preparar_conciliacao_financeira(op, rel, obra):
+    """Conciliação Financeira: digita o orçamento da obra, data período inicial 01/01/2025 e Executar."""
+    # 1. Campo Orçamento: canto superior esquerdo
+    rotulo = op.esperar_texto(("Orcamento", "Orçamento"), timeout=40)
+    op.pagina.mouse.click(rotulo.x + 20, rotulo.y + rotulo.altura + 10)
+    time.sleep(0.8)
+    op.tecla("End", pausa=0.1)
+    for _ in range(10):
+        op.tecla("Backspace", pausa=0.03)
+    op.digitar(str(obra["orcamento"]))
+    time.sleep(1.0)
+    op.tecla("Tab")
+    time.sleep(2.0)
+
+    # 2. Campo Data período: data inicial
+    rotulo_data = op.esperar_texto(("Data periodo", "Data período"), timeout=30)
+    campo_data = Caixa(rotulo_data.x, rotulo_data.y + rotulo_data.altura + 4, 90, 18, "", 0)
+    inicial = "01/01/2025"
+    for passo in rel.get("preparo", []):
+        if passo.get("tipo") == "data" and passo.get("valor"):
+            inicial = passo["valor"]
+    dia, mes, ano = inicial.split("/")
+    op.digitar_data(campo_data, dia, mes, ano)
+    time.sleep(1.5)
+
+    # 3. Clicar no botão Executar
+    img = op.tela()
+    caixa_exec = op.v.achar_texto("Executar", img=img)
+    if caixa_exec:
+        op.pagina.mouse.click(caixa_exec.x + caixa_exec.largura // 2,
+                              caixa_exec.y + caixa_exec.altura // 2)
+    else:
+        caixa_cc = op.v.achar_texto("Centro de custo", img=img)
+        if caixa_cc:
+            op.pagina.mouse.click(caixa_cc.x + 160, caixa_cc.y + 12)
+        else:
+            op.log("   aviso: clicando no botão Executar por coordenada padrão (870, 160)")
+            op.pagina.mouse.click(870, 160)
+
+    op.log("   Executar clicado; aguardando carregamento do grid de conciliação...")
+
+    # 4. Aguardar até o grid carregar (~60s a 3 min)
+    limite = time.time() + 180
+    while time.time() < limite:
+        time.sleep(8)
+        img = op.tela()
+        if (op.v.achar_texto("Série AP", img=img)
+                or op.v.achar_texto("Serie AP", img=img)
+                or op.v.achar_texto("Número AP", img=img)
+                or op.v.achar_texto("Numero AP", img=img)
+                or op.v.achar_texto("Nivel1", img=img)
+                or op.v.achar_texto("Nenhum Registro Encontrado", img=img)):
+            op.log("   grid de conciliação carregado com sucesso")
+            time.sleep(3)
+            return
+    op.log("   aviso: timeout aguardando conclusão do grid (3 min); prosseguindo")
+
+
 PREPARADORES = {
     "analise_saldo_solicitacao": preparar_analise_saldo,
     "itens_solicitados": preparar_itens_solicitados,
@@ -337,6 +395,7 @@ PREPARADORES = {
     "solicitacoes_por_etapa": preparar_solicitacoes_por_etapa,
     "medicoes_contratos": preparar_medicoes_contratos,
     "contratos_itens": preparar_contratos_itens,
+    "conciliacao_financeira": preparar_conciliacao_financeira,
 }
 
 

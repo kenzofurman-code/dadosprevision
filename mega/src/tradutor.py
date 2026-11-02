@@ -131,6 +131,14 @@ RENOMEIO_MANUAL = {
         # "Cód. Alternativo.3" e "Descrição.2" descartadas em COLUNAS_DESCARTAR
         # (confirmado com o usuario: sempre vazias, sem uso conhecido).
     },
+    "conciliacao_financeira": {
+        "Valor rateado [A]": "valor_rateado",
+        "Deduções [B]": "deducoes",
+        "Acréscimos [C]": "acrescimos",
+        "Pagamentos [D]": "pagamentos",
+        "Saldo a pagar [E] = A-B+C-D": "saldo_a_pagar",
+        "Total [F] = D + E ": "total",
+    },
     "contratos_itens": {
         "Cód. Item.": "cod_item_insumo",
         "Cód. Padrão Unidade": "cod_padrao",

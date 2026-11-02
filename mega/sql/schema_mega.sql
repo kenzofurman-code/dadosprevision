@@ -313,3 +313,38 @@ CREATE INDEX IF NOT EXISTS idx_mega_contratos_itens_obra
 CREATE INDEX IF NOT EXISTS idx_mega_contratos_itens_contrato
   ON mega.contratos_itens(cod_contrato);
 
+-- ---------------------------------------------------------------------------
+-- conciliacao_financeira: relatorio de conciliacao financeira (pagamentos por AP)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS mega.conciliacao_financeira (
+  id                      BIGSERIAL PRIMARY KEY,
+  obra                    TEXT NOT NULL,
+  obra_nome               TEXT,
+  data_extracao           DATE NOT NULL,
+  serie_ap                TEXT,
+  numero_ap               BIGINT NOT NULL,
+  parcela                 TEXT NOT NULL,
+  tipo_documento          TEXT,
+  numero_documento        TEXT,
+  codigo_agente           BIGINT,
+  descricao_agente        TEXT,
+  data_emissao            DATE,
+  data_entrada            DATE,
+  data_vencimento         DATE,
+  valor_total_ap          NUMERIC,
+  valor_rateado           NUMERIC,
+  deducoes                NUMERIC,
+  acrescimos              NUMERIC,
+  pagamentos              NUMERIC,
+  saldo_a_pagar           NUMERIC,
+  total                   NUMERIC,
+  doc_origem              TEXT,
+  codigo_estruturado      TEXT,
+  raw_data                JSONB DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS idx_mega_conciliacao_financeira_obra
+  ON mega.conciliacao_financeira(obra);
+CREATE INDEX IF NOT EXISTS idx_mega_conciliacao_financeira_ap
+  ON mega.conciliacao_financeira(obra, numero_ap);
+CREATE INDEX IF NOT EXISTS idx_mega_conciliacao_financeira_vencimento
+  ON mega.conciliacao_financeira(data_vencimento);

@@ -20,7 +20,7 @@ import retry
 
 # Relatorios adicionados depois dos testes originais; os testes os consideram
 # sempre completos para focar em visualizacao_itens/pedidos_compra.
-TABELAS_NOVAS = ("solicitacoes_por_etapa", "medicoes_contratos", "contratos_itens")
+TABELAS_NOVAS = ("solicitacoes_por_etapa", "medicoes_contratos", "contratos_itens", "conciliacao_financeira")
 
 
 def _completar_tabelas_novas(conn, obras, data_iso):
