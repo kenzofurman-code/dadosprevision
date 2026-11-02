@@ -1007,3 +1007,314 @@
     grid-column: auto;
   }
 }
+
+
+/* ==========================================================================
+   TABS DE PÁGINAS DO VISUALIZADOR (PÁGINA 1: CURVA S / PÁGINA 2: MENSAL)
+   ========================================================================== */
+
+.curvas-page-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #f1f5f9;
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.curvas-page-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.curvas-page-tab-btn:hover {
+  color: #173f38;
+}
+
+.curvas-page-tab-btn.active {
+  background: #ffffff;
+  color: #173f38;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.curvas-perspective-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  margin-left: 4px;
+}
+
+.curvas-perspective-btn {
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.curvas-perspective-btn:hover {
+  border-color: #94a3b8;
+}
+
+.curvas-perspective-btn.active {
+  background: #173f38;
+  border-color: #173f38;
+  color: #ffffff;
+}
+
+.curvas-print-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.curvas-print-btn {
+  background: #f8fafc;
+  color: #1e293b;
+  border-color: #cbd5e1;
+}
+
+.curvas-print-btn:hover {
+  background: #173f38;
+  color: #ffffff;
+  border-color: #173f38;
+}
+
+/* ==========================================================================
+   CARDS DE DESVIO ACUMULADO & AVANÇO MENSAL
+   ========================================================================== */
+
+.curvas-deviation-card {
+  margin-top: 14px;
+  padding: 14px 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+}
+
+.curvas-deviation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.curvas-deviation-titles h4 {
+  margin: 2px 0 0 0;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.curvas-chart-sublabel {
+  font-size: 9.5px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  color: #0f766e;
+  text-transform: uppercase;
+}
+
+.curvas-deviation-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.curvas-deviation-badge.positive {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+}
+
+.curvas-deviation-badge.negative {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+
+.curvas-deviation-badge.neutral {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.curvas-monthly-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+.curvas-monthly-card {
+  padding: 14px 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+}
+
+.curvas-bar-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.curvas-bar-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.curvas-bar-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.curvas-bar-swatch.planned {
+  background: #2563eb;
+}
+
+.curvas-bar-swatch.actual {
+  background: #16a34a;
+}
+
+.curvas-bar-rect {
+  transition: opacity 0.15s ease;
+}
+
+.curvas-month-bar-group:hover .curvas-bar-rect {
+  opacity: 0.85;
+}
+
+.curvas-variation-hint {
+  font-size: 11px;
+  color: #64748b;
+  font-style: italic;
+}
+
+.curvas-print-header {
+  display: none;
+}
+
+/* ==========================================================================
+   ESTILOS DE IMPRESSÃO (A4 PAISAGEM)
+   ========================================================================== */
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 6mm 8mm;
+  }
+
+  body,
+  .app-shell,
+  .curvas-view {
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    color: #000000 !important;
+  }
+
+  /* Oculta elementos de navegação e controle na folha impressa */
+  .page-header,
+  .summary,
+  .data-tabs,
+  .toolbar,
+  .curvas-heading-card,
+  .curvas-legend-card,
+  .curvas-chart-toolbar,
+  .curvas-table-card,
+  .curvas-feedback,
+  .curvas-page-tabs,
+  .curvas-perspective-group,
+  .curvas-print-group {
+    display: none !important;
+  }
+
+  .curvas-chart-layout {
+    display: block !important;
+    width: 100% !important;
+    min-height: auto !important;
+    gap: 0 !important;
+  }
+
+  .curvas-chart-card,
+  .curvas-deviation-card,
+  .curvas-monthly-card {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 2px 0 !important;
+    margin: 0 0 10px 0 !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .curvas-chart-wrap,
+  .curvas-chart {
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  .curvas-print-header {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 6px 0 8px 0 !important;
+    margin-bottom: 8px !important;
+    border-bottom: 2px solid #173f38 !important;
+  }
+
+  .curvas-print-brand h2 {
+    font-size: 15px !important;
+    font-weight: 800 !important;
+    color: #173f38 !important;
+    margin: 0 0 2px 0 !important;
+  }
+
+  .curvas-print-brand span {
+    font-size: 11px !important;
+    color: #475569 !important;
+  }
+
+  .curvas-print-meta {
+    text-align: right !important;
+    font-size: 10px !important;
+    color: #334155 !important;
+    line-height: 1.4 !important;
+  }
+
+  .curvas-page-break {
+    page-break-after: always;
+    break-after: page;
+    height: 0;
+  }
+}

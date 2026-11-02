@@ -73,6 +73,7 @@ type ReorderableGestaoPanel = GestaoTablePanel | 'panel4'
 interface GestaoPanelPreference {
   onlyWithData: boolean
   onlyWithVariation?: boolean
+  showPavimentosInsteadOfQty?: boolean
   serviceOrder: string[]
 }
 
@@ -86,6 +87,19 @@ interface GestaoServiceItem {
   position: number
   groupRank: number
   activities: DataRecord[]
+}
+
+interface GestaoMonthProjection {
+  count: number
+  pavimentos: string[]
+}
+
+interface GestaoPanel3Row {
+  service: string
+  groupRank: number
+  mPlus1: GestaoMonthProjection
+  mPlus2: GestaoMonthProjection
+  mPlus3: GestaoMonthProjection
 }
 
 interface GestaoFloorItem {
@@ -1054,6 +1068,7 @@ function App() {
   }, [theme])
   const [gestaoGroup, setGestaoGroup] = useState<string>('all')
   const [gestaoPanelTab, setGestaoPanelTab] = useState<GestaoPanelTab>('panel1')
+  const [gestaoPanel3ViewMode, setGestaoPanel3ViewMode] = useState<'mPlus1' | 'mPlus2' | 'mPlus3' | 'all'>('mPlus1')
   const [panel5Service, setPanel5Service] = useState('')
   const [a4LayoutMode, setA4LayoutMode] = useState<boolean>(true)
   const [groupOrders, setGroupOrders] = useState<Record<string, string[]>>(() => {
@@ -2095,7 +2110,7 @@ function App() {
         mPlus3: null,
         panel1Rows: [],
         panel2Rows: [],
-        panel3Rows: [],
+        panel3Rows: [] as GestaoPanel3Row[],
         matrixMap: new Map<string, DataRecord>(),
       }
     }
@@ -2212,16 +2227,29 @@ function App() {
       return { prev: prevTotal, real: realTotal }
     }
 
-    function countActive(activities: DataRecord[], range: { start: Date; end: Date }) {
+    const floorOrderIndex = new Map(currentFloorOrder.map((floor, index) => [floor, index]))
+
+    function getMonthFloorData(activities: DataRecord[], range: { start: Date; end: Date }): GestaoMonthProjection {
+      const activePavs = new Set<string>()
       let count = 0
       for (const act of activities) {
         const start = act.data_inicio ? new Date(act.data_inicio) : null
         const end = act.data_fim ? new Date(act.data_fim) : null
+        const prog = Number(act.progresso_realizado) || 0
         if (start && end && start <= range.end && end >= range.start) {
           count += 1
+          if (prog < 1.0 && act.pavimento_nome) {
+            activePavs.add(act.pavimento_nome)
+          }
         }
       }
-      return count
+      const pavimentos = Array.from(activePavs).sort(
+        (a, b) =>
+          (floorOrderIndex.get(a) ?? Number.MAX_SAFE_INTEGER) -
+            (floorOrderIndex.get(b) ?? Number.MAX_SAFE_INTEGER) ||
+          compareNatural(a, b),
+      )
+      return { count, pavimentos }
     }
 
     const panel1Rows = services.map((s) => {
@@ -2276,16 +2304,16 @@ function App() {
       }
     })
 
-    const panel3Rows = services.map((s) => {
-      const c1 = countActive(s.activities, mPlus1)
-      const c2 = countActive(s.activities, mPlus2)
-      const c3 = countActive(s.activities, mPlus3)
+    const panel3Rows: GestaoPanel3Row[] = services.map((s) => {
+      const p1 = getMonthFloorData(s.activities, mPlus1)
+      const p2 = getMonthFloorData(s.activities, mPlus2)
+      const p3 = getMonthFloorData(s.activities, mPlus3)
       return {
         service: s.name,
         groupRank: s.groupRank,
-        mPlus1: c1,
-        mPlus2: c2,
-        mPlus3: c3,
+        mPlus1: p1,
+        mPlus2: p2,
+        mPlus3: p3,
       }
     })
 
@@ -2313,6 +2341,7 @@ function App() {
     const normalizePreference = (pref?: Partial<GestaoPanelPreference>): GestaoPanelPreference => ({
       onlyWithData: pref?.onlyWithData ?? false,
       onlyWithVariation: pref?.onlyWithVariation ?? false,
+      showPavimentosInsteadOfQty: pref?.showPavimentosInsteadOfQty ?? false,
       serviceOrder: Array.isArray(pref?.serviceOrder) ? pref.serviceOrder : [],
     })
     return {
@@ -2386,10 +2415,19 @@ function App() {
       panel3: orderRows(
         gestaoData.panel3Rows,
         currentGestaoPanelPreferences.panel3,
-        (row) => row.mPlus1 > 0 || row.mPlus2 > 0 || row.mPlus3 > 0,
+        (row) => {
+          const showPavs = currentGestaoPanelPreferences.panel3.showPavimentosInsteadOfQty
+          const hasM1 = showPavs ? row.mPlus1.pavimentos.length > 0 : (row.mPlus1.count > 0 || row.mPlus1.pavimentos.length > 0)
+          const hasM2 = showPavs ? row.mPlus2.pavimentos.length > 0 : (row.mPlus2.count > 0 || row.mPlus2.pavimentos.length > 0)
+          const hasM3 = showPavs ? row.mPlus3.pavimentos.length > 0 : (row.mPlus3.count > 0 || row.mPlus3.pavimentos.length > 0)
+          if (gestaoPanel3ViewMode === 'mPlus1') return hasM1
+          if (gestaoPanel3ViewMode === 'mPlus2') return hasM2
+          if (gestaoPanel3ViewMode === 'mPlus3') return hasM3
+          return hasM1 || hasM2 || hasM3
+        },
       ),
     }
-  }, [currentGestaoPanelPreferences, gestaoData])
+  }, [currentGestaoPanelPreferences, gestaoData, gestaoPanel3ViewMode])
 
   const updateGestaoPanelPreference = useCallback(
     (
@@ -2401,6 +2439,7 @@ function App() {
         const fallbackPref = (): GestaoPanelPreference => ({
           onlyWithData: false,
           onlyWithVariation: false,
+          showPavimentosInsteadOfQty: false,
           serviceOrder: [],
         })
         const current = projectPreferences?.[panel] || fallbackPref()
@@ -3017,7 +3056,7 @@ function App() {
           : node.outerHTML)
         .join('')
     const baseHref = document.baseURI
-    const defaultPrintOrientation = gestaoPanelTab === 'matrix' ? 'landscape' : 'portrait'
+    const defaultPrintOrientation = (gestaoPanelTab === 'matrix' || gestaoPanelTab === 'panel3') ? 'landscape' : 'portrait'
     printWindow.document.open()
     printWindow.document.write(`<!doctype html>
       <html lang="pt-BR">
@@ -3079,9 +3118,9 @@ function App() {
             .gestao-print-source .gestao-table td:not(.service-col),
             .gestao-print-source .panel5-export-table th:not(:first-child),
             .gestao-print-source .panel5-export-table td:not(:first-child) {
-              width: var(--print-column-width, 110px);
-              min-width: var(--print-column-width, 110px);
-              max-width: var(--print-column-width, 110px);
+              width: var(--print-column-width, ${gestaoPanelTab === 'panel3' ? '200px' : '110px'});
+              min-width: var(--print-column-width, ${gestaoPanelTab === 'panel3' ? '200px' : '110px'});
+              max-width: var(--print-column-width, ${gestaoPanelTab === 'panel3' ? '200px' : '110px'});
               box-sizing: border-box;
             }
             .gestao-print-source .gestao-table th.service-col,
@@ -3146,6 +3185,14 @@ function App() {
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
               }
+              .gestao-print-source .gestao-pav-tag {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              .gestao-print-source .gestao-panel3-month-col .gestao-pav-tag {
+                font-size: 9px;
+                padding: 1px 5px;
+              }
               .gestao-print-source .gestao-table,
               .gestao-print-source .panel5-export-table { width: max-content !important; min-width: 0 !important; }
               .matrix-print-source .gestao-matrix-container { overflow: visible !important; max-height: none !important; }
@@ -3158,7 +3205,7 @@ function App() {
             <strong>Gestão à Vista · Visualização de impressão</strong>
             <div class="print-preview-controls">
               <label title="Ajustar zoom da impressão"><span class="print-preview-control-label">Zoom</span><input id="zoom-input" aria-label="Zoom da impressão" type="range" min="40" max="140" step="5" value="100" /></label>
-              <label title="Ajustar largura das colunas"><span class="print-preview-control-label">Colunas</span><input id="column-input" aria-label="Largura das colunas" type="range" min="60" max="220" step="5" value="110" /></label>
+              <label title="Ajustar largura das colunas"><span class="print-preview-control-label">Colunas</span><input id="column-input" aria-label="Largura das colunas" type="range" min="60" max="360" step="5" value="${gestaoPanelTab === 'panel3' ? '200' : '110'}" /></label>
               <label title="Ajustar largura da primeira coluna"><span class="print-preview-control-label">Primeira coluna</span><input id="service-input" aria-label="Largura da primeira coluna" type="range" min="160" max="520" step="10" value="260" /></label>
             </div>
             <div class="print-orientation-toggle" role="group" aria-label="Orientação da página">
@@ -3231,7 +3278,7 @@ function App() {
             if (width !== null) return width
             const cell = table.tHead?.rows[0]?.cells[columnIndex]
             const cellWidth = cell?.getBoundingClientRect().width
-            return Number.isFinite(cellWidth) && cellWidth && cellWidth > 0 ? cellWidth : columnIndex === 0 ? 260 : 110
+            return Number.isFinite(cellWidth) && cellWidth && cellWidth > 0 ? cellWidth : columnIndex === 0 ? 260 : (gestaoPanelTab === 'panel3' ? 200 : 110)
           })
 
           return {
@@ -3245,7 +3292,7 @@ function App() {
       : []
 
     const getPrintColumnWidth = (columnIndex: number, widths: Array<number | null>) => {
-      const globalWidth = Number(columnInput?.value || 110)
+      const globalWidth = Number(columnInput?.value || (gestaoPanelTab === 'panel3' ? 200 : 110))
       const firstColumnWidth = Number(serviceInput?.value || 260)
       const settings = printTableSettings.find((item) => item.widths === widths)
       const baseWidth = settings?.baseWidths[columnIndex]
@@ -4489,97 +4536,346 @@ function App() {
               {/* ---------------------------------------------------- */}
               {/* SUB-ABA: PAINEL 3 (PRÓXIMOS MESES)                   */}
               {/* ---------------------------------------------------- */}
-              {gestaoPanelTab === 'panel3' && (
-                <div className={a4LayoutMode ? 'a4-landscape-container' : ''}>
-                  <div className={`${a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-card'} gestao-print-source`}>
-                    <div className="a4-sheet-header">
-                      <div className="a4-sheet-brand">
-                        <h3 className="a4-sheet-title">PAINEL 3: PROJEÇÃO PRÓXIMOS MESES</h3>
-                        <span className="a4-sheet-subtitle">
-                          Projeção quantitativa de pavimentos para {gestaoData.mPlus1?.label}, {gestaoData.mPlus2?.label} e {gestaoData.mPlus3?.label}
-                        </span>
-                        <label className="gestao-panel-data-filter">
-                          <input
-                            type="checkbox"
-                            checked={currentGestaoPanelPreferences.panel3.onlyWithData}
-                            onChange={(event) =>
-                              updateGestaoPanelPreference('panel3', (preference) => ({
-                                ...preference,
-                                onlyWithData: event.target.checked,
-                              }))
-                            }
-                          />
-                          <Flag size={12} />
-                          Somente serviços com quantidade
-                        </label>
-                      </div>
-                      <div className="a4-sheet-meta">
-                        <div className="a4-sheet-meta-item">
-                          <strong>{projects.find((p) => p.id_prevision === selectedProject)?.nome_projeto || 'Todas as Obras'}</strong>
-                          <small>{gestaoGroup !== 'all' ? gestaoGroup : 'Todas as Torres'}</small>
-                        </div>
-                        <div className="a4-sheet-meta-item">
-                          <strong>Mês Ref: {gestaoData.m0?.label}</strong>
-                          <small>{new Date().toLocaleDateString('pt-BR')}</small>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="a4-sheet-body">
-                      <table className="gestao-table">
-                        <thead>
-                          <tr>
-                            <th className="service-col">Serviço</th>
-                            <th>
-                              <div>{gestaoData.mPlus1?.label} (M+1)</div>
-                              <div className="gestao-subhead">Qtde Prevista</div>
-                            </th>
-                            <th>
-                              <div>{gestaoData.mPlus2?.label} (M+2)</div>
-                              <div className="gestao-subhead">Qtde Prevista</div>
-                            </th>
-                            <th>
-                              <div>{gestaoData.mPlus3?.label} (M+3)</div>
-                              <div className="gestao-subhead">Qtde Prevista</div>
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {gestaoPanelRows.panel3.length === 0 ? (
-                            <tr>
-                              <td colSpan={4} style={{ textAlign: 'center', padding: '30px' }}>
-                                Nenhum serviço projetado.
-                              </td>
-                            </tr>
-                          ) : (
-                            gestaoPanelRows.panel3.map((row) => (
-                              <tr
-                                key={row.service}
-                                draggable
-                                className={draggedGestaoRow?.panel === 'panel3' && draggedGestaoRow.service === row.service ? 'gestao-row-dragging' : ''}
-                                onDragStart={() => setDraggedGestaoRow({ panel: 'panel3', service: row.service })}
-                                onDragEnd={() => setDraggedGestaoRow(null)}
-                                onDragOver={(event) => event.preventDefault()}
-                                onDrop={() => handleGestaoRowDrop('panel3', row.service, gestaoData.panel3Rows.map((item) => item.service))}
+              {gestaoPanelTab === 'panel3' && (() => {
+                const activeTargetMonth =
+                  gestaoPanel3ViewMode === 'mPlus2'
+                    ? gestaoData.mPlus2
+                    : gestaoPanel3ViewMode === 'mPlus3'
+                    ? gestaoData.mPlus3
+                    : gestaoData.mPlus1
+                return (
+                  <div className={a4LayoutMode ? 'a4-landscape-container' : ''}>
+                    <div className={`${a4LayoutMode ? 'a4-landscape-sheet' : 'gestao-card'} gestao-print-source`}>
+                      <div className="a4-sheet-header">
+                        <div className="a4-sheet-brand">
+                          <h3 className="a4-sheet-title">
+                            PAINEL 3: {gestaoPanel3ViewMode === 'all' ? 'PROJEÇÃO PRÓXIMOS MESES' : 'ATIVIDADES PREVISTAS PARA OS PRÓXIMOS MESES'}
+                          </h3>
+                          <span className="a4-sheet-subtitle">
+                            {gestaoPanel3ViewMode === 'all'
+                              ? `Projeção de quantidade e pavimentos para ${gestaoData.mPlus1?.label}, ${gestaoData.mPlus2?.label} e ${gestaoData.mPlus3?.label}`
+                              : `Planejamento e pavimentos a realizar no mês ${activeTargetMonth?.label} (${activeTargetMonth?.startFormatted} a ${activeTargetMonth?.endFormatted})`}
+                          </span>
+                          <div className="gestao-panel-filters">
+                            <div className="gestao-pill-group">
+                              <button
+                                type="button"
+                                className={`gestao-pill-btn ${gestaoPanel3ViewMode === 'mPlus1' ? 'active' : ''}`}
+                                onClick={() => setGestaoPanel3ViewMode('mPlus1')}
                               >
-                                <td className="service-col"><span className="gestao-service-drag"><GripVertical size={14} />{row.service}</span></td>
-                                <td>{row.mPlus1.toFixed(2)}</td>
-                                <td>{row.mPlus2.toFixed(2)}</td>
-                                <td>{row.mPlus3.toFixed(2)}</td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                                {gestaoData.mPlus1?.label || 'M+1'} (M+1)
+                              </button>
+                              <button
+                                type="button"
+                                className={`gestao-pill-btn ${gestaoPanel3ViewMode === 'mPlus2' ? 'active' : ''}`}
+                                onClick={() => setGestaoPanel3ViewMode('mPlus2')}
+                              >
+                                {gestaoData.mPlus2?.label || 'M+2'} (M+2)
+                              </button>
+                              <button
+                                type="button"
+                                className={`gestao-pill-btn ${gestaoPanel3ViewMode === 'mPlus3' ? 'active' : ''}`}
+                                onClick={() => setGestaoPanel3ViewMode('mPlus3')}
+                              >
+                                {gestaoData.mPlus3?.label || 'M+3'} (M+3)
+                              </button>
+                              <button
+                                type="button"
+                                className={`gestao-pill-btn ${gestaoPanel3ViewMode === 'all' ? 'active' : ''}`}
+                                onClick={() => setGestaoPanel3ViewMode('all')}
+                              >
+                                Todos (3 Meses)
+                              </button>
+                            </div>
+                            <label className="gestao-panel-data-filter">
+                              <input
+                                type="checkbox"
+                                checked={currentGestaoPanelPreferences.panel3.onlyWithData}
+                                onChange={(event) =>
+                                  updateGestaoPanelPreference('panel3', (preference) => ({
+                                    ...preference,
+                                    onlyWithData: event.target.checked,
+                                  }))
+                                }
+                              />
+                              <Flag size={12} />
+                              Somente serviços com quantidade
+                            </label>
+                            <label className="gestao-panel-data-filter" title="Exibe os pavimentos previstos em vez da quantidade numérica">
+                              <input
+                                type="checkbox"
+                                checked={!!currentGestaoPanelPreferences.panel3.showPavimentosInsteadOfQty}
+                                onChange={(event) =>
+                                  updateGestaoPanelPreference('panel3', (preference) => ({
+                                    ...preference,
+                                    showPavimentosInsteadOfQty: event.target.checked,
+                                  }))
+                                }
+                              />
+                              <Layers3 size={12} />
+                              Pavimentos no lugar de quantidade
+                            </label>
+                          </div>
+                        </div>
+                        <div className="a4-sheet-meta">
+                          <div className="a4-sheet-meta-item">
+                            <strong>{projects.find((p) => p.id_prevision === selectedProject)?.nome_projeto || 'Todas as Obras'}</strong>
+                            <small>{gestaoGroup !== 'all' ? gestaoGroup : 'Todas as Torres'}</small>
+                          </div>
+                          <div className="a4-sheet-meta-item">
+                            <strong>Mês Ref: {gestaoData.m0?.label}</strong>
+                            <small>{new Date().toLocaleDateString('pt-BR')}</small>
+                          </div>
+                        </div>
+                      </div>
 
-                    <div className="a4-sheet-footer">
-                      <span>Projeção baseada na linha de balanceamento e cronograma aprovado</span>
-                      <span>Gestão à Vista · Dados Prevision</span>
+                      <div className="a4-sheet-body">
+                        {gestaoPanel3ViewMode !== 'all' ? (
+                          <table className="gestao-table gestao-panel2-table">
+                            <thead>
+                              <tr>
+                                <th className="service-col" style={{ width: '280px' }}>Atividade / Serviço</th>
+                                {!currentGestaoPanelPreferences.panel3.showPavimentosInsteadOfQty && (
+                                  <th style={{ width: '110px' }}>Qtde Prevista</th>
+                                )}
+                                <th>
+                                  PAVIMENTOS PREVISTOS NO MÊS{activeTargetMonth?.label ? ` (${activeTargetMonth.label})` : ''}
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {gestaoPanelRows.panel3.length === 0 ? (
+                                <tr>
+                                  <td colSpan={currentGestaoPanelPreferences.panel3.showPavimentosInsteadOfQty ? 2 : 3} style={{ textAlign: 'center', padding: '30px' }}>
+                                    Nenhum serviço previsto para este mês.
+                                  </td>
+                                </tr>
+                              ) : (
+                                gestaoPanelRows.panel3.map((row) => {
+                                  const monthData =
+                                    gestaoPanel3ViewMode === 'mPlus2'
+                                      ? row.mPlus2
+                                      : gestaoPanel3ViewMode === 'mPlus3'
+                                      ? row.mPlus3
+                                      : row.mPlus1
+                                  return (
+                                    <tr
+                                      key={row.service}
+                                      draggable
+                                      className={
+                                        draggedGestaoRow?.panel === 'panel3' &&
+                                        draggedGestaoRow.service === row.service
+                                          ? 'gestao-row-dragging'
+                                          : ''
+                                      }
+                                      onDragStart={() =>
+                                        setDraggedGestaoRow({ panel: 'panel3', service: row.service })
+                                      }
+                                      onDragEnd={() => setDraggedGestaoRow(null)}
+                                      onDragOver={(event) => event.preventDefault()}
+                                      onDrop={() =>
+                                        handleGestaoRowDrop(
+                                          'panel3',
+                                          row.service,
+                                          gestaoData.panel3Rows.map((item) => item.service),
+                                        )
+                                      }
+                                    >
+                                      <td className="service-col">
+                                        <span className="gestao-service-drag">
+                                          <GripVertical size={14} />
+                                          {row.service}
+                                        </span>
+                                      </td>
+                                      {!currentGestaoPanelPreferences.panel3.showPavimentosInsteadOfQty && (
+                                        <td>
+                                          <strong>{Number.isInteger(monthData.count) ? monthData.count : monthData.count.toFixed(2)}</strong>
+                                        </td>
+                                      )}
+                                      <td className="gestao-panel2-pavements">
+                                        {monthData.pavimentos.length === 0 ? (
+                                          <span style={{ color: '#94a3b8' }}>-</span>
+                                        ) : (
+                                          <div className="gestao-pav-list">
+                                            {monthData.pavimentos.map((pav) => (
+                                              <span key={pav} className="gestao-pav-tag">
+                                                {pav}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  )
+                                })
+                              )}
+                            </tbody>
+                          </table>
+                        ) : (
+                          <table className="gestao-table">
+                            <thead>
+                              <tr>
+                                <th className="service-col" style={{ minWidth: '220px' }}>Atividade / Serviço</th>
+                                <th style={{ minWidth: '180px' }}>
+                                  <div>{gestaoData.mPlus1?.label} (M+1)</div>
+                                  <div className="gestao-subhead">
+                                    {currentGestaoPanelPreferences.panel3.showPavimentosInsteadOfQty
+                                      ? 'Pavimentos Previstos'
+                                      : 'Qtde Prevista'}
+                                  </div>
+                                </th>
+                                <th style={{ minWidth: '180px' }}>
+                                  <div>{gestaoData.mPlus2?.label} (M+2)</div>
+                                  <div className="gestao-subhead">
+                                    {currentGestaoPanelPreferences.panel3.showPavimentosInsteadOfQty
+                                      ? 'Pavimentos Previstos'
+                                      : 'Qtde Prevista'}
+                                  </div>
+                                </th>
+                                <th style={{ minWidth: '180px' }}>
+                                  <div>{gestaoData.mPlus3?.label} (M+3)</div>
+                                  <div className="gestao-subhead">
+                                    {currentGestaoPanelPreferences.panel3.showPavimentosInsteadOfQty
+                                      ? 'Pavimentos Previstos'
+                                      : 'Qtde Prevista'}
+                                  </div>
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {gestaoPanelRows.panel3.length === 0 ? (
+                                <tr>
+                                  <td colSpan={4} style={{ textAlign: 'center', padding: '30px' }}>
+                                    Nenhum serviço projetado.
+                                  </td>
+                                </tr>
+                              ) : (
+                                gestaoPanelRows.panel3.map((row) => (
+                                  <tr
+                                    key={row.service}
+                                    draggable
+                                    className={
+                                      draggedGestaoRow?.panel === 'panel3' &&
+                                      draggedGestaoRow.service === row.service
+                                        ? 'gestao-row-dragging'
+                                        : ''
+                                    }
+                                    onDragStart={() =>
+                                      setDraggedGestaoRow({ panel: 'panel3', service: row.service })
+                                    }
+                                    onDragEnd={() => setDraggedGestaoRow(null)}
+                                    onDragOver={(event) => event.preventDefault()}
+                                    onDrop={() =>
+                                      handleGestaoRowDrop(
+                                        'panel3',
+                                        row.service,
+                                        gestaoData.panel3Rows.map((item) => item.service),
+                                      )
+                                    }
+                                  >
+                                    <td className="service-col">
+                                      <span className="gestao-service-drag">
+                                        <GripVertical size={14} />
+                                        {row.service}
+                                      </span>
+                                    </td>
+                                    <td className="gestao-panel3-month-col">
+                                      {currentGestaoPanelPreferences.panel3.showPavimentosInsteadOfQty ? (
+                                        row.mPlus1.pavimentos.length > 0 ? (
+                                          <div className="gestao-pav-list">
+                                            {row.mPlus1.pavimentos.map((pav) => (
+                                              <span key={pav} className="gestao-pav-tag">
+                                                {pav}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        ) : row.mPlus1.count > 0 ? (
+                                          <span style={{ color: '#64748b', fontSize: '11px', fontStyle: 'italic' }}>
+                                            {Number.isInteger(row.mPlus1.count) ? row.mPlus1.count : row.mPlus1.count.toFixed(1)} serv.
+                                          </span>
+                                        ) : (
+                                          <span style={{ color: '#94a3b8' }}>-</span>
+                                        )
+                                      ) : row.mPlus1.count > 0 ? (
+                                        <div className="gestao-panel3-month-cell">
+                                          <span className="gestao-panel3-qty">
+                                            {Number.isInteger(row.mPlus1.count) ? row.mPlus1.count : row.mPlus1.count.toFixed(2)}
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <span style={{ color: '#94a3b8' }}>-</span>
+                                      )}
+                                    </td>
+                                    <td className="gestao-panel3-month-col">
+                                      {currentGestaoPanelPreferences.panel3.showPavimentosInsteadOfQty ? (
+                                        row.mPlus2.pavimentos.length > 0 ? (
+                                          <div className="gestao-pav-list">
+                                            {row.mPlus2.pavimentos.map((pav) => (
+                                              <span key={pav} className="gestao-pav-tag">
+                                                {pav}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        ) : row.mPlus2.count > 0 ? (
+                                          <span style={{ color: '#64748b', fontSize: '11px', fontStyle: 'italic' }}>
+                                            {Number.isInteger(row.mPlus2.count) ? row.mPlus2.count : row.mPlus2.count.toFixed(1)} serv.
+                                          </span>
+                                        ) : (
+                                          <span style={{ color: '#94a3b8' }}>-</span>
+                                        )
+                                      ) : row.mPlus2.count > 0 ? (
+                                        <div className="gestao-panel3-month-cell">
+                                          <span className="gestao-panel3-qty">
+                                            {Number.isInteger(row.mPlus2.count) ? row.mPlus2.count : row.mPlus2.count.toFixed(2)}
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <span style={{ color: '#94a3b8' }}>-</span>
+                                      )}
+                                    </td>
+                                    <td className="gestao-panel3-month-col">
+                                      {currentGestaoPanelPreferences.panel3.showPavimentosInsteadOfQty ? (
+                                        row.mPlus3.pavimentos.length > 0 ? (
+                                          <div className="gestao-pav-list">
+                                            {row.mPlus3.pavimentos.map((pav) => (
+                                              <span key={pav} className="gestao-pav-tag">
+                                                {pav}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        ) : row.mPlus3.count > 0 ? (
+                                          <span style={{ color: '#64748b', fontSize: '11px', fontStyle: 'italic' }}>
+                                            {Number.isInteger(row.mPlus3.count) ? row.mPlus3.count : row.mPlus3.count.toFixed(1)} serv.
+                                          </span>
+                                        ) : (
+                                          <span style={{ color: '#94a3b8' }}>-</span>
+                                        )
+                                      ) : row.mPlus3.count > 0 ? (
+                                        <div className="gestao-panel3-month-cell">
+                                          <span className="gestao-panel3-qty">
+                                            {Number.isInteger(row.mPlus3.count) ? row.mPlus3.count : row.mPlus3.count.toFixed(2)}
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <span style={{ color: '#94a3b8' }}>-</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+
+                      <div className="a4-sheet-footer">
+                        <span>Projeção baseada na linha de balanceamento e cronograma aprovado</span>
+                        <span>Gestão à Vista · Dados Prevision</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )
+              })()}
 
               {/* ---------------------------------------------------- */}
               {/* SUB-ABA: PAINEL 4 (MATRIZ / ESCADINHA)               */}
@@ -5074,15 +5370,27 @@ function App() {
                             <th className="service-col">Serviço</th>
                             <th>
                               <div>{gestaoData.mPlus1?.label} (M+1)</div>
-                              <div className="gestao-subhead">Qtde Prev.</div>
+                              <div className="gestao-subhead">
+                                {currentGestaoPanelPreferences.panel3.showPavimentosInsteadOfQty
+                                  ? 'Pavimentos'
+                                  : 'Qtde Prev.'}
+                              </div>
                             </th>
                             <th>
                               <div>{gestaoData.mPlus2?.label} (M+2)</div>
-                              <div className="gestao-subhead">Qtde Prev.</div>
+                              <div className="gestao-subhead">
+                                {currentGestaoPanelPreferences.panel3.showPavimentosInsteadOfQty
+                                  ? 'Pavimentos'
+                                  : 'Qtde Prev.'}
+                              </div>
                             </th>
                             <th>
                               <div>{gestaoData.mPlus3?.label} (M+3)</div>
-                              <div className="gestao-subhead">Qtde Prev.</div>
+                              <div className="gestao-subhead">
+                                {currentGestaoPanelPreferences.panel3.showPavimentosInsteadOfQty
+                                  ? 'Pavimentos'
+                                  : 'Qtde Prev.'}
+                              </div>
                             </th>
                           </tr>
                         </thead>
@@ -5097,9 +5405,87 @@ function App() {
                             gestaoPanelRows.panel3.map((row) => (
                               <tr key={row.service}>
                                 <td className="service-col">{row.service}</td>
-                                <td>{row.mPlus1.toFixed(2)}</td>
-                                <td>{row.mPlus2.toFixed(2)}</td>
-                                <td>{row.mPlus3.toFixed(2)}</td>
+                                <td className="gestao-panel3-month-col">
+                                  {currentGestaoPanelPreferences.panel3.showPavimentosInsteadOfQty ? (
+                                    row.mPlus1.pavimentos.length > 0 ? (
+                                      <div className="gestao-pav-list">
+                                        {row.mPlus1.pavimentos.map((pav) => (
+                                          <span key={pav} className="gestao-pav-tag">
+                                            {pav}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    ) : row.mPlus1.count > 0 ? (
+                                      <span style={{ color: '#64748b', fontSize: '11px', fontStyle: 'italic' }}>
+                                        {Number.isInteger(row.mPlus1.count) ? row.mPlus1.count : row.mPlus1.count.toFixed(1)} serv.
+                                      </span>
+                                    ) : (
+                                      <span style={{ color: '#94a3b8' }}>-</span>
+                                    )
+                                  ) : row.mPlus1.count > 0 ? (
+                                    <div className="gestao-panel3-month-cell">
+                                      <span className="gestao-panel3-qty">
+                                        {Number.isInteger(row.mPlus1.count) ? row.mPlus1.count : row.mPlus1.count.toFixed(2)}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span style={{ color: '#94a3b8' }}>-</span>
+                                  )}
+                                </td>
+                                <td className="gestao-panel3-month-col">
+                                  {currentGestaoPanelPreferences.panel3.showPavimentosInsteadOfQty ? (
+                                    row.mPlus2.pavimentos.length > 0 ? (
+                                      <div className="gestao-pav-list">
+                                        {row.mPlus2.pavimentos.map((pav) => (
+                                          <span key={pav} className="gestao-pav-tag">
+                                            {pav}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    ) : row.mPlus2.count > 0 ? (
+                                      <span style={{ color: '#64748b', fontSize: '11px', fontStyle: 'italic' }}>
+                                        {Number.isInteger(row.mPlus2.count) ? row.mPlus2.count : row.mPlus2.count.toFixed(1)} serv.
+                                      </span>
+                                    ) : (
+                                      <span style={{ color: '#94a3b8' }}>-</span>
+                                    )
+                                  ) : row.mPlus2.count > 0 ? (
+                                    <div className="gestao-panel3-month-cell">
+                                      <span className="gestao-panel3-qty">
+                                        {Number.isInteger(row.mPlus2.count) ? row.mPlus2.count : row.mPlus2.count.toFixed(2)}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span style={{ color: '#94a3b8' }}>-</span>
+                                  )}
+                                </td>
+                                <td className="gestao-panel3-month-col">
+                                  {currentGestaoPanelPreferences.panel3.showPavimentosInsteadOfQty ? (
+                                    row.mPlus3.pavimentos.length > 0 ? (
+                                      <div className="gestao-pav-list">
+                                        {row.mPlus3.pavimentos.map((pav) => (
+                                          <span key={pav} className="gestao-pav-tag">
+                                            {pav}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    ) : row.mPlus3.count > 0 ? (
+                                      <span style={{ color: '#64748b', fontSize: '11px', fontStyle: 'italic' }}>
+                                        {Number.isInteger(row.mPlus3.count) ? row.mPlus3.count : row.mPlus3.count.toFixed(1)} serv.
+                                      </span>
+                                    ) : (
+                                      <span style={{ color: '#94a3b8' }}>-</span>
+                                    )
+                                  ) : row.mPlus3.count > 0 ? (
+                                    <div className="gestao-panel3-month-cell">
+                                      <span className="gestao-panel3-qty">
+                                        {Number.isInteger(row.mPlus3.count) ? row.mPlus3.count : row.mPlus3.count.toFixed(2)}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span style={{ color: '#94a3b8' }}>-</span>
+                                  )}
+                                </td>
                               </tr>
                             ))
                           )}

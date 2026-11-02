@@ -3,18 +3,25 @@ import type { ChangeEvent, CSSProperties, PointerEvent as ReactPointerEvent } fr
 import {
   ArrowDown,
   ArrowUp,
+  BarChart3,
   Check,
+  ChevronDown,
   CircleHelp,
   Eye,
   EyeOff,
   Palette,
   Plus,
+  Printer,
   RotateCcw,
   Settings2,
   Table2,
+  TrendingUp,
   Upload,
   X,
 } from 'lucide-react'
+import { CumulativeDeviationChart } from './components/curvas/CumulativeDeviationChart'
+import { MonthlyAdvanceCharts } from './components/curvas/MonthlyAdvanceCharts'
+import { formatMonth, formatPercent, formatSignedPercent } from './lib/curvas-formatters'
 import './CurvasView.css'
 
 type CurvePerspective = 'physical' | 'monetary'
@@ -83,7 +90,6 @@ type BaselineCurve = {
 
 type Range = { start: number; end: number }
 
-const MONTH_NAMES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const CURVE_STYLES: Array<{ value: CurveStyle; label: string; dash: string }> = [
   { value: 'solid', label: 'Sólido', dash: 'none' },
   { value: 'dashed', label: 'Tracejado', dash: '8 5' },
@@ -175,27 +181,11 @@ function currentMonthKey() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
-function formatMonth(value: string) {
-  const match = value.match(/^(\d{4})-(\d{2})/)
-  return match ? `${MONTH_NAMES[Number(match[2]) - 1]}/${match[1].slice(2)}` : value
-}
-
 function normalizeValue(value: unknown) {
   if (value === null || value === undefined || value === '') return null
   const number = Number(value)
   if (!Number.isFinite(number)) return null
   return Math.abs(number) > 1.5 ? number / 100 : number
-}
-
-function formatPercent(value: number | null) {
-  if (value === null || !Number.isFinite(value)) return '—'
-  return `${(value * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
-}
-
-function formatSignedPercent(value: number | null) {
-  if (value === null || !Number.isFinite(value)) return '—'
-  const sign = value > 0 ? '+' : value < 0 ? '−' : ''
-  return `${sign}${(Math.abs(value) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
 }
 
 function formatInputValue(value: number | null) {
@@ -567,7 +557,13 @@ function baselineDisplayName(baseline: BaselineCurve | null) {
 }
 
 function baselineOptionLabel(baseline: BaselineCurve) {
-  return `${baselineDisplayName(baseline)}${baseline.ativa ? ' · ativa' : ''}`
+  const pointsCount = (baseline.pontos || []).length
+  const status = baseline.ativa
+    ? 'ativa'
+    : pointsCount > 0
+      ? `${pointsCount} meses`
+      : 'espelho base ativa'
+  return `${baselineDisplayName(baseline)} (${status})`
 }
 
 function persistableCurves(curves: CurveDefinition[]) {
@@ -758,12 +754,7 @@ function CurveChart({
     const stacks: Array<{ anchorY: number; nextIndex: number }> = []
     visibleSeries.forEach((curve) => {
       const point = curve.points[range.start + index]
-      if (
-        point?.value === null ||
-        point?.value === undefined ||
-        isRepeatedActualValue(curve, range.start, index) ||
-        (index % labelStride !== 0 && index !== windowMonths.length - 1)
-      ) return
+      if (point?.value === null || point?.value === undefined) return
       const pointY = y(point.value)
       let stack = stacks.find((candidate) => Math.abs(candidate.anchorY - pointY) < 18)
       if (!stack) {
@@ -825,21 +816,25 @@ function CurveChart({
               {showMarkers && points.map((point, index) => point.value === null ? null : (
                 <circle key={`${curve.id}-point-${index}`} className="curvas-marker" cx={x(index)} cy={y(point.value)} r={focusedId === curve.id ? 4 : 3} fill={curve.color} />
               ))}
-              {showValues && points.map((point, index) => point.value === null || isRepeatedActualValue(curve, range.start, index) || (index % labelStride !== 0 && index !== points.length - 1) ? null : (() => {
+              {showValues && points.map((point, index) => {
+                if (point.value === null || point.value === undefined) return null
                 const label = formatPercent(point.value)
-                const labelWidth = Math.max(30, label.length * 5.4 + 8)
+                const labelWidth = Math.max(26, label.length * 5.2 + 8)
                 const stackIndex = labelStackIndexes.get(`${curve.id}:${index}`) || 0
                 const pointY = y(point.value)
-                const stackGap = 17
-                const labelAboveY = pointY - 20 - stackIndex * stackGap
-                const labelY = labelAboveY >= margin.top ? labelAboveY : pointY + 7 + stackIndex * stackGap
+                const stackGap = 16
+                const isActual = curve.kind === 'actual'
+                const labelAboveY = isActual ? pointY + 7 + stackIndex * stackGap : pointY - 18 - stackIndex * stackGap
+                const labelY = (labelAboveY >= margin.top && labelAboveY <= H - margin.bottom - 15)
+                  ? labelAboveY
+                  : (isActual ? pointY - 18 : pointY + 7)
                 return (
                   <g key={`${curve.id}-value-${index}`} className="curvas-point-label">
-                    <rect x={x(index) - labelWidth / 2} y={labelY} width={labelWidth} height={15} rx={2} fill={curve.color} />
-                    <text x={x(index)} y={labelY + 11} textAnchor="middle" fill="#ffffff">{label}</text>
+                    <rect x={x(index) - labelWidth / 2} y={labelY} width={labelWidth} height={14} rx={2} fill={curve.color} />
+                    <text x={x(index)} y={labelY + 10} textAnchor="middle" fill="#ffffff" fontSize={8.5} fontWeight={700}>{label}</text>
                   </g>
                 )
-              })())}
+              })}
               <path
                 className="curvas-hit-line"
                 d={buildPath(points, (index) => x(index), y)}
@@ -1124,9 +1119,33 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
   const [importing, setImporting] = useState(false)
   const [focusedId, setFocusedId] = useState<string | null>(null)
   const [range, setRange] = useState<Range>({ start: 0, end: 0 })
+  const [activePage, setActivePage] = useState<'curva_s' | 'mensal'>('curva_s')
+  const [reportPerspective, setReportPerspective] = useState<CurvePerspective>('physical')
+  const [isPrintingAll, setIsPrintingAll] = useState(false)
+  const [printMenuOpen, setPrintMenuOpen] = useState(false)
   const saveTimerRef = useRef<number | null>(null)
   const globalSaveTimerRef = useRef<number | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const handleAfterPrint = () => setIsPrintingAll(false)
+    window.addEventListener('afterprint', handleAfterPrint)
+    return () => window.removeEventListener('afterprint', handleAfterPrint)
+  }, [])
+
+  function handlePrint(mode: 'current' | 'all' = 'current') {
+    setPrintMenuOpen(false)
+    if (mode === 'all') {
+      setIsPrintingAll(true)
+      setTimeout(() => {
+        window.print()
+        setTimeout(() => setIsPrintingAll(false), 800)
+      }, 120)
+    } else {
+      setIsPrintingAll(false)
+      setTimeout(() => window.print(), 50)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -1309,6 +1328,16 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
     })
   }, [currentMonth, filteredDefinitions, months, recordByPerspective, selectedBaseline, selectedBaselinePoints])
 
+  const currentPlannedSeries = useMemo(() => {
+    return series.find((curve) => curve.kind === 'planned' && curve.perspective === reportPerspective) ||
+      series.find((curve) => curve.kind === 'planned')
+  }, [series, reportPerspective])
+
+  const currentActualSeries = useMemo(() => {
+    return series.find((curve) => curve.kind === 'actual' && curve.perspective === reportPerspective) ||
+      series.find((curve) => curve.kind === 'actual')
+  }, [series, reportPerspective])
+
   useEffect(() => {
     setRange({ start: 0, end: Math.max(0, months.length - 1) })
   }, [projectId, months.length])
@@ -1449,6 +1478,45 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
           <p>{projectId ? `${projectName || 'Projeto selecionado'} · período completo disponível no Prevision` : globalCurves.length ? 'Curvas importadas independentes dos dados do Prevision' : 'Selecione um projeto ou importe curvas para começar.'}</p>
         </div>
         <div className="curvas-heading-actions">
+          <div className="curvas-page-tabs">
+            <button
+              type="button"
+              className={`curvas-page-tab-btn ${activePage === 'curva_s' ? 'active' : ''}`}
+              onClick={() => setActivePage('curva_s')}
+              title="Visualizar Curva S e Gráfico de Desvio Acumulado"
+            >
+              <TrendingUp size={14} />
+              <span>Pág 1: Curva S & Desvio</span>
+            </button>
+            <button
+              type="button"
+              className={`curvas-page-tab-btn ${activePage === 'mensal' ? 'active' : ''}`}
+              onClick={() => setActivePage('mensal')}
+              title="Visualizar Barras de Previsto vs Realizado e Gráfico de Variação Mensal"
+            >
+              <BarChart3 size={14} />
+              <span>Pág 2: Mensal & Variações</span>
+            </button>
+          </div>
+
+          <div className="curvas-perspective-group">
+            <span>Perspectiva:</span>
+            <button
+              type="button"
+              className={`curvas-perspective-btn ${reportPerspective === 'physical' ? 'active' : ''}`}
+              onClick={() => setReportPerspective('physical')}
+            >
+              Físico
+            </button>
+            <button
+              type="button"
+              className={`curvas-perspective-btn ${reportPerspective === 'monetary' ? 'active' : ''}`}
+              onClick={() => setReportPerspective('monetary')}
+            >
+              Financeiro
+            </button>
+          </div>
+
           <label className="curvas-baseline-selector" title={selectedBaseline?.descricao || 'Selecione a linha de base que será exibida'}>
             <span>Linha de base</span>
             <select
@@ -1463,19 +1531,111 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
               ))}
             </select>
           </label>
+
           <button type="button" className={showMarkers ? 'curvas-toggle active' : 'curvas-toggle'} onClick={() => setShowMarkers((value) => !value)}><span className="curvas-toggle-dot" /> Marcadores</button>
-           <button type="button" className={showValues ? 'curvas-toggle active' : 'curvas-toggle'} onClick={() => setShowValues((value) => !value)}>Valores</button>
-           <button type="button" className={tableOpen ? 'curvas-toggle active' : 'curvas-toggle'} onClick={() => setTableOpen((value) => !value)}><Table2 size={14} /> {tableOpen ? 'Ocultar tabela' : 'Mostrar tabela'}</button>
-           <input ref={importInputRef} className="curvas-import-input" type="file" accept=".xlsx,.xls,.csv,text/csv" onChange={handleImportFile} />
-           <button type="button" className="curvas-secondary-button" disabled={importing} onClick={() => importInputRef.current?.click()}><Upload size={14} /> {importing ? 'Importando...' : 'Importar curvas'}</button>
-           {importedEnterprises.length > 0 && <label className="curvas-enterprise-selector">
-             <span>Empreendimento importado</span>
-             <select value={importedEnterpriseFilter} onChange={(event) => setImportedEnterpriseFilter(event.target.value)} aria-label="Filtrar empreendimentos importados">
-               <option value="all">Todos os importados</option>
-               {importedEnterprises.map((enterprise) => <option key={enterprise} value={enterprise}>{enterprise}</option>)}
-             </select>
-           </label>}
-           <button type="button" className="curvas-secondary-button" onClick={() => setSettingsOpen(true)}><Settings2 size={14} /> Configurar</button>
+          <button type="button" className={showValues ? 'curvas-toggle active' : 'curvas-toggle'} onClick={() => setShowValues((value) => !value)}>Valores</button>
+          <button type="button" className={tableOpen ? 'curvas-toggle active' : 'curvas-toggle'} onClick={() => setTableOpen((value) => !value)}><Table2 size={14} /> {tableOpen ? 'Ocultar tabela' : 'Mostrar tabela'}</button>
+          
+          <div className="curvas-print-group" style={{ position: 'relative' }}>
+            <button
+              type="button"
+              className="curvas-secondary-button curvas-print-btn"
+              onClick={() => handlePrint('current')}
+              title="Imprimir visualização em A4 Paisagem"
+            >
+              <Printer size={14} />
+              <span>Imprimir / PDF</span>
+            </button>
+            <button
+              type="button"
+              className="curvas-secondary-button curvas-print-btn"
+              style={{ padding: '0 6px', minWidth: 'auto' }}
+              onClick={() => setPrintMenuOpen((v) => !v)}
+              title="Opções de impressão"
+            >
+              <ChevronDown size={13} />
+            </button>
+            {printMenuOpen && (
+              <div
+                className="curvas-print-menu"
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: 4,
+                  background: '#ffffff',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: 6,
+                  boxShadow: '0 4px 14px rgba(0,0,0,0.12)',
+                  zIndex: 50,
+                  minWidth: 220,
+                  padding: 4,
+                }}
+              >
+                <button
+                  type="button"
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '8px 10px',
+                    fontSize: 12,
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    borderRadius: 4,
+                  }}
+                  onClick={() => handlePrint('current')}
+                >
+                  Imprimir Página Atual (A4)
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '8px 10px',
+                    fontSize: 12,
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    borderRadius: 4,
+                    fontWeight: 600,
+                    color: '#173f38',
+                  }}
+                  onClick={() => handlePrint('all')}
+                >
+                  Imprimir Relatório Completo (2 Págs A4)
+                </button>
+              </div>
+            )}
+          </div>
+
+          <input ref={importInputRef} className="curvas-import-input" type="file" accept=".xlsx,.xls,.csv,text/csv" onChange={handleImportFile} />
+          <button type="button" className="curvas-secondary-button" disabled={importing} onClick={() => importInputRef.current?.click()}><Upload size={14} /> {importing ? 'Importando...' : 'Importar curvas'}</button>
+          {importedEnterprises.length > 0 && <label className="curvas-enterprise-selector">
+            <span>Empreendimento importado</span>
+            <select value={importedEnterpriseFilter} onChange={(event) => setImportedEnterpriseFilter(event.target.value)} aria-label="Filtrar empreendimentos importados">
+              <option value="all">Todos os importados</option>
+              {importedEnterprises.map((enterprise) => <option key={enterprise} value={enterprise}>{enterprise}</option>)}
+            </select>
+          </label>}
+          <button type="button" className="curvas-secondary-button" onClick={() => setSettingsOpen(true)}><Settings2 size={14} /> Configurar</button>
+        </div>
+      </div>
+
+      {/* EXECUTIVE PRINT HEADER (appears only on print) */}
+      <div className="curvas-print-header">
+        <div className="curvas-print-brand">
+          <h2>CURVAS DE AVANÇO FÍSICO-FINANCEIRO (CURVAS S)</h2>
+          <span>{projectName} · {activePage === 'curva_s' && !isPrintingAll ? 'Página 1: Curva S de Avanço & Desvio Acumulado' : activePage === 'mensal' && !isPrintingAll ? 'Página 2: Avanço Mensal & Variações de Produção' : 'Relatório Completo de Avanço'}</span>
+        </div>
+        <div className="curvas-print-meta">
+          <div><strong>Empreendimento:</strong> {projectName || 'Obra'}</div>
+          <div><strong>Linha de Base:</strong> {baselineDisplayName(selectedBaseline)}</div>
+          <div><strong>Período:</strong> {months.length ? `${formatMonth(months[range.start])} a ${formatMonth(months[range.end])}` : '—'}</div>
+          <div><strong>Data de Emissão:</strong> {new Date().toLocaleDateString('pt-BR')}</div>
         </div>
       </div>
 
@@ -1515,10 +1675,80 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
 
             <div className="curvas-chart-card">
               <div className="curvas-chart-toolbar">
-                <div><strong>{hasAnyData ? `${months.length} meses disponíveis` : 'Sem dados de curva'}</strong><span>Arraste sobre o gráfico para aplicar zoom · duplo clique restaura o período completo</span></div>
-                <button type="button" className="curvas-secondary-button" onClick={() => setRange({ start: 0, end: Math.max(0, months.length - 1) })} disabled={!months.length}><RotateCcw size={14} /> Período completo</button>
+                <div>
+                  <strong>{hasAnyData ? `${months.length} meses disponíveis` : 'Sem dados de curva'}</strong>
+                  <span>{activePage === 'curva_s' ? 'Curva S e Gráfico de Desvio Acumulado · Arraste para zoom' : 'Avanço Mensal e Variação Realizado x Previsto'}</span>
+                </div>
+                <button type="button" className="curvas-secondary-button" onClick={() => setRange({ start: 0, end: Math.max(0, months.length - 1) })} disabled={!months.length}>
+                  <RotateCcw size={14} /> Período completo
+                </button>
               </div>
-              {loading || configState === 'loading' ? <div className="curvas-loading">Carregando curvas...</div> : months.length > 0 ? <CurveChart months={months} series={series} range={range} onZoom={setRange} onResetZoom={() => setRange({ start: 0, end: Math.max(0, months.length - 1) })} showMarkers={showMarkers} showValues={showValues} focusedId={focusedId} onFocus={setFocusedId} /> : <div className="curvas-empty-card">O projeto não possui pontos mensais de andamento disponíveis.</div>}
+
+              {loading || configState === 'loading' ? (
+                <div className="curvas-loading">Carregando curvas...</div>
+              ) : months.length === 0 ? (
+                <div className="curvas-empty-card">O projeto não possui pontos mensais de andamento disponíveis.</div>
+              ) : (
+                <>
+                  {/* PÁGINA 1: CURVA S + DESVIO ACUMULADO */}
+                  {(activePage === 'curva_s' || isPrintingAll) && (
+                    <div className="curvas-page-content">
+                      <CurveChart
+                        months={months}
+                        series={series}
+                        range={range}
+                        onZoom={setRange}
+                        onResetZoom={() => setRange({ start: 0, end: Math.max(0, months.length - 1) })}
+                        showMarkers={showMarkers}
+                        showValues={showValues}
+                        focusedId={focusedId}
+                        onFocus={setFocusedId}
+                      />
+                      {/* Gráfico de linha demonstrando o desvio acumulado na linha do tempo */}
+                      <CumulativeDeviationChart
+                        months={months}
+                        range={range}
+                        plannedPoints={currentPlannedSeries?.points || []}
+                        actualPoints={currentActualSeries?.points || []}
+                        showValues={showValues}
+                        perspectiveLabel={reportPerspective === 'physical' ? 'Físico' : 'Financeiro'}
+                        accentColor={currentPlannedSeries?.color || '#0f766e'}
+                      />
+                    </div>
+                  )}
+
+                  {/* Quebra de página no modo de impressão completa */}
+                  {isPrintingAll && <div className="curvas-page-break" />}
+
+                  {/* PÁGINA 2: AVANÇO MENSAL (BARRAS VERTICAIS) + VARIAÇÃO DO MÊS (LINHA) */}
+                  {(activePage === 'mensal' || isPrintingAll) && (
+                    <div className="curvas-page-content" style={{ marginTop: isPrintingAll ? 14 : 0 }}>
+                      {isPrintingAll && (
+                        <div className="curvas-print-header" style={{ marginBottom: 10 }}>
+                          <div className="curvas-print-brand">
+                            <h2>CURVAS DE AVANÇO FÍSICO-FINANCEIRO (CURVAS S)</h2>
+                            <span>{projectName} · Página 2: Avanço Mensal e Variações de Produção</span>
+                          </div>
+                          <div className="curvas-print-meta">
+                            <div><strong>Empreendimento:</strong> {projectName || 'Obra'}</div>
+                            <div><strong>Perspectiva:</strong> {reportPerspective === 'physical' ? 'Físico' : 'Financeiro'}</div>
+                            <div><strong>Período:</strong> {formatMonth(months[range.start])} a {formatMonth(months[range.end])}</div>
+                          </div>
+                        </div>
+                      )}
+                      <MonthlyAdvanceCharts
+                        months={months}
+                        range={range}
+                        plannedSeries={currentPlannedSeries}
+                        actualSeries={currentActualSeries}
+                        recordByPerspective={recordByPerspective[reportPerspective]}
+                        perspectiveLabel={reportPerspective === 'physical' ? 'Físico' : 'Financeiro'}
+                        showValues={showValues}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
 
