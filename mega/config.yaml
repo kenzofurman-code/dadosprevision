@@ -275,7 +275,7 @@ relatorios:
     busca_tela: "conciliação fin"
     modulo_obrigatorio: "ERP | Construção | Administração de obras | Relatórios | Gerenciais"
     palavra_modulo: "Gerenciais"
-    ancora_titulo_tela: "Conciliação financeira"
+    ancora_titulo_tela: ["Orçamento", "Orcamento", "Série AP", "Serie AP"]
     confere_filial: false
     retencao: "atual"
     chave_natural: ["obra", "numero_ap", "parcela", "codigo_estruturado"]
