@@ -481,8 +481,9 @@ def carregar_relatorio(cfg, conn, rel_id, data_iso, pasta, resultado_execucao,
         # passaria despercebida por semanas. Bloqueia a exportacao INTEIRA.
         problemas_contaminacao = []
         for obra, df in por_obra_traduzido.items():
+            col_f = "codigo_filial" if "codigo_filial" in df.columns else "filial"
             problemas_contaminacao.extend(
-                conferir_contaminacao(df, coluna_filial="filial"))
+                conferir_contaminacao(df, coluna_filial=col_f))
 
         if problemas_contaminacao:
             motivo = "contaminacao entre obras: %s" % "; ".join(problemas_contaminacao)
