@@ -15,14 +15,15 @@ export interface MonthlyDataPoint {
 interface Props {
   months: string[]
   range: { start: number; end: number }
-  plannedSeries?: { points: Array<{ date: string; value: number | null }> }
-  actualSeries?: { points: Array<{ date: string; value: number | null }> }
+  plannedSeries?: { points: Array<{ date: string; value: number | null }>; color?: string }
+  actualSeries?: { points: Array<{ date: string; value: number | null }>; color?: string }
   recordByPerspective?: Map<string, Record<string, any>>
   perspectiveLabel?: string
   showValues?: boolean
+  chartHeight?: number
 }
 
-const MARGIN = { top: 28, right: 24, bottom: 48, left: 58 }
+const MARGIN = { top: 24, right: 24, bottom: 42, left: 58 }
 
 export function MonthlyAdvanceCharts({
   months,
@@ -32,10 +33,18 @@ export function MonthlyAdvanceCharts({
   recordByPerspective,
   perspectiveLabel = 'Físico',
   showValues = true,
+  chartHeight = 230,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(900)
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
+
+  const actualColor = actualSeries?.color || '#2563eb'
+  const plannedColor = plannedSeries?.color || '#16a34a'
+
+  const baseH = chartHeight || 230
+  const barChartHeight = Math.max(160, Math.round(baseH * 0.8))
+  const varChartHeight = Math.max(120, Math.round(baseH * 0.58))
 
   const windowMonths = useMemo(
     () => months.slice(range.start, range.end + 1),
@@ -134,7 +143,6 @@ export function MonthlyAdvanceCharts({
   }
 
   // Bar Chart calculations
-  const barChartHeight = 270
   const barInnerH = barChartHeight - MARGIN.top - MARGIN.bottom
 
   const maxBarValue = useMemo(() => {
@@ -170,7 +178,6 @@ export function MonthlyAdvanceCharts({
   const barWidth = Math.min(20, Math.max(5, (slotWidth - 8) / 2))
 
   // Variation Chart calculations
-  const varChartHeight = 180
   const varInnerH = varChartHeight - MARGIN.top - MARGIN.bottom
 
   const maxAbsVar = useMemo(() => {
@@ -239,10 +246,10 @@ export function MonthlyAdvanceCharts({
           </div>
           <div className="curvas-bar-legend">
             <span className="curvas-bar-legend-item">
-              <span className="curvas-bar-swatch planned" /> Previsto Mensal
+              <span className="curvas-bar-swatch" style={{ backgroundColor: plannedColor }} /> Previsto Mensal
             </span>
             <span className="curvas-bar-legend-item">
-              <span className="curvas-bar-swatch actual" /> Realizado Mensal
+              <span className="curvas-bar-swatch" style={{ backgroundColor: actualColor }} /> Realizado Mensal
             </span>
           </div>
         </div>
@@ -356,7 +363,7 @@ export function MonthlyAdvanceCharts({
                         width={barWidth}
                         height={pBarH}
                         rx={2}
-                        fill="#2563eb"
+                        fill={plannedColor}
                         className="curvas-bar-rect planned"
                       />
                       {showValues && pBarH >= 12 && (
@@ -364,7 +371,7 @@ export function MonthlyAdvanceCharts({
                           x={pBarX + barWidth / 2}
                           y={pBarY - 4}
                           textAnchor="middle"
-                          fill="#1d4ed8"
+                          fill={plannedColor}
                           fontSize={8.5}
                           fontWeight={700}
                         >
@@ -383,7 +390,7 @@ export function MonthlyAdvanceCharts({
                         width={barWidth}
                         height={rBarH}
                         rx={2}
-                        fill="#16a34a"
+                        fill={actualColor}
                         className="curvas-bar-rect actual"
                       />
                       {showValues && rBarH >= 12 && (
@@ -391,7 +398,7 @@ export function MonthlyAdvanceCharts({
                           x={rBarX + barWidth / 2}
                           y={rBarY - 4}
                           textAnchor="middle"
-                          fill="#15803d"
+                          fill={actualColor}
                           fontSize={8.5}
                           fontWeight={700}
                         >
@@ -430,12 +437,12 @@ export function MonthlyAdvanceCharts({
             >
               <strong>{formatMonth(monthlyData[hoverIndex].month)}</strong>
               <div className="curvas-tooltip-row">
-                <i style={{ backgroundColor: '#2563eb' }} />
+                <i style={{ backgroundColor: plannedColor }} />
                 <span>Previsto do mês:</span>
                 <b>{formatPercent(monthlyData[hoverIndex].plannedMonthly)}</b>
               </div>
               <div className="curvas-tooltip-row">
-                <i style={{ backgroundColor: '#16a34a' }} />
+                <i style={{ backgroundColor: actualColor }} />
                 <span>Realizado do mês:</span>
                 <b>{formatPercent(monthlyData[hoverIndex].actualMonthly)}</b>
               </div>
@@ -444,12 +451,17 @@ export function MonthlyAdvanceCharts({
                   <i
                     style={{
                       backgroundColor:
-                        monthlyData[hoverIndex].variationMonthly! >= 0 ? '#16a34a' : '#dc2626',
+                        monthlyData[hoverIndex].variationMonthly! > 0.0001 ? actualColor : '#dc2626',
                     }}
                   />
                   <span>Variação do mês:</span>
-                  <b className={monthlyData[hoverIndex].variationMonthly! < 0 ? 'negative' : 'positive'}>
+                  <b>
                     {formatSignedPercent(monthlyData[hoverIndex].variationMonthly)}
+                    {monthlyData[hoverIndex].variationMonthly! > 0.0001
+                      ? ' (Adianto)'
+                      : monthlyData[hoverIndex].variationMonthly! < -0.0001
+                      ? ' (Atraso)'
+                      : ''}
                   </b>
                 </div>
               )}
@@ -465,9 +477,12 @@ export function MonthlyAdvanceCharts({
             <span className="curvas-chart-sublabel">VARIAÇÃO MENSAL ({perspectiveLabel.toUpperCase()})</span>
             <h4>Variação do Mês (Realizado do Mês − Previsto do Mês)</h4>
           </div>
-          <div className="curvas-deviation-meta">
-            <span className="curvas-variation-hint">
-              Valores acima de 0% indicam que o avanço do mês superou o planejado.
+          <div className="curvas-bar-legend">
+            <span className="curvas-bar-legend-item">
+              <span className="curvas-bar-swatch" style={{ backgroundColor: actualColor }} /> Positiva (Adianto)
+            </span>
+            <span className="curvas-bar-legend-item">
+              <span className="curvas-bar-swatch" style={{ backgroundColor: '#dc2626' }} /> Negativa (Atraso)
             </span>
           </div>
         </div>
@@ -573,7 +588,7 @@ export function MonthlyAdvanceCharts({
               <path
                 d={varLinePath}
                 fill="none"
-                stroke="#0284c7"
+                stroke={actualColor}
                 strokeWidth={2.4}
                 className="curvas-variation-line"
               />
@@ -584,8 +599,9 @@ export function MonthlyAdvanceCharts({
               if (d.variationMonthly === null) return null
               const cx = x(d.index)
               const cy = yVar(d.variationMonthly)
-              const isPos = d.variationMonthly >= 0
-              const dotColor = isPos ? '#16a34a' : '#dc2626'
+              const isPos = d.variationMonthly > 0.0001
+              const dotColor = isPos ? actualColor : '#dc2626'
+              const badgeColor = isPos ? actualColor : '#dc2626'
               const label = formatSignedPercent(d.variationMonthly)
               const badgeWidth = Math.max(26, label.length * 5.2 + 8)
               const badgeY = isPos ? cy - 18 : cy + 6
@@ -601,7 +617,7 @@ export function MonthlyAdvanceCharts({
                         width={badgeWidth}
                         height={14}
                         rx={2}
-                        fill={dotColor}
+                        fill={badgeColor}
                       />
                       <text
                         x={cx}

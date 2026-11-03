@@ -282,7 +282,7 @@
 .curvas-chart-wrap {
   position: relative;
   flex: 1 1 auto;
-  min-height: 360px;
+  min-height: 180px;
   padding: 2px 4px 4px;
   background: #f7f6f1;
 }
@@ -291,7 +291,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  min-height: 360px;
+  min-height: 180px;
   touch-action: none;
   user-select: none;
 }
@@ -976,8 +976,7 @@
 
   .curvas-chart-wrap,
   .curvas-chart {
-    min-height: 300px;
-    height: 300px;
+    min-height: 180px;
   }
 
   .curvas-view {
@@ -1200,11 +1199,11 @@
 }
 
 .curvas-bar-swatch.planned {
-  background: #2563eb;
+  background: #16a34a;
 }
 
 .curvas-bar-swatch.actual {
-  background: #16a34a;
+  background: #2563eb;
 }
 
 .curvas-bar-rect {
@@ -1225,6 +1224,115 @@
   display: none;
 }
 
+/* Menu de Ajuste de Altura / Achatamento */
+.curvas-height-group {
+  position: relative;
+}
+
+.curvas-height-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.curvas-height-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  padding: 12px;
+  z-index: 50;
+  min-width: 250px;
+}
+
+.curvas-height-menu-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.curvas-height-menu-header strong {
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.curvas-height-menu-header span {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.curvas-height-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.curvas-height-presets button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 7px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #f8fafc;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.curvas-height-presets button:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.curvas-height-presets button.active {
+  background: #eff6ff;
+  border-color: #3b82f6;
+}
+
+.curvas-height-presets button strong {
+  font-size: 12px;
+  color: #1e293b;
+}
+
+.curvas-height-presets button.active strong {
+  color: #1d4ed8;
+}
+
+.curvas-height-presets button small {
+  font-size: 10.5px;
+  color: #64748b;
+}
+
+.curvas-height-slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.curvas-height-slider-row label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: #334155;
+}
+
+.curvas-height-slider-row input[type="range"] {
+  width: 100%;
+  cursor: pointer;
+}
+
 /* ==========================================================================
    ESTILOS DE IMPRESSÃO (A4 PAISAGEM)
    ========================================================================== */
@@ -1237,10 +1345,15 @@
 
   body,
   .app-shell,
+  .workspace,
+  .table-panel,
   .curvas-view {
     background: #ffffff !important;
     padding: 0 !important;
     margin: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
     color: #000000 !important;
   }
 
@@ -1254,8 +1367,10 @@
   .curvas-chart-toolbar,
   .curvas-table-card,
   .curvas-feedback,
+  .curvas-saving,
   .curvas-page-tabs,
   .curvas-perspective-group,
+  .curvas-height-group,
   .curvas-print-group {
     display: none !important;
   }
@@ -1263,58 +1378,81 @@
   .curvas-chart-layout {
     display: block !important;
     width: 100% !important;
-    min-height: auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
     gap: 0 !important;
   }
 
-  .curvas-chart-card,
+  .curvas-chart-card {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
   .curvas-deviation-card,
   .curvas-monthly-card {
     border: none !important;
     box-shadow: none !important;
-    padding: 2px 0 !important;
-    margin: 0 0 10px 0 !important;
-    page-break-inside: avoid;
-    break-inside: avoid;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 0 6px 0 !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
+  .curvas-page-content {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   .curvas-chart-wrap,
   .curvas-chart {
     width: 100% !important;
-    height: auto !important;
+    min-height: 0 !important;
   }
 
   .curvas-print-header {
     display: flex !important;
     justify-content: space-between;
-    align-items: flex-start;
-    padding: 6px 0 8px 0 !important;
-    margin-bottom: 8px !important;
-    border-bottom: 2px solid #173f38 !important;
+    align-items: center;
+    padding: 2px 0 6px 0 !important;
+    margin-bottom: 6px !important;
+    border-bottom: 1.5px solid #173f38 !important;
   }
 
   .curvas-print-brand h2 {
-    font-size: 15px !important;
+    font-size: 13px !important;
     font-weight: 800 !important;
     color: #173f38 !important;
     margin: 0 0 2px 0 !important;
   }
 
   .curvas-print-brand span {
-    font-size: 11px !important;
+    font-size: 10px !important;
     color: #475569 !important;
   }
 
   .curvas-print-meta {
     text-align: right !important;
-    font-size: 10px !important;
+    font-size: 9.5px !important;
     color: #334155 !important;
-    line-height: 1.4 !important;
+    line-height: 1.35 !important;
   }
 
   .curvas-page-break {
-    page-break-after: always;
-    break-after: page;
-    height: 0;
+    page-break-before: always !important;
+    break-before: page !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
   }
 }

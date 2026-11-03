@@ -14,6 +14,7 @@ import {
   Printer,
   RotateCcw,
   Settings2,
+  SlidersHorizontal,
   Table2,
   TrendingUp,
   Upload,
@@ -113,7 +114,7 @@ const DEFAULT_CURVES: CurveDefinition[] = [
     label: 'Físico · Previsto',
     perspective: 'physical',
     kind: 'planned',
-    color: '#2563eb',
+    color: '#16a34a',
     style: 'dashed',
     visible: true,
     origin: 'prevision',
@@ -123,7 +124,7 @@ const DEFAULT_CURVES: CurveDefinition[] = [
     label: 'Físico · Realizado',
     perspective: 'physical',
     kind: 'actual',
-    color: '#16a34a',
+    color: '#2563eb',
     style: 'solid',
     visible: true,
     origin: 'prevision',
@@ -611,6 +612,7 @@ function CurveChart({
   showValues,
   focusedId,
   onFocus,
+  chartHeight = 230,
 }: {
   months: string[]
   series: CurveSeries[]
@@ -621,11 +623,12 @@ function CurveChart({
   showValues: boolean
   focusedId: string | null
   onFocus: (id: string | null) => void
+  chartHeight?: number
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const [width, setWidth] = useState(900)
-  const [height, setHeight] = useState(360)
+  const [height, setHeight] = useState(chartHeight)
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
   const [hoverY, setHoverY] = useState<number | null>(null)
   const [dragBand, setDragBand] = useState<{ start: number; end: number } | null>(null)
@@ -633,15 +636,15 @@ function CurveChart({
   const windowMonths = months.slice(range.start, range.end + 1)
   const visibleSeries = series.filter((item) => item.visible && item.points.some((point) => point.value !== null))
   const W = Math.max(500, width)
-  const H = Math.max(360, height)
-  const margin = { top: 28, right: 24, bottom: 64, left: 58 }
+  const H = Math.max(180, chartHeight || height)
+  const margin = { top: 20, right: 24, bottom: showValues ? 46 : 38, left: 58 }
   const chartWidth = W - margin.left - margin.right
-  const chartHeight = H - margin.top - margin.bottom
+  const innerChartPlotHeight = H - margin.top - margin.bottom
   const x = (index: number) => margin.left + (windowMonths.length <= 1 ? chartWidth / 2 : (index * chartWidth) / (windowMonths.length - 1))
   const allValues = visibleSeries.flatMap((item) => item.points.slice(range.start, range.end + 1).flatMap((point) => point.value === null ? [] : [point.value]))
   const maxValue = Math.max(1, ...allValues, 0.05)
   const topValue = Math.min(1.5, Math.ceil(maxValue * 10) / 10 + (maxValue >= 1 ? 0.05 : 0.02))
-  const y = (value: number) => margin.top + (1 - value / topValue) * chartHeight
+  const y = (value: number) => margin.top + (1 - value / topValue) * innerChartPlotHeight
   const monthX = (index: number) => x(index)
 
   useEffect(() => {
@@ -650,13 +653,13 @@ function CurveChart({
     const update = () => {
       const bounds = node.getBoundingClientRect()
       setWidth(bounds.width || 900)
-      setHeight(Math.max(360, Math.round(bounds.height || 360)))
+      setHeight(Math.max(180, Math.round(bounds.height || chartHeight)))
     }
     update()
     const observer = new ResizeObserver(update)
     observer.observe(node)
     return () => observer.disconnect()
-  }, [])
+  }, [chartHeight])
 
   useEffect(() => {
     setHoverIndex(null)
@@ -768,11 +771,12 @@ function CurveChart({
   }
 
   return (
-    <div ref={wrapRef} className="curvas-chart-wrap">
+    <div ref={wrapRef} className="curvas-chart-wrap" style={{ height: H, minHeight: H }}>
       <svg
         ref={svgRef}
         className="curvas-chart"
         viewBox={`0 0 ${W} ${H}`}
+        style={{ height: H, minHeight: H }}
         role="img"
         aria-label="Curvas S de andamento físico e financeiro"
         onPointerMove={pointerMove}
@@ -851,7 +855,7 @@ function CurveChart({
           </g>
         )}
         {dragBand && dragBand.start !== dragBand.end && (
-          <rect className="curvas-brush" x={Math.min(x(dragBand.start), x(dragBand.end))} width={Math.abs(x(dragBand.end) - x(dragBand.start))} y={margin.top} height={chartHeight} />
+          <rect className="curvas-brush" x={Math.min(x(dragBand.start), x(dragBand.end))} width={Math.abs(x(dragBand.end) - x(dragBand.start))} y={margin.top} height={innerChartPlotHeight} />
         )}
       </svg>
       {hoveredMonth && (
@@ -1121,11 +1125,45 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
   const [range, setRange] = useState<Range>({ start: 0, end: 0 })
   const [activePage, setActivePage] = useState<'curva_s' | 'mensal'>('curva_s')
   const [reportPerspective, setReportPerspective] = useState<CurvePerspective>('physical')
+  const [chartHeight, setChartHeight] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('curvas_chart_height_v2')
+      if (saved) {
+        const val = Number(saved)
+        if (!Number.isNaN(val) && val >= 180 && val <= 450) return val
+      }
+    } catch {}
+    return 230
+  })
+  const [heightMenuOpen, setHeightMenuOpen] = useState(false)
+  const heightMenuRef = useRef<HTMLDivElement>(null)
+  const printMenuRef = useRef<HTMLDivElement>(null)
   const [isPrintingAll, setIsPrintingAll] = useState(false)
   const [printMenuOpen, setPrintMenuOpen] = useState(false)
   const saveTimerRef = useRef<number | null>(null)
   const globalSaveTimerRef = useRef<number | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
+
+  function handleChartHeightChange(newHeight: number) {
+    const clamped = Math.max(180, Math.min(450, Math.round(newHeight)))
+    setChartHeight(clamped)
+    try {
+      localStorage.setItem('curvas_chart_height_v2', String(clamped))
+    } catch {}
+  }
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (heightMenuRef.current && !heightMenuRef.current.contains(event.target as Node)) {
+        setHeightMenuOpen(false)
+      }
+      if (printMenuRef.current && !printMenuRef.current.contains(event.target as Node)) {
+        setPrintMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   useEffect(() => {
     const handleAfterPrint = () => setIsPrintingAll(false)
@@ -1135,6 +1173,7 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
 
   function handlePrint(mode: 'current' | 'all' = 'current') {
     setPrintMenuOpen(false)
+    setHeightMenuOpen(false)
     if (mode === 'all') {
       setIsPrintingAll(true)
       setTimeout(() => {
@@ -1236,7 +1275,17 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
   const definitions = useMemo(() => {
     const stored = storedCurves || []
     const storedById = new Map(stored.map((curve) => [curve.id, curve]))
-    const defaults = DEFAULT_CURVES.map((curve) => ({ ...curve, ...storedById.get(curve.id) }))
+    const defaults = DEFAULT_CURVES.map((curve) => {
+      const stored = storedById.get(curve.id)
+      if (!stored) return curve
+      if (curve.id === 'physical-planned' && stored.color === '#2563eb') {
+        return { ...curve, ...stored, color: '#16a34a' }
+      }
+      if (curve.id === 'physical-actual' && stored.color === '#16a34a') {
+        return { ...curve, ...stored, color: '#2563eb' }
+      }
+      return { ...curve, ...stored }
+    })
     const defaultIds = new Set(DEFAULT_CURVES.map((curve) => curve.id))
     const custom = stored.filter((curve) => !defaultIds.has(curve.id))
     const ordered = [...stored.map((curve) => curve.id), ...globalCurves.map((curve) => curve.id), ...defaults.map((curve) => curve.id), ...custom.map((curve) => curve.id)]
@@ -1535,8 +1584,67 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
           <button type="button" className={showMarkers ? 'curvas-toggle active' : 'curvas-toggle'} onClick={() => setShowMarkers((value) => !value)}><span className="curvas-toggle-dot" /> Marcadores</button>
           <button type="button" className={showValues ? 'curvas-toggle active' : 'curvas-toggle'} onClick={() => setShowValues((value) => !value)}>Valores</button>
           <button type="button" className={tableOpen ? 'curvas-toggle active' : 'curvas-toggle'} onClick={() => setTableOpen((value) => !value)}><Table2 size={14} /> {tableOpen ? 'Ocultar tabela' : 'Mostrar tabela'}</button>
+
+          <div ref={heightMenuRef} className="curvas-height-group" style={{ position: 'relative' }}>
+            <button
+              type="button"
+              className="curvas-secondary-button curvas-height-btn"
+              onClick={() => setHeightMenuOpen((v) => !v)}
+              title="Ajustar achatamento / altura dos gráficos (ideal para caber na folha A4)"
+            >
+              <SlidersHorizontal size={14} />
+              <span>Altura: {chartHeight}px</span>
+              <ChevronDown size={13} />
+            </button>
+            {heightMenuOpen && (
+              <div className="curvas-height-menu">
+                <div className="curvas-height-menu-header">
+                  <strong>Altura dos Gráficos</strong>
+                  <span>Ajuste vertical para caber na folha A4 paisagem</span>
+                </div>
+                <div className="curvas-height-presets">
+                  <button
+                    type="button"
+                    className={chartHeight === 230 ? 'active' : ''}
+                    onClick={() => handleChartHeightChange(230)}
+                  >
+                    <strong>Achatado A4 (230px)</strong>
+                    <small>Recomendado: 2 gráficos cabem em 1 folha A4</small>
+                  </button>
+                  <button
+                    type="button"
+                    className={chartHeight === 290 ? 'active' : ''}
+                    onClick={() => handleChartHeightChange(290)}
+                  >
+                    <strong>Médio (290px)</strong>
+                    <small>Equilibrado para telas normais</small>
+                  </button>
+                  <button
+                    type="button"
+                    className={chartHeight === 360 ? 'active' : ''}
+                    onClick={() => handleChartHeightChange(360)}
+                  >
+                    <strong>Alto (360px)</strong>
+                    <small>Visualização expandida padrão</small>
+                  </button>
+                </div>
+                <div className="curvas-height-slider-row">
+                  <label htmlFor="chart-height-slider">Ajuste fino: <b>{chartHeight}px</b></label>
+                  <input
+                    id="chart-height-slider"
+                    type="range"
+                    min="180"
+                    max="420"
+                    step="10"
+                    value={chartHeight}
+                    onChange={(e) => handleChartHeightChange(Number(e.target.value))}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
           
-          <div className="curvas-print-group" style={{ position: 'relative' }}>
+          <div ref={printMenuRef} className="curvas-print-group" style={{ position: 'relative' }}>
             <button
               type="button"
               className="curvas-secondary-button curvas-print-btn"
@@ -1625,20 +1733,6 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
         </div>
       </div>
 
-      {/* EXECUTIVE PRINT HEADER (appears only on print) */}
-      <div className="curvas-print-header">
-        <div className="curvas-print-brand">
-          <h2>CURVAS DE AVANÇO FÍSICO-FINANCEIRO (CURVAS S)</h2>
-          <span>{projectName} · {activePage === 'curva_s' && !isPrintingAll ? 'Página 1: Curva S de Avanço & Desvio Acumulado' : activePage === 'mensal' && !isPrintingAll ? 'Página 2: Avanço Mensal & Variações de Produção' : 'Relatório Completo de Avanço'}</span>
-        </div>
-        <div className="curvas-print-meta">
-          <div><strong>Empreendimento:</strong> {projectName || 'Obra'}</div>
-          <div><strong>Linha de Base:</strong> {baselineDisplayName(selectedBaseline)}</div>
-          <div><strong>Período:</strong> {months.length ? `${formatMonth(months[range.start])} a ${formatMonth(months[range.end])}` : '—'}</div>
-          <div><strong>Data de Emissão:</strong> {new Date().toLocaleDateString('pt-BR')}</div>
-        </div>
-      </div>
-
       {configError && <div className="curvas-feedback error"><CircleHelp size={15} /> {configError}</div>}
       {importMessage && <div className="curvas-feedback success"><Check size={15} /> {importMessage}</div>}
       {saving && <div className="curvas-saving"><span /> Salvando configuração compartilhada...</div>}
@@ -1693,6 +1787,18 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
                   {/* PÁGINA 1: CURVA S + DESVIO ACUMULADO */}
                   {(activePage === 'curva_s' || isPrintingAll) && (
                     <div className="curvas-page-content">
+                      <div className="curvas-print-header">
+                        <div className="curvas-print-brand">
+                          <h2>CURVAS DE AVANÇO FÍSICO-FINANCEIRO (CURVA S)</h2>
+                          <span>{projectName} · Curva S de Avanço & Desvio Acumulado</span>
+                        </div>
+                        <div className="curvas-print-meta">
+                          <div><strong>Empreendimento:</strong> {projectName || 'Obra'}</div>
+                          <div><strong>Linha de Base:</strong> {baselineDisplayName(selectedBaseline)}</div>
+                          <div><strong>Período:</strong> {months.length ? `${formatMonth(months[range.start])} a ${formatMonth(months[range.end])}` : '—'}</div>
+                          <div><strong>Data:</strong> {new Date().toLocaleDateString('pt-BR')}</div>
+                        </div>
+                      </div>
                       <CurveChart
                         months={months}
                         series={series}
@@ -1703,6 +1809,7 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
                         showValues={showValues}
                         focusedId={focusedId}
                         onFocus={setFocusedId}
+                        chartHeight={chartHeight}
                       />
                       {/* Gráfico de linha demonstrando o desvio acumulado na linha do tempo */}
                       <CumulativeDeviationChart
@@ -1712,7 +1819,8 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
                         actualPoints={currentActualSeries?.points || []}
                         showValues={showValues}
                         perspectiveLabel={reportPerspective === 'physical' ? 'Físico' : 'Financeiro'}
-                        accentColor={currentPlannedSeries?.color || '#0f766e'}
+                        accentColor={currentActualSeries?.color || '#2563eb'}
+                        chartHeight={Math.max(110, Math.round(chartHeight * 0.58))}
                       />
                     </div>
                   )}
@@ -1723,19 +1831,18 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
                   {/* PÁGINA 2: AVANÇO MENSAL (BARRAS VERTICAIS) + VARIAÇÃO DO MÊS (LINHA) */}
                   {(activePage === 'mensal' || isPrintingAll) && (
                     <div className="curvas-page-content" style={{ marginTop: isPrintingAll ? 14 : 0 }}>
-                      {isPrintingAll && (
-                        <div className="curvas-print-header" style={{ marginBottom: 10 }}>
-                          <div className="curvas-print-brand">
-                            <h2>CURVAS DE AVANÇO FÍSICO-FINANCEIRO (CURVAS S)</h2>
-                            <span>{projectName} · Página 2: Avanço Mensal e Variações de Produção</span>
-                          </div>
-                          <div className="curvas-print-meta">
-                            <div><strong>Empreendimento:</strong> {projectName || 'Obra'}</div>
-                            <div><strong>Perspectiva:</strong> {reportPerspective === 'physical' ? 'Físico' : 'Financeiro'}</div>
-                            <div><strong>Período:</strong> {formatMonth(months[range.start])} a {formatMonth(months[range.end])}</div>
-                          </div>
+                      <div className="curvas-print-header">
+                        <div className="curvas-print-brand">
+                          <h2>AVANÇO MENSAL E VARIAÇÕES DE PRODUÇÃO</h2>
+                          <span>{projectName} · Produção Mensal & Variação Previsto vs Realizado</span>
                         </div>
-                      )}
+                        <div className="curvas-print-meta">
+                          <div><strong>Empreendimento:</strong> {projectName || 'Obra'}</div>
+                          <div><strong>Perspectiva:</strong> {reportPerspective === 'physical' ? 'Físico' : 'Financeiro'}</div>
+                          <div><strong>Período:</strong> {months.length ? `${formatMonth(months[range.start])} a ${formatMonth(months[range.end])}` : '—'}</div>
+                          <div><strong>Data:</strong> {new Date().toLocaleDateString('pt-BR')}</div>
+                        </div>
+                      </div>
                       <MonthlyAdvanceCharts
                         months={months}
                         range={range}
@@ -1744,6 +1851,7 @@ export function CurvasView({ projectId, projectName, records, baselineCurves = [
                         recordByPerspective={recordByPerspective[reportPerspective]}
                         perspectiveLabel={reportPerspective === 'physical' ? 'Físico' : 'Financeiro'}
                         showValues={showValues}
+                        chartHeight={chartHeight}
                       />
                     </div>
                   )}

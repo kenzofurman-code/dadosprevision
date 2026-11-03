@@ -10,9 +10,10 @@ interface Props {
   showValues: boolean
   perspectiveLabel?: string
   accentColor?: string
+  chartHeight?: number
 }
 
-const MARGIN = { top: 22, right: 24, bottom: 44, left: 58 }
+const MARGIN = { top: 18, right: 24, bottom: 36, left: 58 }
 
 export function CumulativeDeviationChart({
   months,
@@ -21,7 +22,8 @@ export function CumulativeDeviationChart({
   actualPoints,
   showValues,
   perspectiveLabel = 'Físico',
-  accentColor = '#0f766e',
+  accentColor = '#2563eb',
+  chartHeight = 135,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -72,9 +74,9 @@ export function CumulativeDeviationChart({
   }, [items])
 
   const W = Math.max(500, width)
-  const H = 190
+  const H = Math.max(110, chartHeight)
   const chartWidth = W - MARGIN.left - MARGIN.right
-  const chartHeight = H - MARGIN.top - MARGIN.bottom
+  const innerPlotHeight = H - MARGIN.top - MARGIN.bottom
 
   const x = useCallback(
     (index: number) => {
@@ -96,9 +98,9 @@ export function CumulativeDeviationChart({
     (val: number) => {
       // Clamped to range [-yDomain, +yDomain]
       const clamped = Math.max(-yDomain, Math.min(yDomain, val))
-      return MARGIN.top + ((yDomain - clamped) / (2 * yDomain)) * chartHeight
+      return MARGIN.top + ((yDomain - clamped) / (2 * yDomain)) * innerPlotHeight
     },
-    [yDomain, chartHeight],
+    [yDomain, innerPlotHeight],
   )
 
   const zeroY = y(0)
@@ -269,7 +271,7 @@ export function CumulativeDeviationChart({
           {areaPolygons && (
             <path
               d={areaPolygons}
-              fill="rgba(15, 118, 110, 0.12)"
+              fill="rgba(37, 99, 235, 0.12)"
               className="curvas-deviation-area"
             />
           )}
@@ -301,9 +303,9 @@ export function CumulativeDeviationChart({
             if (item.delta === null) return null
             const cx = x(item.index)
             const cy = y(item.delta)
-            const isPos = item.delta > 0.001
-            const isNeg = item.delta < -0.001
-            const dotColor = isPos ? '#16a34a' : isNeg ? '#dc2626' : '#64748b'
+            const isPos = item.delta > 0.0001
+            const dotColor = isPos ? '#2563eb' : '#dc2626'
+            const badgeColor = isPos ? '#2563eb' : '#dc2626'
             const badgeLabel = formatSignedPercent(item.delta)
             const badgeWidth = Math.max(26, badgeLabel.length * 5.2 + 8)
             const badgeY = isPos ? cy - 18 : cy + 6
@@ -319,7 +321,7 @@ export function CumulativeDeviationChart({
                       width={badgeWidth}
                       height={14}
                       rx={2}
-                      fill={dotColor}
+                      fill={badgeColor}
                     />
                     <text x={cx} y={badgeY + 10} textAnchor="middle" fill="#ffffff" fontSize={9} fontWeight={700}>
                       {badgeLabel}
