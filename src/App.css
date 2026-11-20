@@ -1177,6 +1177,21 @@ td strong {
   min-width: 0;
 }
 
+.gestao-week-table {
+  table-layout: fixed;
+}
+
+.gestao-week-table th.service-col {
+  width: 25%;
+  min-width: 0;
+}
+
+.gestao-week-table th,
+.gestao-week-table td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .gestao-week-table caption {
   padding: 6px 8px;
   text-align: left;
