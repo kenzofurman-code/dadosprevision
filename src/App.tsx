@@ -48,6 +48,7 @@ import { DiarioEfetivo } from './components/diario/DiarioEfetivo'
 import { PainelTeorico } from './components/painel-teorico/PainelTeorico'
 import { ContratacoesConfig } from './components/contratacoes/ContratacoesConfig'
 import { ContratacoesMacro } from './components/contratacoes/ContratacoesMacro'
+import { RestricoesPainel } from './components/restricoes/RestricoesPainel'
 
 type DataView =
   | 'projects'
@@ -66,7 +67,7 @@ type DataView =
   | 'dados_diario'
   | 'gestao_a_vista'
 
-type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix' | 'panel5' | 'milestones' | 'contratacoes' | 'diario' | 'efetivo' | 'teorico'
+type GestaoPanelTab = 'overview' | 'panel1' | 'panel2' | 'panel3' | 'matrix' | 'panel5' | 'milestones' | 'contratacoes' | 'diario' | 'efetivo' | 'teorico' | 'restricoes'
 type GestaoTablePanel = 'panel1' | 'panel2' | 'panel3'
 type ReorderableGestaoPanel = GestaoTablePanel | 'panel4'
 
@@ -3056,7 +3057,7 @@ function App() {
           : node.outerHTML)
         .join('')
     const baseHref = document.baseURI
-    const defaultPrintOrientation = (gestaoPanelTab === 'matrix' || gestaoPanelTab === 'panel3') ? 'landscape' : 'portrait'
+    const defaultPrintOrientation = ['matrix', 'panel3', 'restricoes'].includes(gestaoPanelTab) ? 'landscape' : 'portrait'
     printWindow.document.open()
     printWindow.document.write(`<!doctype html>
       <html lang="pt-BR">
@@ -3929,7 +3930,7 @@ function App() {
                   ))}
                 </select>
               </label>
-              {activeView === 'gestao_a_vista' && gestaoPanelTab !== 'milestones' && currentGroupOrder.length > 0 && (
+              {activeView === 'gestao_a_vista' && gestaoPanelTab !== 'milestones' && gestaoPanelTab !== 'restricoes' && currentGroupOrder.length > 0 && (
                 <label>
                   <span>Torre / Grupo</span>
                   <select value={gestaoGroup} onChange={(event) => setGestaoGroup(event.target.value)}>
@@ -3942,7 +3943,7 @@ function App() {
                   </select>
                 </label>
               )}
-              {activeView === 'gestao_a_vista' && gestaoPanelTab !== 'milestones' && (
+              {activeView === 'gestao_a_vista' && gestaoPanelTab !== 'milestones' && gestaoPanelTab !== 'restricoes' && (
                 <label>
                   <span>Mês de Referência (M0)</span>
                   <select value={gestaoMonth} onChange={(event) => setGestaoMonth(event.target.value)}>
@@ -3962,7 +3963,9 @@ function App() {
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder={
                     activeView === 'gestao_a_vista'
-                      ? gestaoPanelTab === 'milestones'
+                      ? gestaoPanelTab === 'restricoes'
+                        ? 'Buscar restrição, responsável ou checklist'
+                        : gestaoPanelTab === 'milestones'
                         ? 'Filtrar projeto ou marco'
                         : 'Filtrar serviço ou pavimento'
                       : 'Buscar nesta página'
@@ -4087,6 +4090,15 @@ function App() {
                   <span>Painel 9: Teórico x Físico</span>
                 </button>
 
+                <button
+                  type="button"
+                  className={`gestao-panel-tab-btn ${gestaoPanelTab === 'restricoes' ? 'active' : ''}`}
+                  onClick={() => setGestaoPanelTab('restricoes')}
+                >
+                  <ShieldAlert size={14} />
+                  <span>Painel 10: Restrições</span>
+                </button>
+
                 <div className="gestao-top-actions">
                   <button
                     type="button"
@@ -4118,6 +4130,15 @@ function App() {
                   </button>
                 </div>
                 </div>
+              )}
+
+              {gestaoPanelTab === 'restricoes' && (
+                <RestricoesPainel
+                  projectId={selectedProject}
+                  allowedProjectIds={Array.from(effectiveActiveProjectIds)}
+                  search={search}
+                  paper={a4LayoutMode}
+                />
               )}
 
               {gestaoPanelTab === 'milestones' && (
