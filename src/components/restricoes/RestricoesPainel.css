@@ -534,8 +534,8 @@
   color: var(--ink-2);
   min-width: 0;
 }
-.rp-restriction-card:hover,
-.rp-restriction-card.is-selected {
+.rp .rp-restriction-card:hover:not(:disabled),
+.rp .rp-restriction-card.is-selected {
   border-color: var(--accent);
   background: var(--accent-soft);
 }
@@ -557,7 +557,8 @@
 .rp-card-top svg {
   flex-shrink: 0;
 }
-.rp-restriction-card > span:not(.rp-badge):not(.rp-card-top):not(.rp-card-footer) {
+.rp-restriction-card
+  > span:not(.rp-badge):not(.rp-card-top):not(.rp-card-footer):not(.rp-overdue-stages) {
   display: flex;
   align-items: baseline;
   gap: 6px;
@@ -580,6 +581,20 @@
 }
 .rp-card-footer small {
   font-size: 10px;
+}
+.rp-overdue-stages {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  color: var(--ink-2);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.rp-overdue-stages > strong {
+  color: var(--danger);
+  font-size: 11px;
 }
 .rp-detail {
   margin-top: 24px;

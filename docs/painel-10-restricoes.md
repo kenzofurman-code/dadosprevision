@@ -22,11 +22,17 @@ etiquetas e os itens de checklist com seus próprios responsáveis e prazos.
 
 - Uma restrição = um card identificado por projeto + ID Prevision.
 - Concluída = `concluido_em` preenchido ou `etapa_fase = done`; não entra em atraso.
-- Atrasada = card aberto com dia de vencimento anterior ao dia de referência.
-  A diferença usa dias corridos e datas civis; hoje não conta como atraso.
+- Atrasada = card aberto com prazo próprio vencido ou ao menos um item pendente do
+  checklist vencido. Várias etapas vencidas continuam contando como um único card
+  atrasado. Os nomes, prazos e dias de atraso das etapas aparecem na tabela e no card.
+- O prazo de controle é a menor data entre o vencimento do card e os prazos dos itens
+  pendentes do checklist. Define uma única faixa e um único atraso para cada card.
+  A diferença usa dias corridos e datas civis; hoje não conta como atraso. Itens
+  concluídos do checklist não definem o prazo de controle.
 - Referência inicial = hoje em America/Sao_Paulo. Alterá-la recalcula os prazos
   da situação disponível, sem reconstruir estados históricos.
-- Data ausente ou inválida = sem prazo; nunca inferir a data do card pelo checklist.
+- A data original do card é preservada e exibida separadamente do prazo de controle.
+  Sem qualquer prazo válido no card e nos itens pendentes = sem prazo.
 - Checklist atrasado = item ainda pendente, em card aberto, com prazo vencido.
   A contagem de itens é separada da contagem de cards.
 - Sem responsável considera as pessoas atribuídas ao card. O filtro de pessoa
@@ -36,7 +42,8 @@ etiquetas e os itens de checklist com seus próprios responsáveis e prazos.
 - Todas as páginas de `/api/data?type=restrictions` são lidas antes de divulgar
   totais. Erro em qualquer página impede contagens parciais.
 - A consulta não grava alterações nem dispara sincronização ou acesso ao ERP.
-- CSV e impressão exportam todo o recorte, independentemente da paginação da tela.
+- CSV e impressão exportam todo o recorte, independentemente da paginação da tela,
+  com o prazo original do card, o prazo de controle e as etapas atrasadas.
 
 ## Referências pesquisadas
 
@@ -62,3 +69,9 @@ exercitado em navegador com 225 cards sintéticos em duas páginas da API e trê
 projetos, incluindo pesquisa, filtros, seleção no mapa, abertura de detalhes,
 paginação, exportação, vazio e erro. Não representa uma análise dos dados reais
 de produção: o PostgreSQL local não estava disponível durante a implementação.
+
+Na correção da contagem por card, a validação em navegador usou a API real de
+produção, com referência em 19/11/2026: o QOYA passou de 18 para 20 cards com atraso;
+um card com seis etapas vencidas conta uma vez e exibe as seis etapas com suas
+datas. Os projetos ativos somaram 115 cards com algum prazo vencido, mantendo os
+mesmos 458 cards abertos. Os oito testes cobrem também os novos critérios.

@@ -83,7 +83,7 @@ test('um card por projeto/id, sem multiplicar pelo checklist, com responsáveis 
   assert.equal(cards[0].checklist[0].responsavel, 'Bruno')
 })
 
-test('sem data não herda prazo do checklist nem atraso fornecido pela API', () => {
+test('card sem data preserva o prazo original e usa o checklist pendente para o alerta', () => {
   const [card] = prepararRestricoes(
     [
       row({
@@ -94,9 +94,92 @@ test('sem data não herda prazo do checklist nem atraso fornecido pela API', () 
     ],
     '2026-11-05',
   )
-  assert.equal(card.dias, null)
-  assert.equal(card.faixa, 'semData')
+  assert.equal(card.prazo, null)
+  assert.equal(card.prazoControle, '2026-11-01')
+  assert.equal(card.dias, -4)
+  assert.equal(card.faixa, 'de1a7')
   assert.equal(card.checklistAtrasados, 1)
+})
+
+test('várias etapas vencidas geram um único card atrasado mesmo com prazo da mãe no futuro', () => {
+  const cards = prepararRestricoes(
+    [
+      row({
+        vencimento_em: '2026-11-24',
+        checklist_itens: [
+          { id_prevision: '1', descricao: 'Cotação', status: false, vencimento_em: '2026-10-02' },
+          {
+            id_prevision: '2',
+            descricao: 'Negociação',
+            status: false,
+            vencimento_em: '2026-11-10',
+          },
+          {
+            id_prevision: '3',
+            descricao: 'Emissão OC',
+            status: false,
+            vencimento_em: '2026-11-16',
+          },
+        ],
+      }),
+    ],
+    '2026-11-19',
+  )
+  assert.equal(cards.length, 1)
+  assert.equal(cards.filter((c) => !c.concluida && c.dias !== null && c.dias < 0).length, 1)
+  assert.equal(cards[0].checklistAtrasados, 3)
+  assert.equal(cards[0].prazo, '2026-11-24')
+  assert.equal(cards[0].prazoControle, '2026-10-02')
+  assert.equal(cards[0].prazoCardAtrasado, false)
+  assert.equal(cards[0].dias, -48)
+  assert.equal(cards[0].faixa, 'mais30')
+  assert.deepEqual(
+    cards[0].checklist.map((i) => i.dias),
+    [-48, -9, -3],
+  )
+})
+
+test('mãe e checklist atrasados contam uma vez; itens concluídos não definem a faixa', () => {
+  const [card] = prepararRestricoes(
+    [
+      row({
+        vencimento_em: '2026-11-10',
+        checklist_itens: [
+          { id_prevision: '1', status: true, vencimento_em: '2026-01-01' },
+          { id_prevision: '2', status: false, vencimento_em: '2026-11-16' },
+        ],
+      }),
+    ],
+    '2026-11-19',
+  )
+  assert.equal(card.prazoCardAtrasado, true)
+  assert.equal(card.checklistAtrasados, 1)
+  assert.equal(card.prazoControle, '2026-11-10')
+  assert.equal(card.dias, -9)
+  assert.equal(card.faixa, 'de8a30')
+})
+
+test('checklist pendente antecipa o próximo alerta; sem nenhum prazo permanece sem data', () => {
+  const [card] = prepararRestricoes(
+    [
+      row({
+        vencimento_em: '2026-12-10',
+        checklist_itens: [
+          { status: false, vencimento_em: '2026-11-22' },
+          { status: true, vencimento_em: '2026-11-01' },
+        ],
+      }),
+    ],
+    '2026-11-19',
+  )
+  assert.equal(card.prazoControle, '2026-11-22')
+  assert.equal(card.faixa, 'proximos7')
+  const [undated] = prepararRestricoes(
+    [row({ vencimento_em: null, checklist_itens: [{ status: false, vencimento_em: null }] })],
+    '2026-11-19',
+  )
+  assert.equal(undated.prazoControle, null)
+  assert.equal(undated.faixa, 'semData')
 })
 
 test('consulta todas as páginas; falha não publica contagem parcial', async (t) => {

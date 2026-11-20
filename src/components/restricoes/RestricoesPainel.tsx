@@ -72,6 +72,23 @@ function matches(c: RestrictionCard, cut: Recorte) {
   return c.faixa === cut
 }
 
+function EtapasAtrasadas({ card }: { card: RestrictionCard }) {
+  const etapas = card.checklist.filter((item) => item.atrasado)
+  if (!card.prazoCardAtrasado && !etapas.length) return null
+  return (
+    <span className="rp-overdue-stages">
+      <strong>Um card em atraso</strong>
+      {card.prazoCardAtrasado && <span>Prazo do card vencido · {date(card.prazo)}</span>}
+      {etapas.length > 0 && <strong>Etapas atrasadas:</strong>}
+      {etapas.map((item) => (
+        <span key={item.id}>
+          {item.descricao} · {date(item.prazo)} · {-(item.dias ?? 0)} d de atraso
+        </span>
+      ))}
+    </span>
+  )
+}
+
 function downloadCsv(cards: RestrictionCard[]) {
   const cell = (s: unknown) => {
     const text = String(s ?? '')
@@ -84,7 +101,8 @@ function downloadCsv(cards: RestrictionCard[]) {
       'Restrição',
       'Etapa',
       'Responsáveis',
-      'Vencimento',
+      'Vencimento do card',
+      'Prazo do alerta',
       'Situação',
       'Dias de atraso',
       'Criação',
@@ -92,6 +110,7 @@ function downloadCsv(cards: RestrictionCard[]) {
       'Serviço',
       'Pavimento',
       'Checklist atrasado',
+      'Etapas atrasadas (descrição / prazo / dias)',
     ],
     ...cards.map((c) => [
       c.projeto,
@@ -100,6 +119,7 @@ function downloadCsv(cards: RestrictionCard[]) {
       c.etapa,
       c.responsaveis.join(', '),
       date(c.prazo),
+      date(c.prazoControle),
       formatarPrazo(c),
       !c.concluida && c.dias !== null ? Math.max(0, -c.dias) : '',
       date(c.criado),
@@ -107,6 +127,10 @@ function downloadCsv(cards: RestrictionCard[]) {
       c.servico,
       c.pavimento,
       c.checklistAtrasados,
+      c.checklist
+        .filter((i) => i.atrasado)
+        .map((i) => `${i.descricao} / ${date(i.prazo)} / ${-(i.dias ?? 0)} d`)
+        .join(' | '),
     ]),
   ]
   const url = URL.createObjectURL(
@@ -252,10 +276,11 @@ export function RestricoesPainel({ projectId, allowedProjectIds, search, paper }
           (c) => (!selection.obra || c.projetoId === selection.obra) && matches(c, selection.faixa),
         )
         .sort((a, b) => {
-          const left = sort === 'prazo' ? a.prazo || '9999' : a[sort]
-          const right = sort === 'prazo' ? b.prazo || '9999' : b[sort]
+          const left = sort === 'prazo' ? a.prazoControle || '9999' : a[sort]
+          const right = sort === 'prazo' ? b.prazoControle || '9999' : b[sort]
           // Sem prazo permanece ao final da ordenação por data.
-          if (sort === 'prazo' && (!a.prazo || !b.prazo)) return Number(!a.prazo) - Number(!b.prazo)
+          if (sort === 'prazo' && (!a.prazoControle || !b.prazoControle))
+            return Number(!a.prazoControle) - Number(!b.prazoControle)
           return left.localeCompare(right, 'pt-BR', { numeric: true }) * (desc ? -1 : 1)
         }),
     [base, selection, sort, desc],
@@ -326,7 +351,7 @@ export function RestricoesPainel({ projectId, allowedProjectIds, search, paper }
       cut: 'atrasadas',
       label: 'Atrasadas',
       count: atrasadas,
-      note: 'Prazo do card vencido',
+      note: 'Um por card, com prazo ou etapa vencida',
       icon: CircleAlert,
       tom: 'danger',
     },
@@ -462,8 +487,8 @@ export function RestricoesPainel({ projectId, allowedProjectIds, search, paper }
               <div>
                 <h4 id="rp-map-title">Mapa de prazos por projeto</h4>
                 <p>
-                  Clique em uma quantidade para ver os cards. Projetos com mais atrasos aparecem
-                  primeiro.
+                  Cada card aparece uma vez, pelo prazo pendente mais antigo. Clique para ver as
+                  etapas atrasadas.
                 </p>
               </div>
               <span className="rp-reference">Referência: {date(referencia)}</span>
@@ -680,7 +705,7 @@ export function RestricoesPainel({ projectId, allowedProjectIds, search, paper }
                           }
                         >
                           <button onClick={() => sortBy('prazo')}>
-                            Vencimento
+                            Prazo do alerta
                             {sort === 'prazo' &&
                               (desc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}
                           </button>
@@ -708,12 +733,16 @@ export function RestricoesPainel({ projectId, allowedProjectIds, search, paper }
                               {c.servico && ` · ${c.servico}`}
                               {c.pavimento && ` · ${c.pavimento}`}
                             </small>
+                            <EtapasAtrasadas card={c} />
                           </td>
                           <td>
                             {c.responsaveis.join(', ') || 'Não atribuído'}
                             <small>{c.etapa}</small>
                           </td>
-                          <td className="rp-date">{date(c.prazo)}</td>
+                          <td className="rp-date">
+                            {date(c.prazoControle)}
+                            {c.prazo !== c.prazoControle && <small>Card: {date(c.prazo)}</small>}
+                          </td>
                           <td>
                             <span className={`rp-badge rp-${tone(c)}`}>{formatarPrazo(c)}</span>
                           </td>
@@ -723,7 +752,7 @@ export function RestricoesPainel({ projectId, allowedProjectIds, search, paper }
                             </span>
                             {c.checklistAtrasados > 0 && (
                               <small className="rp-text-danger">
-                                {c.checklistAtrasados} atrasado(s)
+                                {c.checklistAtrasados} etapa(s) vencida(s)
                               </small>
                             )}
                           </td>
@@ -751,8 +780,10 @@ export function RestricoesPainel({ projectId, allowedProjectIds, search, paper }
                       <strong>{c.titulo}</strong>
                       <span className={`rp-badge rp-${tone(c)}`}>{formatarPrazo(c)}</span>
                       <span className="rp-card-date">
-                        <CalendarDays size={14} /> Prazo: {date(c.prazo)}
+                        <CalendarDays size={14} /> Prazo do alerta: {date(c.prazoControle)}
                       </span>
+                      {c.prazo !== c.prazoControle && <span>Prazo do card: {date(c.prazo)}</span>}
+                      <EtapasAtrasadas card={c} />
                       <span>
                         <Users size={14} />
                         {c.responsaveis.join(', ') || 'Sem responsável'}
@@ -762,7 +793,9 @@ export function RestricoesPainel({ projectId, allowedProjectIds, search, paper }
                         <small>
                           {c.checklist.filter((i) => i.concluido).length}/{c.checklist.length}{' '}
                           checklist
-                          {c.checklistAtrasados ? ` · ${c.checklistAtrasados} atrasado(s)` : ''}
+                          {c.checklistAtrasados
+                            ? ` · ${c.checklistAtrasados} etapa(s) vencida(s)`
+                            : ''}
                         </small>
                       </span>
                     </button>
@@ -777,7 +810,7 @@ export function RestricoesPainel({ projectId, allowedProjectIds, search, paper }
                     <th>Projeto</th>
                     <th>Restrição</th>
                     <th>Responsáveis / Etapa</th>
-                    <th>Vencimento</th>
+                    <th>Prazo do alerta</th>
                     <th>Situação</th>
                     <th>Checklist</th>
                   </tr>
@@ -791,16 +824,20 @@ export function RestricoesPainel({ projectId, allowedProjectIds, search, paper }
                         <small>
                           #{c.codigo} · {[c.servico, c.pavimento].filter(Boolean).join(' / ')}
                         </small>
+                        <EtapasAtrasadas card={c} />
                       </td>
                       <td>
                         {c.responsaveis.join(', ') || 'Não atribuído'}
                         <small>{c.etapa}</small>
                       </td>
-                      <td>{date(c.prazo)}</td>
+                      <td>
+                        {date(c.prazoControle)}
+                        {c.prazo !== c.prazoControle && <small>Card: {date(c.prazo)}</small>}
+                      </td>
                       <td>{formatarPrazo(c)}</td>
                       <td>
                         {c.checklist.filter((i) => i.concluido).length}/{c.checklist.length}
-                        <small>{c.checklistAtrasados} atrasado(s)</small>
+                        <small>{c.checklistAtrasados} etapa(s) vencida(s)</small>
                       </td>
                     </tr>
                   ))}
@@ -843,8 +880,12 @@ export function RestricoesPainel({ projectId, allowedProjectIds, search, paper }
                     <strong>{date(detail.criado)}</strong>
                   </div>
                   <div>
-                    <span>Vencimento</span>
+                    <span>Vencimento do card</span>
                     <strong>{date(detail.prazo)}</strong>
+                  </div>
+                  <div>
+                    <span>Prazo do alerta</span>
+                    <strong>{date(detail.prazoControle)}</strong>
                   </div>
                   <div>
                     <span>Conclusão</span>
@@ -903,7 +944,11 @@ export function RestricoesPainel({ projectId, allowedProjectIds, search, paper }
                         <span
                           className={`rp-badge rp-${i.concluido ? 'success' : i.atrasado ? 'danger' : 'neutral'}`}
                         >
-                          {i.concluido ? 'Concluído' : i.atrasado ? 'Atrasado' : 'Pendente'}
+                          {i.concluido
+                            ? 'Concluído'
+                            : i.atrasado
+                              ? `${-(i.dias ?? 0)} d de atraso`
+                              : 'Pendente'}
                         </span>
                       </li>
                     ))}
@@ -948,9 +993,10 @@ export function RestricoesPainel({ projectId, allowedProjectIds, search, paper }
           </section>
           <footer className="rp-footnote">
             <p>
-              <strong>Critério:</strong> atraso = vencimento do card anterior à referência, em dias
-              corridos. Cards concluídos ficam fora dos atrasos. Checklist é acompanhado
-              separadamente; seus itens não multiplicam a contagem de cards.
+              <strong>Critério:</strong> um card conta um único atraso quando seu prazo ou qualquer
+              etapa pendente do checklist está vencida. A faixa e os dias de atraso usam o prazo
+              pendente mais antigo. As etapas vencidas aparecem no próprio card; não somam outros
+              atrasos. Cards concluídos ficam fora da contagem.
             </p>
             <details className="rp-no-print">
               <summary>Como interpretar e referências</summary>

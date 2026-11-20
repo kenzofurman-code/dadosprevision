@@ -23,6 +23,7 @@ export interface ChecklistRestriction {
   conclusao: string | null
   responsavel: string
   atrasado: boolean
+  dias: number | null
 }
 export interface RestrictionCard {
   id: string
@@ -33,6 +34,8 @@ export interface RestrictionCard {
   descricao: string
   criado: string | null
   prazo: string | null
+  prazoControle: string | null
+  prazoCardAtrasado: boolean
   conclusao: string | null
   concluida: boolean
   dias: number | null
@@ -109,22 +112,7 @@ export function prepararRestricoes(
     const codigo = String(r.id_prevision || '')
     const id = JSON.stringify([projetoId, codigo || r.firestore_id || index])
     const prazo = dataRestricao(r.vencimento_em)
-    const dias = prazo ? diasEntre(prazo, referencia) : null
     const concluida = Boolean(r.concluido_em) || String(r.etapa_fase || '').toLowerCase() === 'done'
-    const faixa: Prazo =
-      dias === null
-        ? 'semData'
-        : dias < -30
-          ? 'mais30'
-          : dias < -7
-            ? 'de8a30'
-            : dias < 0
-              ? 'de1a7'
-              : dias === 0
-                ? 'hoje'
-                : dias <= 7
-                  ? 'proximos7'
-                  : 'futuro'
     const checklist = array(r.checklist_itens).map((item, i): ChecklistRestriction => {
       const date = dataRestricao(item.vencimento_em)
       const done =
@@ -140,8 +128,30 @@ export function prepararRestricoes(
         conclusao: dataRestricao(item.concluido_em),
         responsavel: String(item.responsavel_nome || item.responsavel_email || ''),
         atrasado: !concluida && !done && !!date && date < referencia,
+        dias: date ? diasEntre(date, referencia) : null,
       }
     })
+    // O card continua único. Seu alerta considera o prazo mais antigo ainda em aberto,
+    // sem substituir a data original do card nem contar cada item como outra restrição.
+    const prazosPendentes = concluida
+      ? []
+      : checklist.filter((i) => !i.concluido && i.prazo).map((i) => i.prazo!)
+    const prazoControle = [...(prazo ? [prazo] : []), ...prazosPendentes].sort()[0] || null
+    const dias = prazoControle ? diasEntre(prazoControle, referencia) : null
+    const faixa: Prazo =
+      dias === null
+        ? 'semData'
+        : dias < -30
+          ? 'mais30'
+          : dias < -7
+            ? 'de8a30'
+            : dias < 0
+              ? 'de1a7'
+              : dias === 0
+                ? 'hoje'
+                : dias <= 7
+                  ? 'proximos7'
+                  : 'futuro'
     unique.set(id, {
       id,
       codigo,
@@ -151,6 +161,8 @@ export function prepararRestricoes(
       descricao: String(r.descricao || ''),
       criado: dataRestricao(r.criado_em),
       prazo,
+      prazoControle,
+      prazoCardAtrasado: !concluida && !!prazo && prazo < referencia,
       conclusao: dataRestricao(r.concluido_em),
       concluida,
       dias,
@@ -167,7 +179,7 @@ export function prepararRestricoes(
   })
   return [...unique.values()].sort(
     (a, b) =>
-      (a.prazo || '9999').localeCompare(b.prazo || '9999') ||
+      (a.prazoControle || '9999').localeCompare(b.prazoControle || '9999') ||
       a.projeto.localeCompare(b.projeto, 'pt-BR') ||
       a.titulo.localeCompare(b.titulo, 'pt-BR'),
   )
