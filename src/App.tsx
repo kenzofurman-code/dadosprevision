@@ -1,3 +1,4 @@
+import { monthWeeks, weeklyActivities } from './lib/gestao-weeks'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -72,6 +73,7 @@ type GestaoTablePanel = 'panel1' | 'panel2' | 'panel3'
 type ReorderableGestaoPanel = GestaoTablePanel | 'panel4'
 
 interface GestaoPanelPreference {
+  showWeeks?: boolean
   onlyWithData: boolean
   onlyWithVariation?: boolean
   showPavimentosInsteadOfQty?: boolean
@@ -2340,6 +2342,7 @@ function App() {
   const currentGestaoPanelPreferences = useMemo(() => {
     const saved = gestaoPanelPreferences[gestaoPanelPreferenceKey]
     const normalizePreference = (pref?: Partial<GestaoPanelPreference>): GestaoPanelPreference => ({
+      showWeeks: pref?.showWeeks ?? false,
       onlyWithData: pref?.onlyWithData ?? false,
       onlyWithVariation: pref?.onlyWithVariation ?? false,
       showPavimentosInsteadOfQty: pref?.showPavimentosInsteadOfQty ?? false,
@@ -3528,6 +3531,70 @@ function App() {
     }
   }
 
+  function weeksToggle(panel: 'panel2' | 'panel3') {
+    return <label className="gestao-panel-data-filter">
+      <input type="checkbox" checked={!!currentGestaoPanelPreferences[panel].showWeeks}
+        onChange={event => {
+          const showWeeks = event.target.checked
+          updateGestaoPanelPreference(panel, pref => ({ ...pref, showWeeks }))
+        }} />
+      Mostrar semanas
+    </label>
+  }
+
+  function weeklyTables(panel: 'panel2' | 'panel3', view: typeof gestaoPanel3ViewMode = 'all') {
+    const current = panel === 'panel2'
+    const showFloors = current || !!currentGestaoPanelPreferences.panel3.showPavimentosInsteadOfQty
+    const months = current ? [gestaoData.m0] : view !== 'all' ? [gestaoData[view]] : [gestaoData.mPlus1, gestaoData.mPlus2, gestaoData.mPlus3]
+    const activities = new Map(gestaoData.services.map(s => [s.name, s.activities]))
+    const floorOrder = new Map(currentFloorOrder.map((name, i) => [name, i]))
+    const rows = gestaoPanelRows[panel]
+    const services = (current ? gestaoData.panel2Rows : gestaoData.panel3Rows).map(row => row.service)
+    return months.map(month => {
+      if (!month) return null
+      const weeks = monthWeeks(month)
+      return (
+        <table key={month.label} className="gestao-table gestao-week-table">
+          <caption>{month.label}</caption>
+          <thead><tr>
+            <th scope="col" className="service-col">Atividade / Serviço</th>
+            {current && <th scope="col">Qtde Prevista</th>}
+            {weeks.map((week, i) => <th scope="col" key={week.start}>Semana {i + 1}<br />{week.label}</th>)}
+          </tr></thead>
+          <tbody>
+            {!rows.length && <tr><td colSpan={weeks.length + (current ? 2 : 1)}>Nenhum serviço encontrado.</td></tr>}
+            {rows.map(row => (
+              <tr key={row.service} draggable
+                onDragStart={() => setDraggedGestaoRow({ panel, service: row.service })}
+                onDragEnd={() => setDraggedGestaoRow(null)}
+                onDragOver={event => event.preventDefault()}
+                onDrop={() => handleGestaoRowDrop(panel, row.service, services)}>
+                <td className="service-col">{row.service}</td>
+                {'qtdePrevista' in row && <td><strong>{row.qtdePrevista.toFixed(2)}</strong>
+                  {row.qtdeAtrasada > 0 && <span className="gestao-overdue-count">
+                    {row.qtdeAtrasada} atrasada{row.qtdeAtrasada > 1 ? 's' : ''}<br />
+                    {row.pavimentos.filter(p => p.isOverdue).map(p => p.name).join(', ')}
+                  </span>}
+                </td>}
+                {weeklyActivities(activities.get(row.service) ?? [], weeks, true).map((cell, i) => (
+                  <td key={weeks[i].start}>
+                    {!showFloors && <strong>{cell.count}</strong>}
+                    {showFloors && !cell.floors.size && (cell.count && !current ? cell.count + ' serv.' : '—')}
+                    <div className="gestao-pav-list">
+                      {showFloors && Array.from(cell.floors).sort((a, b) =>
+                        (floorOrder.get(a) ?? Infinity) - (floorOrder.get(b) ?? Infinity) || compareNatural(a, b)
+                      ).map(name => <span key={name} className="gestao-pav-tag">{name}</span>)}
+                    </div>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )
+    })
+  }
+
   return (
     <main className="app-shell">
       <header className="page-header">
@@ -4474,6 +4541,7 @@ function App() {
                           <Flag size={12} />
                           Somente serviços com quantidade
                         </label>
+                        {weeksToggle('panel2')}
                       </div>
                       <div className="a4-sheet-meta">
                         <div className="a4-sheet-meta-item">
@@ -4488,6 +4556,7 @@ function App() {
                     </div>
 
                     <div className="a4-sheet-body">
+                      {currentGestaoPanelPreferences.panel2.showWeeks ? weeklyTables('panel2') : (
                       <table className="gestao-table gestao-panel2-table">
                         <thead>
                           <tr>
@@ -4544,6 +4613,7 @@ function App() {
                           )}
                         </tbody>
                       </table>
+                      )}
                     </div>
 
                     <div className="a4-sheet-footer">
@@ -4622,6 +4692,7 @@ function App() {
                               <Flag size={12} />
                               Somente serviços com quantidade
                             </label>
+                        {weeksToggle('panel3')}
                             <label className="gestao-panel-data-filter" title="Exibe os pavimentos previstos em vez da quantidade numérica">
                               <input
                                 type="checkbox"
@@ -4651,7 +4722,7 @@ function App() {
                       </div>
 
                       <div className="a4-sheet-body">
-                        {gestaoPanel3ViewMode !== 'all' ? (
+                        {currentGestaoPanelPreferences.panel3.showWeeks ? weeklyTables('panel3', gestaoPanel3ViewMode) : gestaoPanel3ViewMode !== 'all' ? (
                           <table className="gestao-table gestao-panel2-table">
                             <thead>
                               <tr>
@@ -5318,11 +5389,13 @@ function App() {
                       <div className="gestao-card-title">
                         <span>Atividades Previstas - Mês Vigente</span>
                       </div>
+                      {weeksToggle('panel2')}
                       <span className="gestao-card-badge">
                         {gestaoData.m0?.label} ({gestaoData.m0?.startFormatted} - {gestaoData.m0?.endFormatted})
                       </span>
                     </div>
                     <div className="gestao-card-body">
+                      {currentGestaoPanelPreferences.panel2.showWeeks ? weeklyTables('panel2') : (
                       <table className="gestao-table gestao-panel2-table">
                         <thead>
                           <tr>
@@ -5371,6 +5444,7 @@ function App() {
                           )}
                         </tbody>
                       </table>
+                      )}
                     </div>
                   </div>
 
@@ -5380,11 +5454,13 @@ function App() {
                       <div className="gestao-card-title">
                         <span>Projeção Próximos Meses</span>
                       </div>
+                      {weeksToggle('panel3')}
                       <span className="gestao-card-badge">
                         {gestaoData.mPlus1?.label} - {gestaoData.mPlus3?.label}
                       </span>
                     </div>
                     <div className="gestao-card-body">
+                      {currentGestaoPanelPreferences.panel3.showWeeks ? weeklyTables('panel3') : (
                       <table className="gestao-table">
                         <thead>
                           <tr>
@@ -5512,6 +5588,7 @@ function App() {
                           )}
                         </tbody>
                       </table>
+                      )}
                     </div>
                   </div>
                 </div>

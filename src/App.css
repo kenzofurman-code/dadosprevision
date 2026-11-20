@@ -1177,6 +1177,17 @@ td strong {
   min-width: 0;
 }
 
+.gestao-week-table caption {
+  padding: 6px 8px;
+  text-align: left;
+  font-weight: 700;
+}
+
+.gestao-week-table + .gestao-week-table {
+  margin-top: 12px;
+}
+
+.gestao-week-table .gestao-pav-tag,
 .gestao-panel2-pavements .gestao-pav-tag {
   max-width: 100%;
   margin: 0;
